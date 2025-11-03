@@ -80,17 +80,8 @@ export default function RegisterScreen({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  // Log au montage/démontage initial uniquement
-  useEffect(() => {
-    console.log('🚀 RegisterScreen monté');
-    return () => {
-      console.log('⚠️ RegisterScreen démonté définitivement');
-    };
-  }, []);
-
   // Animation d'entrée
   useEffect(() => {
-    console.log('🎬 Animation d\'entrée pour l\'étape:', currentStep);
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -104,13 +95,6 @@ export default function RegisterScreen({ navigation }) {
       }),
     ]).start();
   }, [currentStep]);
-
-  // Détection changement d'étape
-  useEffect(() => {
-    if (currentStep !== 'form') {
-      console.log('📊 Étape actuelle:', currentStep, '| Loading:', loading, '| Auth:', isAuthenticated);
-    }
-  }, [currentStep, loading, isAuthenticated]);
 
   // Timer OTP
   useEffect(() => {
@@ -148,9 +132,7 @@ export default function RegisterScreen({ navigation }) {
   // Redirection après authentification
   useEffect(() => {
     if (isAuthenticated && currentStep === 'success') {
-      console.log('✅ Utilisateur authentifié - Redirection dans 3 secondes...');
       setTimeout(() => {
-        console.log('🔄 Navigation vers MainTabs');
         navigation.replace('MainTabs');
       }, 3000);
     }
@@ -199,76 +181,47 @@ export default function RegisterScreen({ navigation }) {
 
   // Validation formulaire
   const validateForm = () => {
-    console.log('=== VALIDATION FORMULAIRE ===');
     const newErrors = [];
     const { name, email, phoneNumber, password, passwordConf, acceptTerms } = formData;
 
     // Nom
     if (!name.trim() || name.length < 3) {
       newErrors.push('Le nom doit contenir au moins 3 caractères.');
-      console.error('❌ Nom invalide:', { name, length: name.length });
     }
 
     // Email obligatoire pour OTP
     if (!email) {
       newErrors.push("L'adresse email est obligatoire pour la vérification.");
-      console.error('❌ Email manquant');
     } else if (!validateEmail(email)) {
       newErrors.push('Adresse email invalide.');
-      console.error('❌ Format email invalide:', email);
     }
 
     // Téléphone (optionnel mais si renseigné, doit être valide)
     if (phoneNumber && phoneNumber.length < 8) {
       newErrors.push('Le numéro de téléphone doit contenir au moins 8 chiffres.');
-      console.error('❌ Téléphone invalide:', { phoneNumber, length: phoneNumber.length });
     }
 
     // Mot de passe
     const passwordErrors = validatePassword(password);
-    if (passwordErrors.length > 0) {
-      console.error('❌ Erreurs mot de passe:', passwordErrors);
-    }
     newErrors.push(...passwordErrors);
 
     // Confirmation mot de passe
     if (passwordConf !== password) {
       newErrors.push('Les mots de passe ne correspondent pas.');
-      console.error('❌ Mots de passe différents');
     }
 
     // Conditions
     if (!acceptTerms) {
       newErrors.push('Vous devez accepter les conditions d\'utilisation.');
-      console.error('❌ Conditions non acceptées');
     }
 
     setErrors(newErrors);
-    
-    if (newErrors.length === 0) {
-      console.log('✅ Validation réussie');
-    } else {
-      console.error('❌ Validation échouée. Total erreurs:', newErrors.length);
-      console.error('Liste des erreurs:', newErrors);
-    }
-    
     return newErrors.length === 0;
   };
 
   // ÉTAPE 1: Envoyer OTP
   const handleSendOtp = async () => {
-    console.log('=== DÉBUT ENVOI OTP ===');
-    console.log('Données du formulaire:', {
-      name: formData.name,
-      email: formData.email,
-      phoneNumber: formData.phoneNumber,
-      countryCode: formData.countryCode,
-      hasPassword: !!formData.password,
-      acceptTerms: formData.acceptTerms,
-    });
-
     if (!isConnected) {
-      console.error('❌ Pas de connexion Internet');
       Toast.show({
         type: 'error',
         text1: 'Pas de connexion',
@@ -304,18 +257,10 @@ export default function RegisterScreen({ navigation }) {
         position: 'top',
       });
 
-      console.log('🔄 Passage à l\'étape OTP');
       setCurrentStep('otp');
       setTimeLeft(300);
       setCanResend(false);
     } catch (err) {
-      console.error('❌ ERREUR lors de l\'envoi OTP:', {
-        message: err?.message || err,
-        response: err?.response?.data,
-        status: err?.response?.status,
-        fullError: err,
-      });
-      
       const errorInfo = getUserFriendlyError(err);
       Toast.show({
         type: 'error',
@@ -329,12 +274,7 @@ export default function RegisterScreen({ navigation }) {
 
   // ÉTAPE 2: Vérifier OTP et créer compte
   const handleVerifyOtp = async (otpCode) => {
-    console.log('=== DÉBUT VÉRIFICATION OTP ===');
-    console.log('Code OTP:', otpCode);
-    console.log('Email:', formData.email);
-
     if (!isConnected) {
-      console.error('❌ Pas de connexion Internet');
       Toast.show({
         type: 'error',
         text1: 'Pas de connexion',
@@ -346,28 +286,17 @@ export default function RegisterScreen({ navigation }) {
 
     try {
       // 1. Vérifier l'OTP
-      console.log('📤 Étape 1/3: Vérification OTP...');
       const verifyResult = await dispatch(verifyOtp({
         email: formData.email,
         otp: otpCode,
       })).unwrap();
 
-      console.log('✅ OTP vérifié avec succès:', verifyResult);
       setOtpToken(verifyResult.token);
 
       // 2. Créer l'utilisateur
       const phoneWithCode = formData.phoneNumber 
         ? `${formData.countryCode}${formData.phoneNumber}` 
         : null;
-
-      console.log('📤 Étape 2/3: Création du compte...');
-      console.log('Données d\'inscription:', {
-        name: formData.name,
-        email: formData.email,
-        phoneNumber: phoneWithCode,
-        whatsapp: formData.whatsapp,
-        hasOtpToken: !!verifyResult.token,
-      });
 
       await dispatch(registerWithOtp({
         name: formData.name,
@@ -378,20 +307,12 @@ export default function RegisterScreen({ navigation }) {
         otpToken: verifyResult.token,
       })).unwrap();
 
-      console.log('✅ Compte créé avec succès');
-
       // 3. Connexion automatique
-      console.log('📤 Étape 3/3: Connexion automatique...');
-      const loginResult = await dispatch(login({
+      await dispatch(login({
         email: formData.email,
         phoneNumber: phoneWithCode,
         password: formData.password,
       })).unwrap();
-
-      console.log('✅ Connexion réussie:', {
-        user: loginResult.user?.name,
-        hasToken: !!loginResult.token,
-      });
 
       Toast.show({
         type: 'success',
@@ -400,17 +321,9 @@ export default function RegisterScreen({ navigation }) {
         position: 'top',
       });
 
-      console.log('🔄 Passage à l\'étape succès');
       setCurrentStep('success');
 
     } catch (err) {
-      console.error('❌ ERREUR lors de la vérification OTP:', {
-        message: err?.message || err,
-        response: err?.response?.data,
-        status: err?.response?.status,
-        fullError: err,
-      });
-      
       setOtp(['', '', '', '', '', '']);
       otpRefs.current[0]?.focus();
       
@@ -427,17 +340,12 @@ export default function RegisterScreen({ navigation }) {
 
   // Renvoyer OTP
   const handleResendOtp = async () => {
-    console.log('=== RENVOI OTP ===');
-    console.log('Email:', formData.email);
-    
     try {
-      console.log('📤 Renvoi du code OTP...');
       await dispatch(sendOtp({
         email: formData.email,
         name: formData.name,
       })).unwrap();
 
-      console.log('✅ Code OTP renvoyé avec succès');
       setTimeLeft(300);
       setCanResend(false);
       setOtp(['', '', '', '', '', '']);
@@ -450,13 +358,6 @@ export default function RegisterScreen({ navigation }) {
         position: 'top',
       });
     } catch (err) {
-      console.error('❌ ERREUR lors du renvoi OTP:', {
-        message: err?.message || err,
-        response: err?.response?.data,
-        status: err?.response?.status,
-        fullError: err,
-      });
-      
       const errorInfo = getUserFriendlyError(err);
       Toast.show({
         type: 'error',

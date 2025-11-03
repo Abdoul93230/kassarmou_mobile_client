@@ -77,7 +77,6 @@ export default function CategoryScreen() {
   }, [dispatch]);
 
   const handleCategoryPress = (category) => {
-    console.log('📂 [CategoryScreen] Navigate to category:', category.name);
     navigation.navigate('ProductListScreen', {
       categoryId: category._id,
       categoryName: category.name,

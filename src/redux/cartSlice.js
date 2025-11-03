@@ -1,6 +1,15 @@
 import { createSlice } from "@reduxjs/toolkit";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Helper pour trouver un item avec variantes
+const findItemIndex = (items, productId, color, size) => {
+  return items.findIndex(item => 
+    item.product._id === productId &&
+    item.selectedColor === color &&
+    item.selectedSize === size
+  );
+};
+
 // Slice pour le panier
 const cartSlice = createSlice({
   name: "cart",
@@ -12,42 +21,71 @@ const cartSlice = createSlice({
   reducers: {
     setCart: (state, action) => {
       state.items = action.payload;
-      state.itemCount = action.payload.length;
+      state.itemCount = action.payload.reduce((sum, item) => sum + item.quantity, 0);
       state.total = action.payload.reduce((sum, item) => {
         const price = item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix;
         return sum + (price * item.quantity);
       }, 0);
     },
     addToCart: (state, action) => {
-      const existingItem = state.items.find(
-        item => item.product._id === action.payload.product._id
+      const { product, quantity, selectedColor, selectedSize, colorImage } = action.payload;
+      
+      // Chercher si l'item existe déjà avec la même variante
+      const existingIndex = findItemIndex(
+        state.items,
+        product._id,
+        selectedColor,
+        selectedSize
       );
       
-      if (existingItem) {
-        existingItem.quantity += action.payload.quantity;
+      if (existingIndex !== -1) {
+        // Augmenter la quantité
+        state.items[existingIndex].quantity += quantity;
       } else {
-        state.items.push(action.payload);
+        // Ajouter nouveau item
+        state.items.push({
+          product,
+          quantity,
+          selectedColor,
+          selectedSize,
+          colorImage,
+          addedAt: new Date().toISOString(),
+        });
       }
       
-      state.itemCount = state.items.length;
+      // Recalculer totaux
+      state.itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
       state.total = state.items.reduce((sum, item) => {
         const price = item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix;
         return sum + (price * item.quantity);
       }, 0);
     },
     removeFromCart: (state, action) => {
-      state.items = state.items.filter(item => item.product._id !== action.payload);
-      state.itemCount = state.items.length;
+      const { productId, color, size } = action.payload;
+      
+      // Supprimer l'item spécifique
+      const index = findItemIndex(state.items, productId, color, size);
+      if (index !== -1) {
+        state.items.splice(index, 1);
+      }
+      
+      // Recalculer totaux
+      state.itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
       state.total = state.items.reduce((sum, item) => {
         const price = item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix;
         return sum + (price * item.quantity);
       }, 0);
     },
     updateQuantity: (state, action) => {
-      const item = state.items.find(i => i.product._id === action.payload.productId);
-      if (item) {
-        item.quantity = action.payload.quantity;
+      const { productId, color, size, quantity } = action.payload;
+      
+      const index = findItemIndex(state.items, productId, color, size);
+      if (index !== -1) {
+        state.items[index].quantity = Math.max(1, quantity);
       }
+      
+      // Recalculer totaux
+      state.itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
       state.total = state.items.reduce((sum, item) => {
         const price = item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix;
         return sum + (price * item.quantity);
@@ -78,7 +116,7 @@ export const loadCart = () => async (dispatch) => {
       dispatch(setCart(cart));
     }
   } catch (error) {
-    console.error('Erreur lors du chargement du panier:', error);
+    console.error('Erreur chargement panier:', error);
   }
 };
 
@@ -87,7 +125,7 @@ export const saveCart = (cart) => async (dispatch) => {
     await AsyncStorage.setItem('panier', JSON.stringify(cart));
     dispatch(setCart(cart));
   } catch (error) {
-    console.error('Erreur lors de la sauvegarde du panier:', error);
+    console.error('Erreur sauvegarde panier:', error);
   }
 };
 
@@ -97,27 +135,27 @@ export const addItemToCart = (item) => async (dispatch, getState) => {
     const { cart } = getState();
     await AsyncStorage.setItem('panier', JSON.stringify(cart.items));
   } catch (error) {
-    console.error('Erreur lors de l\'ajout au panier:', error);
+    console.error('Erreur ajout panier:', error);
   }
 };
 
-export const removeItemFromCart = (productId) => async (dispatch, getState) => {
+export const removeItemFromCart = (productId, color, size) => async (dispatch, getState) => {
   try {
-    dispatch(removeFromCart(productId));
+    dispatch(removeFromCart({ productId, color, size }));
     const { cart } = getState();
     await AsyncStorage.setItem('panier', JSON.stringify(cart.items));
   } catch (error) {
-    console.error('Erreur lors de la suppression du panier:', error);
+    console.error('Erreur suppression panier:', error);
   }
 };
 
-export const updateCartQuantity = (productId, quantity) => async (dispatch, getState) => {
+export const updateCartQuantity = (productId, color, size, quantity) => async (dispatch, getState) => {
   try {
-    dispatch(updateQuantity({ productId, quantity }));
+    dispatch(updateQuantity({ productId, color, size, quantity }));
     const { cart } = getState();
     await AsyncStorage.setItem('panier', JSON.stringify(cart.items));
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du panier:', error);
+    console.error('Erreur mise à jour panier:', error);
   }
 };
 
@@ -126,7 +164,7 @@ export const clearCartData = () => async (dispatch) => {
     await AsyncStorage.removeItem('panier');
     dispatch(clearCart());
   } catch (error) {
-    console.error('Erreur lors du vidage du panier:', error);
+    console.error('Erreur vidage panier:', error);
   }
 };
 

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // URL du backend - API en ligne
 export const BackendUrl = 'https://kassarmou-backend.onrender.com';
+export const API_URL = BackendUrl; // Alias pour compatibilité
 
 // Pour développement local, décommenter la ligne ci-dessous :
 // export const BackendUrl = 'http://10.0.2.2:5000'; // Émulateur Android

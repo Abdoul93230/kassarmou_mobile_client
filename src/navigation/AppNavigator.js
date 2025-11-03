@@ -142,53 +142,58 @@ function AppNavigator() {
           headerBackTitleVisible: false,
         }}
       >
-        {!isAuthenticated ? (
-          // Écrans pour utilisateurs non connectés
+        {/* Écrans principaux toujours accessibles */}
+        <Stack.Screen 
+          name="MainTabs" 
+          component={MainTabs}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="ProductDetail" 
+          component={ProductDetailScreen}
+          options={{ title: 'Détail du produit' }}
+        />
+        <Stack.Screen 
+          name="Cart" 
+          component={CartScreen}
+          options={{ title: 'Mon Panier', headerShown: false }}
+        />
+        <Stack.Screen 
+          name="ProductListScreen" 
+          component={ProductListScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="Search" 
+          component={SearchScreen}
+          options={{ title: 'Recherche' }}
+        />
+        
+        {/* Écrans d'authentification */}
+        <Stack.Screen 
+          name="Login" 
+          component={LoginScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="Register" 
+          component={RegisterScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="ForgotPassword" 
+          component={ForgotPasswordScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="ResetPassword" 
+          component={ResetPasswordScreen}
+          options={{ headerShown: false }}
+        />
+        
+        {/* Écrans protégés (nécessitent authentification) */}
+        {isAuthenticated && (
           <>
-            <Stack.Screen 
-              name="Login" 
-              component={LoginScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="Register" 
-              component={RegisterScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="ForgotPassword" 
-              component={ForgotPasswordScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="ResetPassword" 
-              component={ResetPasswordScreen}
-              options={{ headerShown: false }}
-            />
-          </>
-        ) : (
-          // Écrans pour utilisateurs connectés
-          <>
-            <Stack.Screen 
-              name="MainTabs" 
-              component={MainTabs}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="ProductDetail" 
-              component={ProductDetailScreen}
-              options={{ title: 'Détail du produit' }}
-            />
-            <Stack.Screen 
-              name="ProductListScreen" 
-              component={ProductListScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="Search" 
-              component={SearchScreen}
-              options={{ title: 'Recherche' }}
-            />
             <Stack.Screen 
               name="Checkout" 
               component={CheckoutScreen}

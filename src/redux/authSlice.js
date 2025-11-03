@@ -12,8 +12,6 @@ export const login = createAsyncThunk(
         credentials: "include",
       });
       
-      console.log('✅ [login] Response from API:', response.data);
-      
       // Le backend renvoie directement { id, name, token, message }
       // On stocke tel quel comme le projet web
       await AsyncStorage.setItem('userEcomme', JSON.stringify(response.data));
@@ -54,29 +52,23 @@ export const verifyAuth = createAsyncThunk(
   'auth/verifyAuth',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('🔍 [verifyAuth] Checking AsyncStorage...');
       const userString = await AsyncStorage.getItem('userEcomme');
       
       if (!userString) {
-        console.log('⚠️ [verifyAuth] No user data in AsyncStorage');
         return null;
       }
       
       const userData = JSON.parse(userString);
-      console.log('✅ [verifyAuth] User data found:', userData);
       
       // Le format du backend est : { id, name, token, message }
       // On vérifie si on a bien un token et un id
       if (userData.token && userData.id) {
-        console.log('✅ [verifyAuth] Valid user data with token and id');
         return userData;
       }
       
-      console.log('⚠️ [verifyAuth] Invalid user data format');
       await AsyncStorage.removeItem('userEcomme');
       return null;
     } catch (error) {
-      console.error('❌ [verifyAuth] Error:', error);
       await AsyncStorage.removeItem('userEcomme');
       return rejectWithValue('Session expirée');
     }
@@ -100,19 +92,12 @@ export const sendOtp = createAsyncThunk(
   'auth/sendOtp',
   async ({ email, name }, { rejectWithValue }) => {
     try {
-      console.log('🔐 [authSlice] Envoi sendOtp:', { email, name });
       const response = await apiClient.post('/api/user/send-otp', {
         email,
         name,
       });
-      console.log('✅ [authSlice] Réponse sendOtp:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ [authSlice] Erreur sendOtp:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-      });
       const errorMessage = error.response?.data?.message || 'Erreur lors de l\'envoi du code OTP';
       return rejectWithValue(errorMessage);
     }
@@ -123,19 +108,12 @@ export const verifyOtp = createAsyncThunk(
   'auth/verifyOtp',
   async ({ email, otp }, { rejectWithValue }) => {
     try {
-      console.log('🔐 [authSlice] Envoi verifyOtp:', { email, otp });
       const response = await apiClient.post('/api/user/verify-otp', {
         email,
         otp,
       });
-      console.log('✅ [authSlice] Réponse verifyOtp:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ [authSlice] Erreur verifyOtp:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-      });
       const errorMessage = error.response?.data?.message || 'Code OTP invalide ou expiré';
       return rejectWithValue(errorMessage);
     }
@@ -146,15 +124,6 @@ export const registerWithOtp = createAsyncThunk(
   'auth/registerWithOtp',
   async ({ name, email, phoneNumber, password, whatsapp, otpToken }, { rejectWithValue }) => {
     try {
-      console.log('🔐 [authSlice] Envoi registerWithOtp avec:', {
-        name,
-        email,
-        phoneNumber: phoneNumber || 'null',
-        hasPassword: !!password,
-        whatsapp,
-        hasOtpToken: !!otpToken,
-      });
-      
       const response = await apiClient.post('/api/user/register-with-otp', {
         name,
         email,
@@ -164,15 +133,8 @@ export const registerWithOtp = createAsyncThunk(
         otpToken,
       });
       
-      console.log('✅ [authSlice] Réponse registerWithOtp:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ [authSlice] Erreur registerWithOtp:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-        fullError: error,
-      });
       const errorMessage = error.response?.data?.message || 'Erreur lors de la création du compte';
       return rejectWithValue(errorMessage);
     }
@@ -246,11 +208,9 @@ const authSlice = createSlice({
           // action.payload contient { id, name, token, message }
           state.user = action.payload;
           state.isAuthenticated = true;
-          console.log('✅ [authSlice] verifyAuth success, user:', action.payload);
         } else {
           state.user = null;
           state.isAuthenticated = false;
-          console.log('⚠️ [authSlice] verifyAuth: no user data');
         }
         state.error = null;
       })
@@ -259,7 +219,6 @@ const authSlice = createSlice({
         state.user = null;
         state.isAuthenticated = false;
         state.error = null;
-        console.log('❌ [authSlice] verifyAuth rejected');
       });
 
     // Logout

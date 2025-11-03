@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -63,13 +63,6 @@ export default function HomeScreen({ navigation }) {
   const cartItems = useSelector(state => state.cart?.items || []);
   const likedProducts = useSelector(state => state.likes.likedProducts);
 
-  // Debug: Log user state
-  useEffect(() => {
-    console.log('👤 [HomeScreen] User state:', user);
-    console.log('🔐 [HomeScreen] Is authenticated:', !!user);
-    console.log('🆔 [HomeScreen] User ID:', user?.id || user?._id);
-  }, [user]);
-
   useEffect(() => {
     loadData();
     // Fade in animation
@@ -80,13 +73,9 @@ export default function HomeScreen({ navigation }) {
     }).start();
     
     // Load user likes if logged in
-    // Le backend renvoie user.id (pas user._id)
     const userId = user?.id || user?._id;
     if (userId) {
-      console.log('❤️ [HomeScreen] Loading likes for user:', userId);
       dispatch(fetchUserLikes(userId));
-    } else {
-      console.log('⚠️ [HomeScreen] No user ID, skipping likes fetch');
     }
   }, [user?.id, user?._id]);
 
@@ -130,7 +119,7 @@ export default function HomeScreen({ navigation }) {
     setCurrentBannerIndex(index);
   };
 
-  const renderBannerDots = () => {
+  const renderBannerDots = useCallback(() => {
     if (banners.length <= 1) return null;
     
     return (
@@ -146,9 +135,9 @@ export default function HomeScreen({ navigation }) {
         ))}
       </View>
     );
-  };
+  }, [banners.length, currentBannerIndex]);
 
-  const renderCategoryCard = (category) => {
+  const renderCategoryCard = useCallback((category) => {
     return (
       <TouchableOpacity
         key={category._id}
@@ -169,20 +158,20 @@ export default function HomeScreen({ navigation }) {
         </LinearGradient>
       </TouchableOpacity>
     );
-  };
+  }, [navigation]);
 
   // Get products for a specific category
-  const getProductsByCategory = (categoryId) => {
+  const getProductsByCategory = useCallback((categoryId) => {
     return products.filter(p => p.ClefCategorie === categoryId);
-  };
+  }, [products]);
 
   // Check if product is liked
-  const isProductLiked = (productId) => {
+  const isProductLiked = useCallback((productId) => {
     return likedProducts.includes(productId);
-  };
+  }, [likedProducts]);
 
   // Handle like toggle
-  const handleToggleLike = async (product, e) => {
+  const handleToggleLike = useCallback(async (product, e) => {
     if (e) e.stopPropagation();
     
     // Le backend renvoie user.id (pas user._id)
@@ -190,26 +179,19 @@ export default function HomeScreen({ navigation }) {
     
     // Check if user is authenticated
     if (!user || !userId) {
-      console.log('🔐 User not authenticated:', user);
       alert('Veuillez vous connecter pour ajouter des favoris');
-      // TODO: Navigate to login screen
-      // navigation.navigate('Login');
       return;
     }
 
-    console.log('❤️ Toggle like for product:', product._id, 'User:', userId);
-
     try {
       await dispatch(toggleLike({ userId, product })).unwrap();
-      console.log('✅ Like toggled successfully');
     } catch (error) {
-      console.error('❌ Erreur lors du toggle like:', error);
       alert('Erreur lors de l\'ajout aux favoris');
     }
-  };
+  }, [user, dispatch]);
 
   // Render category section with products
-  const renderCategorySection = (category, index) => {
+  const renderCategorySection = useCallback((category, index) => {
     const categoryProducts = getProductsByCategory(category._id);
     
     if (categoryProducts.length === 0) return null;
@@ -262,10 +244,10 @@ export default function HomeScreen({ navigation }) {
         </ScrollView>
       </View>
     );
-  };
+  }, [getProductsByCategory, renderHorizontalProduct, navigation]);
 
   // Separate render function for horizontal scroll products
-  const renderHorizontalProduct = (product) => {
+  const renderHorizontalProduct = useCallback((product) => {
     const price = product.prixPromo > 0 ? product.prixPromo : product.prix;
     const hasPromo = product.prixPromo > 0;
     const discount = hasPromo 
@@ -368,9 +350,9 @@ export default function HomeScreen({ navigation }) {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [isProductLiked, handleToggleLike, navigation]);
 
-  const renderProduct = (product) => {
+  const renderProduct = useCallback((product) => {
     const price = product.prixPromo > 0 ? product.prixPromo : product.prix;
     const hasPromo = product.prixPromo > 0;
     const discount = hasPromo 
@@ -495,7 +477,28 @@ export default function HomeScreen({ navigation }) {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [isProductLiked, handleToggleLike, navigation]);
+
+  // Memoized computed values
+  const promoProducts = useMemo(() => 
+    products.filter(p => p.prixPromo > 0),
+    [products]
+  );
+
+  const newProducts = useMemo(() => 
+    products.slice(0, 6),
+    [products]
+  );
+
+  const cartItemCount = useMemo(() => 
+    cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0),
+    [cartItems]
+  );
+
+  const categoriesWithProducts = useMemo(() => 
+    categories.filter(cat => products.some(p => p.ClefCategorie === cat._id)),
+    [categories, products]
+  );
 
   if (loading) {
     return (
@@ -505,14 +508,6 @@ export default function HomeScreen({ navigation }) {
       </View>
     );
   }
-
-  const promoProducts = products.filter(p => p.prixPromo > 0);
-  const newProducts = products.slice(0, 6);
-  const cartItemCount = cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-  // Filter categories that have at least one product
-  const categoriesWithProducts = categories.filter(cat => 
-    products.some(p => p.ClefCategorie === cat._id)
-  );
 
   return (
     <View style={styles.container}>
@@ -557,6 +552,7 @@ export default function HomeScreen({ navigation }) {
       <Animated.ScrollView
         style={[styles.scrollView, { opacity: fadeAnim }]}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
@@ -574,6 +570,7 @@ export default function HomeScreen({ navigation }) {
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
+              removeClippedSubviews={true}
               onMomentumScrollEnd={handleBannerScroll}
               decelerationRate="fast"
               snapToInterval={BANNER_WIDTH + 16}
@@ -637,6 +634,7 @@ export default function HomeScreen({ navigation }) {
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
+              removeClippedSubviews={true}
               contentContainerStyle={styles.horizontalScroll}
             >
               {promoProducts.slice(0, 10).map(renderHorizontalProduct)}
@@ -664,6 +662,7 @@ export default function HomeScreen({ navigation }) {
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
+              removeClippedSubviews={true}
               contentContainerStyle={styles.horizontalScroll}
             >
               {newProducts.map(renderHorizontalProduct)}

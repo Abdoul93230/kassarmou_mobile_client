@@ -13,13 +13,14 @@ import {
   Platform,
   StatusBar,
   Animated,
+  TextInput,
 } from 'react-native';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import RenderHtml from 'react-native-render-html';
 import { toggleLike, fetchUserLikes } from '../redux/likesSlice';
-import { addItem } from '../redux/cartSlice';
+import { addItemToCart } from '../redux/cartSlice';
 import { getProducts } from '../redux/productsSlice';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -45,12 +46,14 @@ export default function ProductDetailScreen({ route, navigation }) {
   const user = useSelector((state) => state.auth.user);
   const likedProducts = useSelector((state) => state.likes.likedProducts || [], shallowEqual);
   const allProducts = useSelector((state) => state.products.data || [], shallowEqual); // Changed from products.products to products.data
+  const cartItemCount = useSelector((state) => state.cart.itemCount || 0);
   
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [selectedSize, setSelectedSize] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState('1');
   const [activeTab, setActiveTab] = useState('description');
   const [showFullDescription, setShowFullDescription] = useState(false);
   
@@ -61,33 +64,8 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   // Memoized similar products to avoid unnecessary rerenders
   const similarProducts = useMemo(() => {
-    console.log('🔍 [ProductDetail] Calculating similar products...');
-    console.log('📦 [ProductDetail] Current product:', product?.name);
-    console.log('📊 [ProductDetail] All products count:', allProducts.length);
-    
-    // Log complete product structure to understand fields
-    if (product) {
-      console.log('🔍 [ProductDetail] Product structure:', {
-        _id: product._id,
-        name: product.name,
-        type: product.type,
-        categorie: product.categorie,
-        marque: product.marque,
-        Categories: product.Categories,
-        Types: product.Types,
-        // Log any field that could be used for similarity
-      });
-    }
-    
-    if (!product) {
-      console.log('❌ [ProductDetail] No product, returning empty array');
-      return [];
-    }
-    
-    if (allProducts.length === 0) {
-      console.log('❌ [ProductDetail] No products in store, returning empty array');
-      return [];
-    }
+    if (!product) return [];
+    if (allProducts.length === 0) return [];
     
     // Try multiple fields for similarity (type, Categories, Types, marque)
     const similar = allProducts.filter(p => {
@@ -103,7 +81,6 @@ export default function ProductDetailScreen({ route, navigation }) {
       return sameType || sameCategories || sameTypes || sameBrand;
     }).slice(0, 10);
     
-    console.log('✅ [ProductDetail] Found', similar.length, 'similar products');
     return similar;
   }, [product, allProducts]);
 
@@ -167,12 +144,8 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   // Load products if not already loaded
   useEffect(() => {
-    console.log('🔄 [ProductDetail] Checking if products need to be loaded...');
     if (allProducts.length === 0) {
-      console.log('📥 [ProductDetail] Loading products...');
       dispatch(getProducts(() => {}));
-    } else {
-      console.log('✅ [ProductDetail] Products already loaded:', allProducts.length);
     }
   }, [dispatch, allProducts.length]);
 
@@ -217,9 +190,35 @@ export default function ProductDetailScreen({ route, navigation }) {
   };
 
   // Handle quantity change
-  const incrementQuantity = () => setQuantity((prev) => prev + 1);
+  const incrementQuantity = () => {
+    const newQty = quantity + 1;
+    setQuantity(newQty);
+    setQuantityInput(newQty.toString());
+  };
+  
   const decrementQuantity = () => {
-    if (quantity > 1) setQuantity((prev) => prev - 1);
+    if (quantity > 1) {
+      const newQty = quantity - 1;
+      setQuantity(newQty);
+      setQuantityInput(newQty.toString());
+    }
+  };
+
+  const handleQuantityInputChange = (text) => {
+    setQuantityInput(text);
+    const num = parseInt(text);
+    if (!isNaN(num) && num > 0 && num <= 999) {
+      setQuantity(num);
+    }
+  };
+
+  const handleQuantityInputBlur = () => {
+    if (!quantityInput || parseInt(quantityInput) < 1) {
+      setQuantityInput('1');
+      setQuantity(1);
+    } else {
+      setQuantityInput(quantity.toString());
+    }
   };
 
   // Handle like toggle with animation
@@ -273,15 +272,14 @@ export default function ProductDetailScreen({ route, navigation }) {
 
     // Create cart item
     const cartItem = {
-      ...product,
+      product: product,
       selectedColor: selectedVariant?.color || null,
       selectedSize: selectedSize || null,
-      selectedVariantImage: selectedVariant?.imageUrl || product.image1,
+      colorImage: selectedVariant?.imageUrl || product.image1,
       quantity: quantity,
-      price: finalPrice,
     };
 
-    dispatch(addItem(cartItem));
+    dispatch(addItemToCart(cartItem));
     
     if (buyNow) {
       navigation.navigate('Cart');
@@ -460,6 +458,21 @@ export default function ProductDetailScreen({ route, navigation }) {
                 
                 <View style={styles.headerActions}>
                   <TouchableOpacity 
+                    onPress={() => navigation.navigate('Cart')} 
+                    style={styles.floatingHeaderButton}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.headerButtonInner}>
+                      <Ionicons name="cart-outline" size={20} color={COLORS.white} />
+                      {cartItemCount > 0 && (
+                        <View style={styles.cartBadge}>
+                          <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
                     onPress={handleShare} 
                     style={styles.floatingHeaderButton}
                     activeOpacity={0.8}
@@ -582,13 +595,26 @@ export default function ProductDetailScreen({ route, navigation }) {
                 onPress={decrementQuantity}
                 style={styles.quantityButton}
                 disabled={quantity <= 1}
+                activeOpacity={0.7}
               >
                 <Ionicons name="remove" size={20} color={quantity <= 1 ? COLORS.lightGray : COLORS.primary} />
               </TouchableOpacity>
               
-              <Text style={styles.quantityText}>{quantity}</Text>
+              <TextInput
+                style={styles.quantityInput}
+                value={quantityInput}
+                onChangeText={handleQuantityInputChange}
+                onBlur={handleQuantityInputBlur}
+                keyboardType="number-pad"
+                maxLength={3}
+                selectTextOnFocus
+              />
               
-              <TouchableOpacity onPress={incrementQuantity} style={styles.quantityButton}>
+              <TouchableOpacity 
+                onPress={incrementQuantity} 
+                style={styles.quantityButton}
+                activeOpacity={0.7}
+              >
                 <Ionicons name="add" size={20} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
@@ -873,11 +899,13 @@ export default function ProductDetailScreen({ route, navigation }) {
                               onPress={(e) => {
                                 e.stopPropagation();
                                 const cartItem = {
-                                  ...item,
+                                  product: item,
                                   quantity: 1,
-                                  price: itemHasPromo ? item.prixPromo : item.prix,
+                                  selectedColor: null,
+                                  selectedSize: null,
+                                  colorImage: item.image1,
                                 };
-                                dispatch(addItem(cartItem));
+                                dispatch(addItemToCart(cartItem));
                                 Alert.alert('✓ Ajouté', 'Produit ajouté au panier');
                               }}
                             >
@@ -1038,6 +1066,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: COLORS.secondary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  cartBadgeText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: 'bold',
+    paddingHorizontal: 4,
   },
   carouselContainer: {
     height: 400,
@@ -1324,6 +1371,16 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  quantityInput: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.black,
+    minWidth: 60,
+    textAlign: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.primary,
+    paddingVertical: 4,
   },
   quantityText: {
     fontSize: 18,
