@@ -8,35 +8,35 @@ export const STORAGE_KEYS = {
   THEME: 'theme',
 };
 
-// Couleurs du thème Kassarmou - Palette simplifiée
+// Couleurs du thème Kassarmou - Couleurs du drapeau du Niger
 export const COLORS = {
-  // 🎨 COULEURS PRINCIPALES (4 couleurs uniquement)
-  primary: '#30A08B',        // Teal - Couleur principale de la marque
-  secondary: '#FC913A',      // Orange - Accents et actions importantes
+  // 🎨 COULEURS PRINCIPALES (Drapeau Niger: Orange, Blanc, Vert)
+  primary: '#E87E04',        // Orange du drapeau Niger
+  secondary: '#008751',      // Vert du drapeau Niger
   tertiary: '#62aca2',       // Teal clair - Arrière-plans et ambiance
   
   // Couleurs de base
-  white: '#FFFFFF',          // Blanc
+  white: '#FFFFFF',          // Blanc du drapeau Niger
   black: '#000000',          // Noir
   
-  // 📝 Dérivées pour l'interface (basées sur les 4 principales)
+  // 📝 Dérivées pour l'interface
   background: '#FFFFFF',     // Blanc
-  backgroundAlt: '#F5F5F5',  // Gris très clair (dérivé)
+  backgroundAlt: '#F5F5F5',  // Gris très clair
   text: '#000000',           // Noir
-  textLight: '#666666',      // Gris moyen (dérivé)
-  textMuted: '#999999',      // Gris clair (dérivé)
-  border: '#E0E0E0',         // Bordures (dérivé)
+  textLight: '#718096',      // Gris moyen
+  textMuted: '#999999',      // Gris clair
+  border: '#E2E8F0',         // Bordures
   
-  // 🎯 États (réutilisation des couleurs principales)
-  success: '#30A08B',        // primary - Succès
-  error: '#FC913A',          // secondary - Erreurs/Alertes
-  warning: '#FC913A',        // secondary - Avertissements
-  info: '#62aca2',           // tertiary - Informations
+  // 🎯 États
+  success: '#008751',        // Vert - Succès
+  error: '#E74C3C',          // Rouge - Erreurs
+  warning: '#E87E04',        // Orange - Avertissements
+  info: '#62aca2',           // Teal - Informations
   
   // Versions claires (pour arrière-plans)
-  primaryLight: 'rgba(48, 160, 139, 0.1)',   // primary avec opacité
-  secondaryLight: 'rgba(252, 145, 58, 0.1)', // secondary avec opacité
-  tertiaryLight: 'rgba(98, 172, 162, 0.1)',  // tertiary avec opacité
+  primaryLight: '#FFE0B2',   // Orange clair
+  secondaryLight: '#CCFFCC', // Vert clair
+  tertiaryLight: 'rgba(98, 172, 162, 0.1)',
   
   // Transparences
   overlay: 'rgba(0, 0, 0, 0.5)',

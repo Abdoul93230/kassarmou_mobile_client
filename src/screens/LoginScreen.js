@@ -319,7 +319,7 @@ export default function LoginScreen({ navigation }) {
           {/* Continuer sans compte */}
           <LoadingButton
             title="Continuer sans compte"
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => navigation.navigate('MainTabs')}
             variant="outline"
             style={styles.guestButton}
           />

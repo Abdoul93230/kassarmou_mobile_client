@@ -75,6 +75,27 @@ export default function CheckoutScreen({ navigation, route }) {
   const [clientSecret, setClientSecret] = useState('');
   const [createdOrderId, setCreatedOrderId] = useState(null);
 
+  // Détecter si c'est un repayment et aller directement à l'étape 2
+  useEffect(() => {
+    const checkRepayment = async () => {
+      try {
+        const pendingOrderJson = await AsyncStorage.getItem('pendingOrder');
+        if (pendingOrderJson) {
+          const pendingOrder = JSON.parse(pendingOrderJson);
+          if (pendingOrder.commandeId) {
+            console.log('🔄 Repayment détecté, passage direct à l\'étape paiement');
+            setStep(2); // Aller directement à l'étape de paiement
+            setPaymentMethod('stripe'); // Sélectionner automatiquement le paiement par carte
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors de la vérification du repayment:', error);
+      }
+    };
+    
+    checkRepayment();
+  }, []);
+
   // Charger les informations de livraison sauvegardées
   useEffect(() => {
     if (user) {
@@ -430,7 +451,7 @@ export default function CheckoutScreen({ navigation, route }) {
 
         // Rediriger vers les commandes après 3 secondes
         setTimeout(() => {
-          navigation.navigate('OrdersScreen'); // Ou 'Home' si pas d'écran de commandes
+          navigation.navigate('Orders');
         }, 3000);
       }
     } catch (error) {
@@ -511,7 +532,7 @@ export default function CheckoutScreen({ navigation, route }) {
         setTimeout(() => {
           navigation.reset({
             index: 0,
-            routes: [{ name: 'Home' }],
+            routes: [{ name: 'MainTabs' }],
           });
         }, 3000);
       } else {

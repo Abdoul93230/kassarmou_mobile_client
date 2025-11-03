@@ -113,10 +113,74 @@ export const loadCart = () => async (dispatch) => {
     const cartString = await AsyncStorage.getItem('panier');
     if (cartString) {
       const cart = JSON.parse(cartString);
-      dispatch(setCart(cart));
+      
+      // Valider et convertir la structure du panier
+      if (Array.isArray(cart) && cart.length > 0) {
+        // Vérifier si c'est le format Redux (avec product)
+        const isReduxFormat = cart.every(item => 
+          item.product && 
+          typeof item.product === 'object' &&
+          item.product._id
+        );
+        
+        if (isReduxFormat) {
+          // Format Redux normal
+          dispatch(setCart(cart));
+        } else {
+          // Format order.prod (format web) - convertir vers format Redux
+          const isOrderProdFormat = cart.every(item => 
+            item._id && 
+            item.name &&
+            typeof item.price !== 'undefined'
+          );
+          
+          if (isOrderProdFormat) {
+            console.log('Conversion du panier depuis order.prod vers format Redux');
+            // Convertir chaque item de order.prod vers le format Redux
+            const convertedCart = cart.map(item => ({
+              product: {
+                _id: item._id || '',
+                nom: item.name || 'Produit',
+                images: item.imageUrl ? [item.imageUrl] : [],
+                prix: item.price || 0,
+                prixPromo: 0, // Pas de promo dans order.prod
+                poid: item.weight || 0,
+                description: item.description || '',
+                categorie: item.category || '',
+                tailles: item.size ? [item.size] : [],
+                couleurs: item.color ? [item.color] : [],
+                stock: 999, // Stock par défaut
+                marque: item.brand || '',
+                dateAjout: item.dateAdded || new Date().toISOString(),
+              },
+              quantity: item.quantity || 1,
+              selectedColor: item.color || '',
+              selectedSize: item.size || '',
+              colorImage: item.imageUrl || '',
+              addedAt: item.addedAt || new Date().toISOString(),
+            }));
+            
+            dispatch(setCart(convertedCart));
+          } else {
+            // Format invalide
+            console.warn('Format de panier invalide, nettoyage...');
+            await AsyncStorage.removeItem('panier');
+            dispatch(clearCart());
+          }
+        }
+      } else {
+        dispatch(setCart(cart));
+      }
     }
   } catch (error) {
     console.error('Erreur chargement panier:', error);
+    // En cas d'erreur, nettoyer le panier corrompu
+    try {
+      await AsyncStorage.removeItem('panier');
+      dispatch(clearCart());
+    } catch (e) {
+      console.error('Erreur nettoyage panier:', e);
+    }
   }
 };
 

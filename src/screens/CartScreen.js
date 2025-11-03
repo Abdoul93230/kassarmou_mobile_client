@@ -481,7 +481,7 @@ export default function CartScreen({ navigation }) {
           </View>
 
           {/* Poids si disponible */}
-          {item.product.poid && (
+          {item.product.poid > 0 && (
             <View style={styles.weightBadge}>
               <Ionicons name="scale-outline" size={12} color={COLORS.primary} />
               <Text style={styles.weightText}>
@@ -576,7 +576,7 @@ export default function CartScreen({ navigation }) {
           
           <TouchableOpacity
             style={styles.shopButton}
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => navigation.navigate('MainTabs')}
             activeOpacity={0.8}
           >
             <LinearGradient

@@ -430,7 +430,7 @@ export default function FavoritesScreen() {
         
         <TouchableOpacity
           style={styles.exploreButton}
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => navigation.navigate('MainTabs')}
         >
           <LinearGradient
             colors={[COLORS.primary, COLORS.tertiary]}

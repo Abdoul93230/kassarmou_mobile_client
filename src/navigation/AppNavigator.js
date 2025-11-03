@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { verifyAuth } from '../redux/authSlice';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
@@ -24,6 +25,7 @@ import SearchScreen from '../screens/SearchScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderDetailScreen from '../screens/OrderDetailScreen';
 import ProductListScreen from '../screens/ProductListScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -31,6 +33,7 @@ const Tab = createBottomTabNavigator();
 // Navigation principale avec Tabs
 function MainTabs() {
   const cartItemCount = useSelector(state => state.cart.itemCount);
+  const insets = useSafeAreaInsets();
   
   return (
     <Tab.Navigator
@@ -58,9 +61,9 @@ function MainTabs() {
           backgroundColor: '#FFFFFF',          // Blanc
           borderTopColor: '#E0E0E0',           // Bordure grise
           borderTopWidth: 1,
-          paddingBottom: 5,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 5, // Adapte au safe area
           paddingTop: 5,
-          height: 60,
+          height: 60 + (insets.bottom > 0 ? insets.bottom : 0), // Hauteur adaptative
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -195,6 +198,11 @@ function AppNavigator() {
         {isAuthenticated && (
           <>
             <Stack.Screen 
+              name="EditProfile" 
+              component={EditProfileScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
               name="Checkout" 
               component={CheckoutScreen}
               options={{ title: 'Paiement' }}
@@ -207,7 +215,7 @@ function AppNavigator() {
             <Stack.Screen 
               name="OrderDetail" 
               component={OrderDetailScreen}
-              options={{ title: 'Détail de la commande' }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen 
               name="Messages" 
