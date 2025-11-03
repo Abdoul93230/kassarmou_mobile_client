@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "kassarmou_mobile_client",
-    "slug": "kassarmou_mobile_client",
+    "name": "Kassarmou",
+    "slug": "kassarmou-mobile-client",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,20 +10,38 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#30A08B"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kassarmou.mobile"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#30A08B"
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.kassarmou.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "33730fc4-2f3a-4498-8887-70bd090e6c37"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/33730fc4-2f3a-4498-8887-70bd090e6c37"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
