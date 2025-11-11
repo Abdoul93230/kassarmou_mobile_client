@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -182,9 +184,12 @@ export default function OrdersScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+    <>
+      <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
+      <View style={styles.statusBarBackground} />
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        {/* Header */}
+        <View style={styles.header}>
         <Text style={styles.headerTitle}>Mes commandes</Text>
       </View>
 
@@ -284,26 +289,36 @@ export default function OrdersScreen({ navigation }) {
           ))
         )}
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  statusBarBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 50 : 0,
+    backgroundColor: '#30A08B',
+    zIndex: 1000,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#30A08B',
+    paddingTop: Platform.OS === 'ios' ? 72 : 24,
+    paddingBottom: 16,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomWidth: 0,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: COLORS.white,
   },
   loadingContainer: {
     flex: 1,

@@ -1,5 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
+import { navigationRef, navigate } from '../navigation/RootNavigation';
 
 // URL du backend - API en ligne
 export const BackendUrl = 'https://kassarmou-backend.onrender.com';
@@ -63,9 +65,53 @@ apiClient.interceptors.response.use(
       }
     }
     
-    // Gérer erreur 401 (token expiré)
+    // Gérer erreur 401 (token expiré) : déconnecter l'utilisateur globalement
     if (error.response?.status === 401) {
-      await AsyncStorage.removeItem('userEcomme');
+      try {
+        // Supprimer le token du storage
+        await AsyncStorage.removeItem('userEcomme');
+
+        // Importer dynamiquement le store et les actions pour éviter les cycles d'import
+        try {
+          // require à l'exécution pour casser les dépendances circulaires
+          // eslint-disable-next-line global-require
+          const storeModule = require('../redux/store');
+          // eslint-disable-next-line global-require
+          const { logoutUser: logoutAction } = require('../redux/authSlice');
+          // eslint-disable-next-line global-require
+          const { clearCartData: clearCartAction } = require('../redux/cartSlice');
+
+          const storeLocal = storeModule && storeModule.default ? storeModule.default : storeModule;
+          if (storeLocal && storeLocal.dispatch) {
+            storeLocal.dispatch(logoutAction());
+            storeLocal.dispatch(clearCartAction());
+          }
+        } catch (reqErr) {
+          console.warn('Impossible de dispatcher logout via store dynamique:', reqErr);
+        }
+
+        // Afficher un message utilisateur
+        try {
+          Toast.show({
+            type: 'info',
+            text1: 'Session expirée',
+            text2: 'Veuillez vous reconnecter.',
+          });
+        } catch (tErr) {
+          console.warn('Toast unavailable:', tErr);
+        }
+
+        // Naviguer vers l'écran Login si possible
+        try {
+          if (navigationRef && navigationRef.isReady && navigationRef.isReady()) {
+            navigate('Login');
+          }
+        } catch (navErr) {
+          console.warn('Navigation to Login failed:', navErr);
+        }
+      } catch (e) {
+        console.error('Erreur lors du nettoyage après 401:', e);
+      }
     }
     
     return Promise.reject(error);

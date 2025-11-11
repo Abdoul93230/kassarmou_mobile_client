@@ -11,6 +11,7 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -371,6 +372,7 @@ const EditProfileScreen = ({ navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -601,9 +603,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.primary,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 16,
+    backgroundColor: '#30A08B',
+    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

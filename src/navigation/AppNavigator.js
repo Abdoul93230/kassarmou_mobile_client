@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from './RootNavigation';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +27,7 @@ import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderDetailScreen from '../screens/OrderDetailScreen';
 import ProductListScreen from '../screens/ProductListScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
+import FaqScreen from '../screens/FaqScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -129,7 +131,7 @@ function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{
           headerStyle: {
@@ -149,12 +151,15 @@ function AppNavigator() {
         <Stack.Screen 
           name="MainTabs" 
           component={MainTabs}
-          options={{ headerShown: false }}
+          options={{ 
+            headerShown: false,
+            title: 'Accueil'
+          }}
         />
         <Stack.Screen 
           name="ProductDetail" 
           component={ProductDetailScreen}
-          options={{ title: 'Détail du produit' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen 
           name="Cart" 
@@ -193,6 +198,11 @@ function AppNavigator() {
           component={ResetPasswordScreen}
           options={{ headerShown: false }}
         />
+        <Stack.Screen
+          name="Faq"
+          component={FaqScreen}
+          options={{ headerShown: false }}
+        />
         
         {/* Écrans protégés (nécessitent authentification) */}
         {isAuthenticated && (
@@ -210,7 +220,7 @@ function AppNavigator() {
             <Stack.Screen 
               name="Orders" 
               component={OrdersScreen}
-              options={{ title: 'Mes commandes' }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen 
               name="OrderDetail" 

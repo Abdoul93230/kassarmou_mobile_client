@@ -15,6 +15,7 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -399,10 +400,11 @@ export default function ProductListScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <>
       <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
-      
-      {/* Search Bar or Sticky Bar - Mode recherche remplace la sticky bar */}
+      <View style={styles.statusBarBackground} />
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        {/* Search Bar or Sticky Bar - Mode recherche remplace la sticky bar */}
       {showStickyBar && (
         <>
           {!showSearchBar ? (
@@ -686,11 +688,21 @@ export default function ProductListScreen() {
           </>
         }
       />
-    </View>
+      </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  statusBarBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 50 : 0,
+    backgroundColor: '#30A08B',
+    zIndex: 1000,
+  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
@@ -698,7 +710,7 @@ const styles = StyleSheet.create({
   // Sticky Bar Styles
   stickyBar: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0,
+    top: 0,
     left: 0,
     right: 0,
     height: 60,
@@ -765,7 +777,7 @@ const styles = StyleSheet.create({
   },
   heroGradient: {
     width: '100%',
-    paddingTop: Platform.OS === 'ios' ? 55 : 45,
+    paddingTop: Platform.OS === 'ios' ? 70 : (StatusBar.currentHeight || 0) + 10,
     paddingHorizontal: 20,
     paddingBottom: 30,
   },
@@ -1186,7 +1198,7 @@ const styles = StyleSheet.create({
   // Sticky Search Bar Styles
   searchStickyBar: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0,
+    top: 0,
     left: 0,
     right: 0,
     backgroundColor: '#30A08B',

@@ -53,21 +53,29 @@ export const verifyAuth = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const userString = await AsyncStorage.getItem('userEcomme');
-      
+
       if (!userString) {
         return null;
       }
-      
+
       const userData = JSON.parse(userString);
-      
-      // Le format du backend est : { id, name, token, message }
-      // On vérifie si on a bien un token et un id
-      if (userData.token && userData.id) {
-        return userData;
+
+      // Si on n'a pas de token, on supprime et on retourne null
+      if (!userData.token) {
+        await AsyncStorage.removeItem('userEcomme');
+        return null;
       }
-      
-      await AsyncStorage.removeItem('userEcomme');
-      return null;
+
+      // Valider le token côté serveur en appelant /me
+      try {
+        const profileResponse = await apiClient.get('/api/profilesRoutes/me');
+        // Si tout OK, retourner les données utilisateur (on conserve le format stocké)
+        return { ...userData, profile: profileResponse.data };
+      } catch (err) {
+        // Si le serveur renvoie 401 ou autre, on considère la session invalide
+        await AsyncStorage.removeItem('userEcomme');
+        return null;
+      }
     } catch (error) {
       await AsyncStorage.removeItem('userEcomme');
       return rejectWithValue('Session expirée');

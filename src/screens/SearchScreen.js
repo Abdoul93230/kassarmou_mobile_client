@@ -137,7 +137,7 @@ export default function SearchScreen() {
   };
 
   const handleProductPress = (product) => {
-    navigation.navigate('ProductDetail', { productId: product._id });
+    navigation.navigate('ProductDetail', { product });
   };
 
   const handleRecentSearchPress = (term) => {
@@ -166,12 +166,12 @@ export default function SearchScreen() {
             {item.nom || item.name}
           </Text>
           <View style={styles.priceRow}>
-            <Text style={styles.resultPrice}>{price?.toFixed(0)} FCFA</Text>
+            <Text style={styles.resultPrice}>€{price?.toFixed(2)}</Text>
             {hasPromo && (
-              <Text style={styles.oldPrice}>{item.prix?.toFixed(0)} FCFA</Text>
+              <Text style={styles.oldPrice}>€{item.prix?.toFixed(2)}</Text>
             )}
           </View>
-          {item.stock > 0 ? (
+          {item.isdisponible ? (
             <Text style={styles.inStock}>En stock</Text>
           ) : (
             <Text style={styles.outOfStock}>Rupture</Text>

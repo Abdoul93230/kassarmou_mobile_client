@@ -4,12 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
   Image,
   Alert,
+  StatusBar,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useSelector } from 'react-redux';
@@ -60,7 +62,7 @@ export default function OrderDetailScreen({ route, navigation }) {
   };
 
   const formatPrice = (price) => {
-    return `${price?.toLocaleString('fr-FR')} XOF`;
+    return `€${price?.toFixed(2)}`;
   };
 
   const getStatusBadgeColor = (status) => {
@@ -166,9 +168,12 @@ export default function OrderDetailScreen({ route, navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+    <>
+      <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
+      <View style={styles.statusBarBackground} />
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        {/* Header */}
+        <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
@@ -443,11 +448,21 @@ export default function OrderDetailScreen({ route, navigation }) {
           <Text style={styles.helpButtonText}>Besoin d'aide ?</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  statusBarBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 50 : 0,
+    backgroundColor: '#30A08B',
+    zIndex: 1000,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.backgroundAlt,
@@ -515,9 +530,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#30A08B',
+    paddingTop: Platform.OS === 'ios' ? 72 : 24,
+    paddingBottom: 16,
     paddingHorizontal: 16,
-    paddingVertical: 16,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

@@ -13,6 +13,7 @@ import {
   Animated,
   Modal,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -445,28 +446,97 @@ export default function FavoritesScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-      
-      <FlatList
-        data={sortedProducts}
-        renderItem={renderProductCard}
-        keyExtractor={(item) => item._id}
-        numColumns={2}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={!loading && renderEmptyState}
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={sortedProducts.length > 0 ? styles.columnWrapper : null}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      />
+      {!user && <View style={styles.statusBarBackground} />}
+      <View style={styles.container}>
+        {!user ? (
+          // Utilisateur non connecté
+          <ScrollView style={styles.notLoggedInContainer} showsVerticalScrollIndicator={false}>
+            <LinearGradient
+              colors={['#30A08B', '#2D9175', '#26805F']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.notLoggedInHeader}
+            >
+            <View style={styles.notLoggedInAvatarContainer}>
+              <View style={styles.notLoggedInAvatar}>
+                <MaterialCommunityIcons name="heart-multiple" size={60} color={COLORS.white} />
+              </View>
+            </View>
+            <Text style={styles.notLoggedInTitle}>Vos favoris vous attendent</Text>
+            <Text style={styles.notLoggedInSubtitle}>
+              Connectez-vous pour accéder à vos produits favoris
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.notLoggedInContent}>
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={() => navigation.navigate('Login')}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#30A08B', '#26805F']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.loginButtonGradient}
+              >
+                <Ionicons name="log-in-outline" size={24} color={COLORS.white} />
+                <Text style={styles.loginButtonText}>Se connecter</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={() => navigation.navigate('Register')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.registerButtonText}>Créer un compte</Text>
+            </TouchableOpacity>
+
+            <View style={styles.featuresContainer}>
+              <Text style={styles.featuresTitle}>Avec un compte, vous pouvez :</Text>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                <Text style={styles.featureText}>Sauvegarder vos produits préférés</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                <Text style={styles.featureText}>Accéder à vos favoris depuis tous vos appareils</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                <Text style={styles.featureText}>Recevoir des alertes sur les promotions</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                <Text style={styles.featureText}>Ajouter rapidement au panier</Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={sortedProducts}
+          renderItem={renderProductCard}
+          keyExtractor={(item) => item._id}
+          numColumns={2}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={!loading && renderEmptyState}
+          contentContainerStyle={styles.listContent}
+          columnWrapperStyle={sortedProducts.length > 0 ? styles.columnWrapper : null}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        />
+      )}
       
       {/* Delete Confirmation Modal */}
       <Modal
@@ -533,7 +603,8 @@ export default function FavoritesScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </>
   );
 }
 
@@ -1041,5 +1112,107 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.white,
+  },
+  
+  // Not Logged In Styles
+  notLoggedInContainer: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  notLoggedInHeader: {
+    paddingTop: Platform.OS === 'ios' ? 70 : 60,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  notLoggedInAvatarContainer: {
+    marginBottom: 20,
+  },
+  notLoggedInAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.white,
+  },
+  notLoggedInTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: COLORS.white,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  notLoggedInSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  notLoggedInContent: {
+    flex: 1,
+    padding: 20,
+  },
+  loginButton: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  loginButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  loginButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  registerButton: {
+    marginBottom: 32,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    alignItems: 'center',
+  },
+  registerButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  featuresContainer: {
+    backgroundColor: '#F8FFFE',
+    borderRadius: 16,
+    padding: 20,
+  },
+  featuresTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.black,
+    marginBottom: 20,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  featureText: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.darkGray,
+    lineHeight: 20,
   },
 });

@@ -19,7 +19,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/vraisLogo.png",
-        "backgroundColor": "#30A08B"
+        "backgroundColor": "#ffffff"
       },
       "package": "com.kassarmou.mobile",
       "versionCode": 1,

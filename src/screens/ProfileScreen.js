@@ -10,7 +10,9 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
-  Switch
+  Switch,
+  StatusBar,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,9 +23,8 @@ import useNetworkStatus from '../hooks/useNetworkStatus';
 import LoadingButton from '../components/LoadingButton';
 import CountryCodePicker from '../components/CountryCodePicker';
 import { COLORS } from '../config/constants';
-import { API_URL } from '../config/api';
 import Toast from 'react-native-toast-message';
-import axios from 'axios';
+import apiClient from '../config/api';
 import * as ImagePicker from 'expo-image-picker';
 import ImageEditorModal from '../components/ImageEditorModal';
 
@@ -82,9 +83,8 @@ export default function ProfileScreen({ navigation }) {
       setLoading(true);
 
       // Récupérer les données utilisateur
-      const userResponse = await axios.get(`${API_URL}/api/user/getUser`, {
+      const userResponse = await apiClient.get('/api/user/getUser', {
         params: { id: user.id },
-        headers: { Authorization: `Bearer ${user.token}` },
       });
 
       if (!userResponse.data.user) {
@@ -101,9 +101,7 @@ export default function ProfileScreen({ navigation }) {
 
       // Récupérer le profil (peut ne pas exister)
       try {
-        const profileResponse = await axios.get(`${API_URL}/api/profilesRoutes/me`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        });
+        const profileResponse = await apiClient.get('/api/profilesRoutes/me');
 
         const profileData = profileResponse.data?.data;
 
@@ -132,7 +130,13 @@ export default function ProfileScreen({ navigation }) {
       });
     } catch (error) {
       console.error('Erreur chargement profil:', error);
-      
+
+      // Si l'erreur est 401, interceptor gère la déconnexion/navigation => éviter les toasts doublons
+      if (error.response?.status === 401) {
+        setLoading(false);
+        return;
+      }
+
       let errorMessage = 'Impossible de charger le profil';
       if (error.code === 'ECONNABORTED') {
         errorMessage = 'Le serveur met trop de temps à répondre';
@@ -141,7 +145,7 @@ export default function ProfileScreen({ navigation }) {
       } else if (error.request) {
         errorMessage = 'Aucune réponse du serveur';
       }
-      
+
       Toast.show({
         type: 'error',
         text1: 'Erreur',
@@ -157,15 +161,14 @@ export default function ProfileScreen({ navigation }) {
     if (!user || !user.id) return;
     
     try {
-      const response = await axios.get(`${API_URL}/api/ordersRoutes/user/${user.id}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
+      const response = await apiClient.get(`/api/ordersRoutes/user/${user.id}`);
       
       if (response.data?.commandes) {
         setOrdersCount(response.data.commandes.length);
       }
     } catch (error) {
       console.error('Erreur chargement commandes:', error);
+      if (error.response?.status === 401) return; // interceptor will handle logout
     }
   }, [user]);
 
@@ -174,7 +177,7 @@ export default function ProfileScreen({ navigation }) {
     if (!user || !user.id) return;
     
     try {
-      const response = await axios.get(`${API_URL}/likes/user/${user.id}`);
+  const response = await apiClient.get(`/likes/user/${user.id}`);
       
       console.log('📊 Données favoris brutes:', response.data);
       console.log('📊 Nombre total de likes:', response.data.length);
@@ -189,9 +192,10 @@ export default function ProfileScreen({ navigation }) {
     } catch (error) {
       console.error('Erreur chargement favoris:', error);
       // Si l'endpoint retourne 404, c'est que l'utilisateur n'a pas de favoris
-      if (error.response?.status === 404) {
+        if (error.response?.status === 404) {
         setFavoritesCount(0);
-      }
+        }
+      if (error.response?.status === 401) return; // interceptor will handle logout
     }
   }, [user]);
 
@@ -259,16 +263,9 @@ export default function ProfileScreen({ navigation }) {
       formData.append('whatsapp', whatsapp);
       formData.append('id', user.id);
 
-      await axios.post(
-        `${API_URL}/api/profilesRoutes/create`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${user.token}`,
-          },
-        }
-      );
+      await apiClient.post('/api/profilesRoutes/create', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
       Toast.show({
         type: 'success',
@@ -412,16 +409,9 @@ export default function ProfileScreen({ navigation }) {
       formData.append('whatsapp', whatsapp);
       formData.append('id', user.id);
 
-      await axios.post(
-        `${API_URL}/api/profilesRoutes/create`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${user.token}`,
-          },
-        }
-      );
+      await apiClient.post('/api/profilesRoutes/create', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
       Toast.show({
         type: 'success',
@@ -504,14 +494,83 @@ export default function ProfileScreen({ navigation }) {
       icon: 'help-circle-outline',
       title: 'Aide et support',
       subtitle: 'FAQ et contact',
-      onPress: () => {},
+      onPress: () => navigation.navigate('Faq'),
       badge: null,
     },
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {loading ? (
+    <>
+      <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
+      {!user && <View style={styles.statusBarBackground} />}
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        {!user ? (
+          // Utilisateur non connecté
+          <ScrollView style={styles.notLoggedInContainer} showsVerticalScrollIndicator={false}>
+          <LinearGradient
+            colors={['#30A08B', '#2D9175', '#26805F']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.notLoggedInHeader}
+          >
+            <View style={styles.notLoggedInAvatarContainer}>
+              <View style={styles.notLoggedInAvatar}>
+                <Ionicons name="person-outline" size={60} color={COLORS.white} />
+              </View>
+            </View>
+            <Text style={styles.notLoggedInTitle}>Bienvenue sur Kassarmou</Text>
+            <Text style={styles.notLoggedInSubtitle}>
+              Connectez-vous pour accéder à votre profil et vos commandes
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.notLoggedInContent}>
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={() => navigation.navigate('Login')}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#30A08B', '#26805F']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.loginButtonGradient}
+              >
+                <Ionicons name="log-in-outline" size={24} color={COLORS.white} />
+                <Text style={styles.loginButtonText}>Se connecter</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={() => navigation.navigate('Register')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.registerButtonText}>Créer un compte</Text>
+            </TouchableOpacity>
+
+            <View style={styles.featuresContainer}>
+              <Text style={styles.featuresTitle}>Profitez de tous les avantages :</Text>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                <Text style={styles.featureText}>Suivre vos commandes en temps réel</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                <Text style={styles.featureText}>Sauvegarder vos produits favoris</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                <Text style={styles.featureText}>Accéder à l'historique de vos achats</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                <Text style={styles.featureText}>Gérer vos adresses de livraison</Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      ) : loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Chargement du profil...</Text>
@@ -643,18 +702,28 @@ export default function ProfileScreen({ navigation }) {
         onSave={handleSaveEditedImage}
         onCancel={handleCancelImageEditing}
       />
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  statusBarBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 44 : 0,
+    backgroundColor: '#30A08B',
+    zIndex: 1000,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
   header: {
-    paddingTop: 20,
-    paddingBottom: 30,
+    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    paddingBottom: 24,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -682,6 +751,7 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     position: 'relative',
+    marginTop: 17,
     marginBottom: 16,
   },
   avatarCircle: {
@@ -857,5 +927,103 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  // Styles pour utilisateur non connecté
+  notLoggedInContainer: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  notLoggedInHeader: {
+    paddingTop: Platform.OS === 'ios' ? 70 : 60,
+    paddingBottom: 60,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  notLoggedInAvatarContainer: {
+    marginBottom: 24,
+  },
+  notLoggedInAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.white,
+  },
+  notLoggedInTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: COLORS.white,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  notLoggedInSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  notLoggedInContent: {
+    padding: 24,
+  },
+  loginButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  loginButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 12,
+  },
+  loginButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  registerButton: {
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  registerButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  featuresContainer: {
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    padding: 20,
+  },
+  featuresTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 20,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  featureText: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.textLight,
+    lineHeight: 22,
   },
 });
