@@ -1,32 +1,59 @@
 {
   "expo": {
-    "name": "Kassarmou",
-    "slug": "kassarmou-mobile-client",
+    "name": "Ihambaobab",
+    "slug": "ihambaobab",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/vraisLogo.png",
+    "icon": "./assets/adaptive-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "ihambaobab",
     "splash": {
-      "image": "./assets/vraisLogo.png",
+      "image": "./assets/2.jpg",
       "resizeMode": "contain",
-      "backgroundColor": "#30A08B"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kassarmou.mobile"
+      "bundleIdentifier": "com.ihambaobab.mobile",
+      "associatedDomains": [
+        "applinks:ihambaobab.com",
+        "applinks:www.ihambaobab.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/vraisLogo.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
       },
-      "package": "com.kassarmou.mobile",
+      "package": "com.ihambaobab.mobile",
       "versionCode": 1,
       "permissions": [
         "INTERNET",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ]
     },
     "web": {
@@ -34,11 +61,11 @@
     },
     "extra": {
       "eas": {
-        "projectId": "33730fc4-2f3a-4498-8887-70bd090e6c37"
+        "projectId": "cc2a64e6-a646-43b0-9c43-ba6720c574a0"
       }
     },
     "updates": {
-      "url": "https://u.expo.dev/33730fc4-2f3a-4498-8887-70bd090e6c37"
+      "url": "https://u.expo.dev/cc2a64e6-a646-43b0-9c43-ba6720c574a0"
     },
     "runtimeVersion": {
       "policy": "appVersion"

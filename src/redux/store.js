@@ -10,7 +10,7 @@ const store = configureStore({
     products: productsReducer,
     likes: likesReducer,
     auth: authReducer,
-    cart: cartReducer,
+    panier: cartReducer,
     categories: categoriesReducer,
   },
   middleware: (getDefaultMiddleware) =>

@@ -22,7 +22,7 @@ const SplashScreen = () => {
         </View>
 
         {/* App Name */}
-        <Text style={styles.appName}>Kassarmoumarket</Text>
+        <Text style={styles.appName}>Ihambaobab</Text>
         <Text style={styles.tagline}>Votre marketplace de confiance</Text>
 
         {/* Loading Indicator */}

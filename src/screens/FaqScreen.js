@@ -72,11 +72,11 @@ export default function FaqScreen({ navigation }) {
 
         <View style={styles.contactCard}>
           <Text style={styles.contactTitle}>Nos informations</Text>
-          <Text style={styles.contactText}>Email: support@kassarmoumarket.com</Text>
+          <Text style={styles.contactText}>Email: support@ihambaobab.com</Text>
           <Text style={styles.contactText}>WhatsApp: +32465965436</Text>
           <Text style={styles.contactText}>Adresse: 3053 Haasrode, Belgique</Text>
 
-          <TouchableOpacity style={styles.contactButton} onPress={() => Linking.openURL('mailto:support@kassarmoumarket.com')}>
+          <TouchableOpacity style={styles.contactButton} onPress={() => Linking.openURL('mailto:support@ihambaobab.com')}>
             <Text style={styles.contactButtonText}>Contacter le support</Text>
           </TouchableOpacity>
         </View>

@@ -174,9 +174,9 @@ export default function LoginScreen({ navigation }) {
         {/* Logo */}
         <View style={styles.logoContainer}>
           <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>K</Text>
+            <Text style={styles.logoText}>I</Text>
           </View>
-          <Text style={styles.title}>KASSARMOU</Text>
+          <Text style={styles.title}>IHAMBAOBAB</Text>
           <Text style={styles.subtitle}>Connectez-vous à votre compte</Text>
         </View>
 

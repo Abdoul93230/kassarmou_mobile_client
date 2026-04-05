@@ -4,12 +4,9 @@ import Toast from 'react-native-toast-message';
 import { navigationRef, navigate } from '../navigation/RootNavigation';
 
 // URL du backend - API en ligne
-export const BackendUrl = 'https://kassarmou-backend.onrender.com';
+export const BackendUrl = 'https://ihambackend.onrender.com';
 export const API_URL = BackendUrl; // Alias pour compatibilité
 
-// Pour développement local, décommenter la ligne ci-dessous :
-// export const BackendUrl = 'http://10.0.2.2:5000'; // Émulateur Android
-// export const BackendUrl = 'http://192.168.1.X:5000'; // Téléphone physique (remplacer X par votre IP)
 
 // Configuration Axios
 const apiClient = axios.create({
@@ -79,7 +76,7 @@ apiClient.interceptors.response.use(
           // eslint-disable-next-line global-require
           const { logoutUser: logoutAction } = require('../redux/authSlice');
           // eslint-disable-next-line global-require
-          const { clearCartData: clearCartAction } = require('../redux/cartSlice');
+          const { clearPanierData: clearCartAction } = require('../redux/cartSlice');
 
           const storeLocal = storeModule && storeModule.default ? storeModule.default : storeModule;
           if (storeLocal && storeLocal.dispatch) {

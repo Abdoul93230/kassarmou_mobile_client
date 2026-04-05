@@ -16,14 +16,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useSelector } from 'react-redux';
-import axios from 'axios';
-import { API_URL } from '../config/api';
+import apiClient from '../config/api';
 import ImageEditorModal from '../components/ImageEditorModal';
+import Toast from 'react-native-toast-message';
 
 const COLORS = {
-  primary: '#E87E04', // Orange du drapeau Niger
-  primaryLight: '#FFE0B2',
-  secondary: '#008751', // Vert du drapeau Niger
+  primary: '#30A08B',
+  primaryLight: '#E0F7F4',
+  secondary: '#B2905F',
   white: '#FFFFFF',
   text: '#2C3E50',
   textLight: '#718096',
@@ -61,30 +61,37 @@ const EditProfileScreen = ({ navigation }) => {
     telephone: '',
     photo: null,
   });
-  const [countryCode, setCountryCode] = useState('+227');
+  const [selectedCountryCode, setSelectedCountryCode] = useState(countryCodes[0]);
+  const [phoneNumberOnly, setPhoneNumberOnly] = useState('');
   const [whatsapp, setWhatsapp] = useState(true);
 
-  // Extract phone info from full number
-  const extractPhoneInfo = (fullPhoneNumber) => {
+  // Fonction pour séparer le numéro de téléphone complet
+  const parsePhoneNumber = (fullPhoneNumber) => {
     if (!fullPhoneNumber) {
-      return { code: '+227', number: '' };
+      return { countryCode: countryCodes[0], phoneOnly: '' };
     }
 
     const phoneStr = String(fullPhoneNumber).trim();
-    const sortedCodes = countryCodes
-      .map((c) => c.code)
-      .sort((a, b) => b.length - a.length);
 
-    for (const code of sortedCodes) {
-      if (phoneStr.startsWith(code)) {
-        return {
-          code: code,
-          number: phoneStr.substring(code.length),
-        };
-      }
+    // Rechercher l'indicatif correspondant
+    const foundCountry = countryCodes.find(country => 
+      phoneStr.startsWith(country.code)
+    );
+
+    if (foundCountry) {
+      const phoneOnly = phoneStr.substring(foundCountry.code.length);
+      return { countryCode: foundCountry, phoneOnly };
     }
 
-    return { code: '+227', number: phoneStr };
+    // Si aucun indicatif trouvé, utiliser le premier par défaut
+    return { countryCode: countryCodes[0], phoneOnly: phoneStr };
+  };
+
+  // Fonction pour construire le numéro complet
+  const buildFullPhoneNumber = () => {
+    return phoneNumberOnly.trim() 
+      ? `${selectedCountryCode.code}${phoneNumberOnly.trim()}`
+      : '';
   };
 
   // Fetch user data
@@ -93,23 +100,35 @@ const EditProfileScreen = ({ navigation }) => {
   }, [user]);
 
   const fetchUserData = async () => {
+    if (!user || !user.id) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: 'Veuillez vous connecter',
+      });
+      navigation.navigate('Login');
+      return;
+    }
+
     try {
       setLoading(true);
 
-      // Vérifier si l'utilisateur est connecté
-      if (!user || !user.token || !user.id) {
-        Alert.alert('Erreur', 'Veuillez vous connecter');
-        navigation.navigate('Login');
-        return;
-      }
-
-      // Fetch user info avec ID en query params
-      const userResponse = await axios.get(`${API_URL}/api/user/getUser`, {
-        params: { id: user.id },
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
-      });
+      // Utiliser EXACTEMENT les mêmes endpoints que la version web
+      const [userResponse, profileResponse] = await Promise.all([
+        apiClient.get('https://ihambackend.onrender.com/user', {
+          params: { id: user.id },
+        }),
+        apiClient.get('https://ihambackend.onrender.com/getUserProfile', {
+          params: { id: user.id },
+        }).catch(error => {
+          // Si le profil n'existe pas (404), ce n'est pas une erreur
+          if (error.response?.status === 404) {
+            console.log('No profile yet, will create on save');
+            return { data: { data: null } };
+          }
+          throw error;
+        })
+      ]);
 
       if (!userResponse.data || !userResponse.data.user) {
         throw new Error('Données utilisateur non trouvées');
@@ -123,50 +142,51 @@ const EditProfileScreen = ({ navigation }) => {
         photo: null,
       });
 
-      // Try to fetch profile info (might not exist yet)
-      try {
-        const profileResponse = await axios.get(`${API_URL}/api/profilesRoutes/me`, {
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
-        });
+      // Traiter les données du profil si elles existent
+      const profileData = profileResponse.data?.data;
 
-        const profileData = profileResponse.data?.data;
+      if (profileData) {
+        const fullPhoneNumber = profileData?.numero || userResponse.data.user.phoneNumber || '';
+        const { countryCode, phoneOnly } = parsePhoneNumber(fullPhoneNumber);
 
-        if (profileData) {
-          // Extract country code and phone number
-          const { code, number } = extractPhoneInfo(profileData?.numero);
+        setSelectedCountryCode(countryCode);
+        setPhoneNumberOnly(phoneOnly);
 
-          setUserData((prev) => ({
-            ...prev,
-            telephone: number,
-            photo: profileData?.image || null,
-          }));
-
-          setCountryCode(code);
-          setWhatsapp(profileData?.whatsapp !== false);
-        }
-      } catch (profileError) {
-        // Si le profil n'existe pas encore (404), ce n'est pas une erreur
-        if (profileError.response?.status === 404) {
-          console.log('No profile yet, will create on save');
-        } else {
-          throw profileError;
-        }
+        setUserData(prev => ({
+          ...prev,
+          telephone: phoneOnly,
+          photo: profileData?.image && 
+                 profileData.image !== "https://chagona.onrender.com/images/image-1688253105925-0.jpeg"
+            ? profileData.image
+            : null,
+        }));
+        
+        setWhatsapp(profileData?.whatsapp !== false);
       }
+
+      Toast.show({
+        type: 'success',
+        text1: 'Profil chargé',
+      });
     } catch (error) {
       console.error('Error fetching user data:', error);
       
       let errorMessage = 'Impossible de charger les données du profil';
-      if (error.code === 'ECONNABORTED') {
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.code === 'ECONNABORTED') {
         errorMessage = 'Le serveur met trop de temps à répondre';
-      } else if (error.response) {
-        errorMessage = error.response.data?.message || errorMessage;
       } else if (error.request) {
         errorMessage = 'Aucune réponse du serveur';
       }
       
-      Alert.alert('Erreur', errorMessage);
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: errorMessage,
+      });
     } finally {
       setLoading(false);
     }
@@ -175,18 +195,30 @@ const EditProfileScreen = ({ navigation }) => {
   // Validate form
   const validateForm = () => {
     if (!userData.nom || userData.nom.trim().length < 3) {
-      Alert.alert('Erreur', 'Le nom doit contenir au moins 3 caractères');
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: 'Le nom doit contenir au moins 3 caractères',
+      });
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!userData.email || !emailRegex.test(userData.email)) {
-      Alert.alert('Erreur', 'Veuillez entrer une adresse email valide');
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: 'Veuillez entrer une adresse email valide',
+      });
       return false;
     }
 
-    if (!userData.telephone || userData.telephone.length < 8) {
-      Alert.alert('Erreur', 'Le numéro de téléphone doit contenir au moins 8 chiffres');
+    if (!phoneNumberOnly || phoneNumberOnly.length < 8) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: 'Le numéro de téléphone doit contenir au moins 8 chiffres',
+      });
       return false;
     }
 
@@ -196,7 +228,6 @@ const EditProfileScreen = ({ navigation }) => {
   // Handle photo selection
   const handleSelectPhoto = async () => {
     try {
-      // Demander à l'utilisateur de choisir entre galerie et caméra
       Alert.alert(
         'Photo de profil',
         'Choisissez une option',
@@ -218,14 +249,17 @@ const EditProfileScreen = ({ navigation }) => {
       );
     } catch (error) {
       console.error('Error selecting photo option:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: 'Une erreur est survenue',
+      });
     }
   };
 
   // Handle take photo with camera
   const handleTakePhoto = async () => {
     try {
-      // Request camera permission
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       
       if (status !== 'granted') {
@@ -236,27 +270,28 @@ const EditProfileScreen = ({ navigation }) => {
         return;
       }
 
-      // Launch camera
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
         quality: 1,
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Ouvrir l'éditeur d'image
         setSelectedImageUri(result.assets[0].uri);
         setShowImageEditor(true);
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Erreur', 'Impossible de prendre une photo');
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: 'Impossible de prendre une photo',
+      });
     }
   };
 
   // Handle pick from gallery
   const handlePickFromGallery = async () => {
     try {
-      // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
@@ -267,21 +302,23 @@ const EditProfileScreen = ({ navigation }) => {
         return;
       }
 
-      // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: false, // On désactive l'édition native
-        quality: 1, // Qualité maximale pour l'éditeur
+        allowsEditing: false,
+        quality: 1,
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Ouvrir l'éditeur d'image
         setSelectedImageUri(result.assets[0].uri);
         setShowImageEditor(true);
       }
     } catch (error) {
       console.error('Error selecting photo:', error);
-      Alert.alert('Erreur', 'Impossible de sélectionner la photo');
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: 'Impossible de sélectionner la photo',
+      });
     }
   };
 
@@ -307,12 +344,13 @@ const EditProfileScreen = ({ navigation }) => {
     try {
       setIsSubmitting(true);
 
+      const fullPhoneNumber = buildFullPhoneNumber();
       const formData = new FormData();
       formData.append('name', userData.nom);
       formData.append('email', userData.email);
-      formData.append('phone', `${countryCode}${userData.telephone}`);
+      formData.append('phone', fullPhoneNumber);
       formData.append('whatsapp', whatsapp);
-      formData.append('id', user.id); // Ajouter l'ID utilisateur
+      formData.append('id', user.id);
 
       // Add photo if it's a local URI (new photo selected)
       if (userData.photo && userData.photo.startsWith('file://')) {
@@ -328,31 +366,44 @@ const EditProfileScreen = ({ navigation }) => {
         });
       }
 
-      const response = await axios.post(
-        `${API_URL}/api/profilesRoutes/create`,
+      // Utiliser EXACTEMENT le même endpoint que la version web
+      const response = await apiClient.post(
+        'https://ihambackend.onrender.com/createProfile',
         formData,
         {
           headers: {
-            Authorization: `Bearer ${user?.token}`,
             'Content-Type': 'multipart/form-data',
           },
         }
       );
 
       if (response.data) {
-        Alert.alert('Succès', 'Profil mis à jour avec succès', [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]);
+        Toast.show({
+          type: 'success',
+          text1: 'Succès',
+          text2: 'Profil mis à jour avec succès',
+        });
+        
+        // Attendre un peu pour que le toast soit visible
+        setTimeout(() => {
+          navigation.goBack();
+        }, 1500);
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      Alert.alert(
-        'Erreur',
-        error.response?.data?.message || 'Impossible de sauvegarder le profil'
-      );
+      
+      let errorMessage = 'Impossible de sauvegarder le profil';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: errorMessage,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -372,7 +423,7 @@ const EditProfileScreen = ({ navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -467,8 +518,7 @@ const EditProfileScreen = ({ navigation }) => {
                 disabled={isSubmitting}
               >
                 <Text style={styles.countryCodeText}>
-                  {countryCodes.find((c) => c.code === countryCode)?.flag || '🇳🇪'}{' '}
-                  {countryCode}
+                  {selectedCountryCode.flag} {selectedCountryCode.code}
                 </Text>
                 <Ionicons
                   name={showCountryPicker ? 'chevron-up' : 'chevron-down'}
@@ -486,13 +536,12 @@ const EditProfileScreen = ({ navigation }) => {
                 />
                 <TextInput
                   style={styles.input}
-                  value={userData.telephone}
-                  onChangeText={(text) =>
-                    setUserData({ ...userData, telephone: text.replace(/[^0-9]/g, '') })
-                  }
-                  placeholder="XX XX XX XX"
+                  value={phoneNumberOnly}
+                  onChangeText={(text) => setPhoneNumberOnly(text.replace(/[^0-9]/g, ''))}
+                  placeholder="90123456"
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="phone-pad"
+                  maxLength={11}
                   editable={!isSubmitting}
                 />
               </View>
@@ -507,10 +556,10 @@ const EditProfileScreen = ({ navigation }) => {
                       key={country.code}
                       style={[
                         styles.countryItem,
-                        countryCode === country.code && styles.countryItemSelected,
+                        selectedCountryCode.code === country.code && styles.countryItemSelected,
                       ]}
                       onPress={() => {
-                        setCountryCode(country.code);
+                        setSelectedCountryCode(country);
                         setShowCountryPicker(false);
                       }}
                     >

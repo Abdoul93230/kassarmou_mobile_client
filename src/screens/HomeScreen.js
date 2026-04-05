@@ -15,9 +15,21 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getProducts, getCategories, getProducts_Pubs } from '../redux/productsSlice';
+import axios from 'axios';
+import { API_URL } from '../config/api';
+import { getProducts, getCategories, getProducts_Pubs,getTypes } from '../redux/productsSlice';
+import { formatPrice } from '../utils/formatPrice';
 import { fetchUserLikes, toggleLike } from '../redux/likesSlice';
 import { COLORS } from '../config/constants';
+import {
+  selectProducts,
+  selectTypes,
+  selectCategories,
+  selectBanners,
+  selectUser,
+  selectCartItems,
+  selectLikedProducts,
+} from '../redux/selectors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 32;
@@ -43,25 +55,24 @@ const getCardWidth = () => {
 const CARD_WIDTH = getCardWidth();
 const HORIZONTAL_CARD_WIDTH = SCREEN_WIDTH < 360 ? 160 : 180;
 
-// Format price for display (prices are already in EUR in database)
-const formatPrice = (price) => {
-  return typeof price === 'number' ? price.toFixed(2) : '0.00';
-};
-
 export default function HomeScreen({ navigation }) {
   const dispatch = useDispatch();
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [popularStores, setPopularStores] = useState([]);
   const bannerScrollRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
-  const products = useSelector(state => state.products.data);
-  const categories = useSelector(state => state.products.categories);
-  const banners = useSelector(state => state.products.products_Pubs);
-  const user = useSelector(state => state.auth.user);
-  const cartItems = useSelector(state => state.cart?.items || []);
-  const likedProducts = useSelector(state => state.likes.likedProducts);
+  // Utiliser les sélecteurs mémoïsés pour éviter les re-renders inutiles
+  const products = useSelector(selectProducts);
+  const types = useSelector(selectTypes);
+  const categories = useSelector(selectCategories);
+  const banners = useSelector(selectBanners);
+  const user = useSelector(selectUser);
+  const cartItems = useSelector(selectCartItems);
+  const likedProducts = useSelector(selectLikedProducts);
+
 
   useEffect(() => {
     loadData();
@@ -102,9 +113,24 @@ export default function HomeScreen({ navigation }) {
     await Promise.all([
       dispatch(getProducts(setLoading)),
       dispatch(getCategories(setLoading)),
+      dispatch(getTypes(setLoading)),
       dispatch(getProducts_Pubs()),
+      fetchPopularStores(),
     ]);
     setLoading(false);
+  };
+
+  const fetchPopularStores = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/getSellers`);
+      const activeStores = response.data.data
+        .filter(store => store.isvalid === true)
+        .sort((a, b) => (b.followersCount || 0) - (a.followersCount || 0))
+        .slice(0, 6);
+      setPopularStores(activeStores);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des boutiques populaires:', error);
+    }
   };
 
   const onRefresh = async () => {
@@ -143,7 +169,7 @@ export default function HomeScreen({ navigation }) {
         key={category._id}
         style={styles.categoryCard}
         activeOpacity={0.8}
-        onPress={() => navigation.navigate('Categories', { categoryId: category._id })}
+        onPress={() => navigation.navigate('ProductListScreen', { categoryId: category._id })}
       >
         <LinearGradient
           colors={['rgba(48, 160, 139, 0.1)', 'rgba(98, 172, 162, 0.2)']}
@@ -161,9 +187,19 @@ export default function HomeScreen({ navigation }) {
   }, [navigation]);
 
   // Get products for a specific category
-  const getProductsByCategory = useCallback((categoryId) => {
-    return products.filter(p => p.ClefCategorie === categoryId);
-  }, [products]);
+ const getProductsByCategory = useCallback((categoryId) => {
+    // Create a map of type IDs to their category IDs
+    const typeToCategory = {};
+    types.forEach(type => {
+      typeToCategory[type._id] = type.clefCategories;
+    });
+    
+    // Filter products whose type belongs to this category
+    return products.filter(product => {
+      const productCategoryId = typeToCategory[product.ClefType];
+      return productCategoryId === categoryId;
+    });
+  }, [products, types]);
 
   // Check if product is liked
   const isProductLiked = useCallback((productId) => {
@@ -203,7 +239,10 @@ export default function HomeScreen({ navigation }) {
         <TouchableOpacity
           style={styles.categorySectionHeader}
           activeOpacity={0.9}
-          onPress={() => navigation.navigate('Categories', { categoryId: category._id })}
+          onPress={() => navigation.navigate('ProductListScreen', { 
+            categoryId: category._id,
+            categoryName: category.name
+          })}
         >
           <LinearGradient
             colors={[
@@ -323,11 +362,11 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.productFooter}>
             <View style={styles.priceContainer}>
               {hasPromo && (
-                <Text style={styles.oldPrice}>{originalPriceEUR}€</Text>
+                <Text style={styles.oldPrice}>{originalPriceEUR} CFA</Text>
               )}
               <View style={styles.currentPriceRow}>
                 <Text style={[styles.price, hasPromo && styles.promoPrice]}>
-                  {priceEUR}€
+                  {priceEUR} CFA
                 </Text>
               </View>
             </View>
@@ -441,11 +480,11 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.productFooter}>
             <View style={styles.priceContainer}>
               {hasPromo && (
-                <Text style={styles.oldPrice}>{originalPriceEUR}€</Text>
+                <Text style={styles.oldPrice}>{originalPriceEUR} CFA</Text>
               )}
               <View style={styles.currentPriceRow}>
                 <Text style={[styles.price, hasPromo && styles.promoPrice]}>
-                  {priceEUR}€
+                  {priceEUR} CFA
                 </Text>
                 {hasPromo && (
                   <View style={styles.saveBadge}>
@@ -495,10 +534,22 @@ export default function HomeScreen({ navigation }) {
     [cartItems]
   );
 
-  const categoriesWithProducts = useMemo(() => 
-    categories.filter(cat => products.some(p => p.ClefCategorie === cat._id)),
-    [categories, products]
+const categoriesWithProducts = useMemo(() => {
+  const typeToCategory = Object.fromEntries(
+    types.map(t => [t._id, t.clefCategories])
   );
+
+  return categories.filter(cat =>
+    products.some(p => typeToCategory[p.ClefType] === cat._id)
+  );
+}, [categories, products, types]);
+
+
+  // console.log({categories});
+  // console.log({products});
+  // console.log({types});
+  // console.log({categoriesWithProducts});
+  
 
   if (loading) {
     return (
@@ -607,7 +658,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Catégories</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('CategoriesList')}>
+              <TouchableOpacity onPress={() => navigation.navigate('Categories')}>
                 <Text style={styles.seeAllText}>Voir tout</Text>
               </TouchableOpacity>
             </View>
@@ -627,7 +678,10 @@ export default function HomeScreen({ navigation }) {
                   <Ionicons name="flame" size={20} color={COLORS.secondary} />
                 </View>
               </View>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => navigation.navigate('ProductListScreen', { 
+                filter: 'promo',
+                categoryName: 'Promotions'
+              })}>
                 <Text style={styles.seeAllText}>Voir tout</Text>
               </TouchableOpacity>
             </View>
@@ -655,7 +709,10 @@ export default function HomeScreen({ navigation }) {
                   style={{ marginLeft: 8 }}
                 />
               </View>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => navigation.navigate('ProductListScreen', { 
+                filter: 'new',
+                categoryName: 'Nouveautés'
+              })}>
                 <Text style={styles.seeAllText}>Voir tout</Text>
               </TouchableOpacity>
             </View>
@@ -666,6 +723,103 @@ export default function HomeScreen({ navigation }) {
               contentContainerStyle={styles.horizontalScroll}
             >
               {newProducts.map(renderHorizontalProduct)}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Popular Stores Section */}
+        {popularStores.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialCommunityIcons 
+                  name="store" 
+                  size={22} 
+                  color={COLORS.primary} 
+                />
+                <Text style={styles.sectionTitle}>Boutiques populaires</Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('AllStores')}>
+                <Text style={styles.seeAllText}>Voir tout</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.storesScroll}
+            >
+              {popularStores.map((store) => (
+                <TouchableOpacity
+                  key={store._id}
+                  style={styles.storeCard}
+                  onPress={() => navigation.navigate('Boutique', {
+                    sellerId: store._id,
+                    storeName: store.storeName || store.name,
+                  })}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={['#F8F9FA', '#FFFFFF']}
+                    style={styles.storeCardGradient}
+                  >
+                    <View style={styles.storeCardImageContainer}>
+                      <Image
+                        source={{ uri: store.logo || 'https://via.placeholder.com/100' }}
+                        style={styles.storeCardImage}
+                      />
+                      {store.isvalid && (
+                        <LinearGradient
+                          colors={[COLORS.primary, COLORS.secondary]}
+                          style={styles.storeVerifiedBadge}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                        >
+                          <MaterialCommunityIcons name="check-decagram" size={16} color={COLORS.white} />
+                        </LinearGradient>
+                      )}
+                    </View>
+                    <View style={styles.storeCardInfo}>
+                      <Text style={styles.storeCardName} numberOfLines={2}>
+                        {store.storeName || `${store.userName2} ${store.name}`}
+                      </Text>
+                      <View style={styles.storeCardStatsRow}>
+                        <View style={styles.storeCardStatItem}>
+                          <View style={styles.storeCardStatIconBg}>
+                            <Ionicons name="star" size={14} color={COLORS.secondary} />
+                          </View>
+                          <Text style={styles.storeCardStatText}>
+                            {store.rating?.toFixed(1) || '0.0'}
+                          </Text>
+                        </View>
+                        <View style={styles.storeCardStatDivider} />
+                        <View style={styles.storeCardStatItem}>
+                          <View style={styles.storeCardStatIconBg}>
+                            <MaterialCommunityIcons 
+                              name="account-group" 
+                              size={14} 
+                              color={COLORS.primary} 
+                            />
+                          </View>
+                          <Text style={styles.storeCardStatText}>
+                            {store.followersCount >= 1000 
+                              ? `${(store.followersCount / 1000).toFixed(1)}k` 
+                              : store.followersCount || 0}
+                          </Text>
+                        </View>
+                      </View>
+                      <LinearGradient
+                        colors={[COLORS.primary, COLORS.secondary]}
+                        style={styles.storeCardVisitBtn}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        <Text style={styles.storeCardVisitText}>Visiter</Text>
+                        <Ionicons name="arrow-forward" size={14} color={COLORS.white} />
+                      </LinearGradient>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         )}
@@ -909,14 +1063,16 @@ const styles = StyleSheet.create({
   // Modern Product Cards - ULTRA RESPONSIVE
   productCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 20,
+    borderRadius: 16,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: '#30A08B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(48, 160, 139, 0.08)',
   },
   horizontalProductCard: {
     marginRight: 12,
@@ -925,7 +1081,10 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
     aspectRatio: 1,
-    backgroundColor: COLORS.backgroundAlt,
+    backgroundColor: '#f8f9fa',
+    borderTopLeftRadius: 15,
+    borderTopRightRadius: 15,
+    overflow: 'hidden',
   },
   productImage: {
     width: '100%',
@@ -940,16 +1099,16 @@ const styles = StyleSheet.create({
   },
   promoBadge: {
     position: 'absolute',
-    top: 12,
-    left: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    top: 10,
+    left: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 20,
     shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   promoText: {
     color: COLORS.white,
@@ -994,7 +1153,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   productInfo: {
-    padding: 12,
+    padding: 10,
+    backgroundColor: COLORS.white,
   },
   productName: {
     fontSize: SCREEN_WIDTH < 360 ? 13 : 14,
@@ -1026,19 +1186,21 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   price: {
-    fontSize: SCREEN_WIDTH < 360 ? 15 : 17,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: SCREEN_WIDTH < 360 ? 13 : 14,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    letterSpacing: 0.2,
+    flexShrink: 0,
   },
   promoPrice: {
-    color: '#FF6B6B',
+    color: '#E74C3C',
   },
   oldPrice: {
-    fontSize: SCREEN_WIDTH < 360 ? 11 : 12,
+    fontSize: SCREEN_WIDTH < 360 ? 10 : 11,
     textDecorationLine: 'line-through',
-    color: COLORS.textMuted,
-    marginBottom: 4,
-    fontWeight: '500',
+    color: '#999',
+    marginBottom: 3,
+    fontWeight: '400',
   },
   saveBadge: {
     backgroundColor: '#FFF3E0',
@@ -1053,17 +1215,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   addToCartButton: {
-    borderRadius: 16,
+    borderRadius: 12,
     overflow: 'hidden',
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   addToCartGradient: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1145,6 +1307,124 @@ const styles = StyleSheet.create({
   categoryProductsScroll: {
     paddingHorizontal: 16,
     gap: 12,
+  },
+
+  // Store Cards Styles
+  storesScroll: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  storeCard: {
+    width: 160,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    marginRight: 16,
+    backgroundColor: COLORS.white,
+  },
+  storeCardGradient: {
+    flex: 1,
+  },
+  storeCardImageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 120,
+    backgroundColor: COLORS.backgroundAlt,
+  },
+  storeCardImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  storeVerifiedBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    borderRadius: 14,
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  storeCardInfo: {
+    padding: 14,
+  },
+  storeCardName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 10,
+    minHeight: 38,
+  },
+  storeCardStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  storeCardStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  storeCardStatIconBg: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storeCardStatText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  storeCardStatDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: COLORS.border,
+  },
+  storeCardVisitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  storeCardVisitText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  storeCardStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  storeCardRating: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginLeft: 4,
+  },
+  storeCardFollowers: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginLeft: 4,
   },
   
   bottomSpacing: {

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { verifyAuth } from '../redux/authSlice';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { selectPanierCount } from '../redux/cartSlice';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
@@ -24,17 +25,21 @@ import MessagesScreen from '../screens/MessagesScreen';
 import CategoryScreen from '../screens/CategoryScreen';
 import SearchScreen from '../screens/SearchScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
+import PaymentWebViewScreen from '../screens/PaymentWebViewScreen';
 import OrderDetailScreen from '../screens/OrderDetailScreen';
 import ProductListScreen from '../screens/ProductListScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import FaqScreen from '../screens/FaqScreen';
+import BoutiqueScreen from '../screens/BoutiqueScreen';
+import AllStoresScreen from '../screens/AllStoresScreen';
+import SellerDetailScreen from '../screens/SellerDetailScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Navigation principale avec Tabs
 function MainTabs() {
-  const cartItemCount = useSelector(state => state.cart.itemCount);
+  const cartItemCount = useSelector(selectPanierCount);
   const insets = useSafeAreaInsets();
   
   return (
@@ -130,8 +135,42 @@ function AppNavigator() {
     return <SplashScreen />;
   }
 
+  const linking = {
+    prefixes: [
+      'ihambaobab://',
+      'https://ihambaobab.com',
+      'https://www.ihambaobab.com'
+    ],
+    config: {
+      screens: {
+        MainTabs: {
+          screens: {
+            Home: '',
+            Search: 'search',
+            Favorites: 'favorites',
+            Profile: 'profile',
+          }
+        },
+        ProductDetail: 'ProduitDetail/:productId',
+        Boutique: 'boutique/:storeName',
+        SellerDetail: 'Profile_boutiquier/:sellerId',
+        ProductListScreen: 'Categorie/:categoryName',
+        AllStores: 'boutiques',
+        Cart: 'Panier',
+        Checkout: 'checkout',
+        Orders: 'commandes',
+        OrderDetail: 'commandes/:orderId',
+      }
+    }
+  };
+
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer 
+      ref={navigationRef}
+      linking={linking}
+      fallback={null}
+      onReady={() => console.log('🧭 Navigation prête avec Deep Linking')}
+    >
       <Stack.Navigator
         screenOptions={{
           headerStyle: {
@@ -169,6 +208,21 @@ function AppNavigator() {
         <Stack.Screen 
           name="ProductListScreen" 
           component={ProductListScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="Boutique" 
+          component={BoutiqueScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="AllStores" 
+          component={AllStoresScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="SellerDetail" 
+          component={SellerDetailScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen 
@@ -216,6 +270,14 @@ function AppNavigator() {
               name="Checkout" 
               component={CheckoutScreen}
               options={{ title: 'Paiement' }}
+            />
+            <Stack.Screen 
+              name="PaymentWebView" 
+              component={PaymentWebViewScreen}
+              options={{ 
+                title: 'Paiement sécurisé',
+                headerShown: true,
+              }}
             />
             <Stack.Screen 
               name="Orders" 

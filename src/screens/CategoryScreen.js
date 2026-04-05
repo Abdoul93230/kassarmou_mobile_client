@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { fetchCategories } from '../redux/categoriesSlice';
-import { getProducts } from '../redux/productsSlice';
+import { getProducts, getTypes } from '../redux/productsSlice';
 
 const { width } = Dimensions.get('window');
 const CARD_MARGIN = 12;
@@ -32,25 +33,37 @@ export default function CategoryScreen() {
   
   const { categories, loading } = useSelector((state) => state.categories || { categories: [], loading: false });
   const products = useSelector((state) => state.products?.data || []);
+  const types = useSelector((state) => state.products?.types || []);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredCategories, setFilteredCategories] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollY] = useState(new Animated.Value(0));
 
+  // Create mapping once with useMemo for performance
+  const typeToCategory = useMemo(() => {
+    const mapping = {};
+    types.forEach(type => {
+      mapping[type._id] = type.clefCategories;
+    });
+    return mapping;
+  }, [types]);
+
   useEffect(() => {
     console.log('📂 [CategoryScreen] Loading categories...');
     dispatch(fetchCategories());
     dispatch(getProducts());
+    dispatch(getTypes());
   }, [dispatch]);
 
   useEffect(() => {
     if (categories.length > 0) {
       console.log('📂 [CategoryScreen] Categories loaded:', categories.length);
       console.log('📦 [CategoryScreen] Products loaded:', products.length);
+      console.log('🏷️ [CategoryScreen] Types loaded:', types.length);
       filterCategories(searchQuery);
     }
-  }, [categories, searchQuery, products]);
+  }, [categories, searchQuery, products, types]);
 
   const filterCategories = (query) => {
     if (!query.trim()) {
@@ -63,15 +76,20 @@ export default function CategoryScreen() {
     }
   };
 
-  const getCategoryProductCount = (categoryId) => {
-    return products.filter((product) => product.ClefCategorie === categoryId).length;
-  };
+  const getCategoryProductCount = useCallback((categoryId) => {
+    // Filter products whose type belongs to this category
+    return products.filter(product => {
+      const productCategoryId = typeToCategory[product.ClefType];
+      return productCategoryId === categoryId;
+    }).length;
+  }, [products, typeToCategory]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
       dispatch(fetchCategories()),
-      dispatch(getProducts())
+      dispatch(getProducts()),
+      dispatch(getTypes())
     ]);
     setRefreshing(false);
   }, [dispatch]);
@@ -275,28 +293,6 @@ export default function CategoryScreen() {
     </View>
   );
 }
-
-// Helper function to get category icon
-const getCategoryIcon = (categoryName) => {
-  const name = categoryName?.toLowerCase() || '';
-  
-  if (name.includes('vêtement') || name.includes('mode') || name.includes('habit')) return 'tshirt-crew';
-  if (name.includes('chaussure') || name.includes('shoe')) return 'shoe-sneaker';
-  if (name.includes('électronique') || name.includes('tech')) return 'laptop';
-  if (name.includes('téléphone') || name.includes('phone')) return 'cellphone';
-  if (name.includes('maison') || name.includes('décor')) return 'home';
-  if (name.includes('beauté') || name.includes('cosmétique')) return 'palette';
-  if (name.includes('sport') || name.includes('fitness')) return 'run';
-  if (name.includes('livre') || name.includes('book')) return 'book-open-variant';
-  if (name.includes('jouet') || name.includes('toy')) return 'toy-brick';
-  if (name.includes('bijou') || name.includes('jewelry')) return 'diamond-stone';
-  if (name.includes('sac') || name.includes('bag')) return 'bag-personal';
-  if (name.includes('montre') || name.includes('watch')) return 'watch';
-  if (name.includes('accessoire')) return 'shopping';
-  
-  return 'folder-multiple';
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,

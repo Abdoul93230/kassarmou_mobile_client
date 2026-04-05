@@ -21,6 +21,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { toggleLike, fetchUserLikes } from '../redux/likesSlice';
 import { addItemToCart } from '../redux/cartSlice';
+import { formatPrice } from '../utils/formatPrice';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -235,14 +236,14 @@ export default function FavoritesScreen() {
             {/* Price Row */}
             <View style={styles.priceRow}>
               <View style={styles.priceColumn}>
-                <Text style={styles.price}>€{finalPrice.toFixed(2)}</Text>
+                <Text style={styles.price}>{formatPrice(finalPrice)} CFA</Text>
                 {hasPromo && (
-                  <Text style={styles.oldPrice}>€{item.prix.toFixed(2)}</Text>
+                  <Text style={styles.oldPrice}>{formatPrice(item.prix)} CFA</Text>
                 )}
               </View>
               
               {/* Quick Add Button */}
-              {item.isdisponible && (
+              {(item.quantite > 0) && (
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => handleAddToCart(item)}
@@ -258,7 +259,7 @@ export default function FavoritesScreen() {
             </View>
             
             {/* Stock Indicator */}
-            {item.isdisponible ? (
+            {(item.quantite > 0) ? (
               <View style={styles.stockBadge}>
                 <View style={styles.stockDot} />
                 <Text style={styles.stockText}>En stock</Text>
@@ -310,7 +311,7 @@ export default function FavoritesScreen() {
             
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>
-                {sortedProducts.filter(p => p.isdisponible).length}
+                {sortedProducts.filter(p => p.quantite > 0).length}
               </Text>
               <Text style={styles.statLabel}>Disponibles</Text>
             </View>
@@ -568,7 +569,7 @@ export default function FavoritesScreen() {
                       {productToDelete.name}
                     </Text>
                     <Text style={styles.modalProductPrice}>
-                      €{(productToDelete.prixPromo > 0 ? productToDelete.prixPromo : productToDelete.prix).toFixed(2)}
+                      {formatPrice(productToDelete.prixPromo > 0 ? productToDelete.prixPromo : productToDelete.prix)} CFA
                     </Text>
                   </View>
                 </View>
@@ -899,15 +900,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   price: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    letterSpacing: 0.2,
+    flexShrink: 0,
   },
   oldPrice: {
     fontSize: 11,
-    color: COLORS.gray,
+    color: '#999',
     textDecorationLine: 'line-through',
     marginTop: 2,
+    fontWeight: '400',
   },
   addButton: {
     elevation: 3,

@@ -1,235 +1,246 @@
 import { createSlice } from "@reduxjs/toolkit";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Helper pour trouver un item avec variantes
-const findItemIndex = (items, productId, color, size) => {
-  return items.findIndex(item => 
-    item.product._id === productId &&
-    item.selectedColor === color &&
-    item.selectedSize === size
-  );
+/**
+ * @typedef {object} PanierArticle
+ * @property {string} _id
+ * @property {string} id
+ * @property {string} name
+ * @property {number} prix
+ * @property {number} [prixPromo]
+ * @property {number} [price]
+ * @property {string[]} [images]
+ * @property {string} [image1]
+ * @property {string} [imageUrl]
+ * @property {number} quantite
+ * @property {number} [quantity] // Alias pour compatibilité
+ * @property {string} [color]
+ * @property {string} [couleur]
+ * @property {string} [taille]
+ * @property {number} [poids]
+ * @property {string} [ClefType]
+ * @property {{_id: string, storeName?: string, name?: string}} [Clefournisseur]
+ * @property {{zones: Array<{name: string, price: number, transporteurName?: string, transporteurContact?: string}>, weight: number, dimensions?: {length: number, width: number, height: number}}} [shipping]
+ */
+
+const initialState = {
+  articles: [],
+  isLoaded: false,
 };
 
-// Slice pour le panier
-const cartSlice = createSlice({
-  name: "cart",
-  initialState: {
-    items: [],
-    total: 0,
-    itemCount: 0,
-  },
+// Helpers pour AsyncStorage (équivalent localStorage web)
+const loadFromAsyncStorage = async () => {
+  try {
+    const panier = await AsyncStorage.getItem("panier");
+    return panier ? JSON.parse(panier) : [];
+  } catch (error) {
+    console.error("Erreur lors du chargement du panier:", error);
+    return [];
+  }
+};
+
+const saveToAsyncStorage = async (articles) => {
+  try {
+    await AsyncStorage.setItem("panier", JSON.stringify(articles));
+  } catch (error) {
+    console.error("Erreur lors de la sauvegarde du panier:", error);
+  }
+};
+
+const panierSlice = createSlice({
+  name: "panier",
+  initialState,
   reducers: {
-    setCart: (state, action) => {
-      state.items = action.payload;
-      state.itemCount = action.payload.reduce((sum, item) => sum + item.quantity, 0);
-      state.total = action.payload.reduce((sum, item) => {
-        const price = item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix;
-        return sum + (price * item.quantity);
-      }, 0);
+    // Charger le panier depuis AsyncStorage
+    loadPanier: (state) => {
+      // Note: Cette action est un marqueur. Le chargement effectif est fait par l'action async.
+      state.isLoaded = true;
     },
-    addToCart: (state, action) => {
-      const { product, quantity, selectedColor, selectedSize, colorImage } = action.payload;
+
+    // Initialiser le panier après chargement asynchrone
+    setPanier: (state, action) => {
+      // Normaliser les articles lors du chargement
+      state.articles = action.payload.map((article) => {
+        // Pour les articles en AsyncStorage, quantity représente la quantité dans le panier
+        const panierQuantity = article.quantity || 1;
+        
+        return {
+          ...article,
+          quantite: panierQuantity, // Utiliser la quantité du panier
+          quantity: panierQuantity  // Maintenir l'alias
+        };
+      });
+      state.isLoaded = true;
+    },
+
+    // Ajouter un article au panier
+    addToPanier: (state, action) => {
+      const article = action.payload;
       
-      // Chercher si l'item existe déjà avec la même variante
-      const existingIndex = findItemIndex(
-        state.items,
-        product._id,
-        selectedColor,
-        selectedSize
+      // S'assurer d'utiliser quantity si disponible, sinon quantite
+      const quantiteToAdd = article.quantity || article.quantite || 1;
+      
+      const existingIndex = state.articles.findIndex(
+        (item) =>
+          item.id === article.id &&
+          item.color === article.color &&
+          item.taille === article.taille
       );
-      
-      if (existingIndex !== -1) {
-        // Augmenter la quantité
-        state.items[existingIndex].quantity += quantity;
+
+      if (existingIndex >= 0) {
+        // Si l'article existe déjà, augmenter la quantité
+        state.articles[existingIndex].quantite += quantiteToAdd;
       } else {
-        // Ajouter nouveau item
-        state.items.push({
-          product,
-          quantity,
-          selectedColor,
-          selectedSize,
-          colorImage,
-          addedAt: new Date().toISOString(),
-        });
+        // Normaliser l'article avant ajout
+        const normalizedArticle = {
+          ...article,
+          quantite: quantiteToAdd, // Utiliser la quantité à ajouter
+          quantity: quantiteToAdd  // Maintenir l'alias pour compatibilité
+        };
+        state.articles.push(normalizedArticle);
       }
-      
-      // Recalculer totaux
-      state.itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
-      state.total = state.items.reduce((sum, item) => {
-        const price = item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix;
-        return sum + (price * item.quantity);
-      }, 0);
     },
-    removeFromCart: (state, action) => {
-      const { productId, color, size } = action.payload;
-      
-      // Supprimer l'item spécifique
-      const index = findItemIndex(state.items, productId, color, size);
-      if (index !== -1) {
-        state.items.splice(index, 1);
+
+    // Mettre à jour un article du panier
+    updatePanier: (state, action) => {
+      const updatedArticle = action.payload;
+      const index = state.articles.findIndex(
+        (item) =>
+          item.id === updatedArticle.id &&
+          item.color === updatedArticle.color &&
+          item.taille === updatedArticle.taille
+      );
+
+      if (index >= 0) {
+        state.articles[index] = updatedArticle;
       }
-      
-      // Recalculer totaux
-      state.itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
-      state.total = state.items.reduce((sum, item) => {
-        const price = item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix;
-        return sum + (price * item.quantity);
-      }, 0);
     },
+
+    // Supprimer un article du panier
+    deletePanier: (state, action) => {
+      const { id, color, taille } = action.payload;
+      state.articles = state.articles.filter(
+        (item) =>
+          !(item.id === id && item.color === color && item.taille === taille)
+      );
+    },
+
+    // Vider le panier
+    clearPanier: (state) => {
+      state.articles = [];
+    },
+
+    // Mettre à jour seulement la quantité
     updateQuantity: (state, action) => {
-      const { productId, color, size, quantity } = action.payload;
-      
-      const index = findItemIndex(state.items, productId, color, size);
-      if (index !== -1) {
-        state.items[index].quantity = Math.max(1, quantity);
+      const { id, color, taille, quantite } = action.payload;
+      const index = state.articles.findIndex(
+        (item) =>
+          item.id === id && item.color === color && item.taille === taille
+      );
+
+      if (index >= 0 && quantite > 0) {
+        state.articles[index].quantite = quantite;
       }
-      
-      // Recalculer totaux
-      state.itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
-      state.total = state.items.reduce((sum, item) => {
-        const price = item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix;
-        return sum + (price * item.quantity);
-      }, 0);
-    },
-    clearCart: (state) => {
-      state.items = [];
-      state.total = 0;
-      state.itemCount = 0;
     },
   },
 });
 
-export const { 
-  setCart, 
-  addToCart, 
-  removeFromCart, 
-  updateQuantity, 
-  clearCart 
-} = cartSlice.actions;
+export const {
+  loadPanier,
+  setPanier,
+  addToPanier,
+  updatePanier,
+  deletePanier,
+  clearPanier,
+  updateQuantity,
+} = panierSlice.actions;
 
-// Actions asynchrones
-export const loadCart = () => async (dispatch) => {
+// ==================== ACTIONS ASYNCHRONES ====================
+
+// Charger le panier depuis AsyncStorage au démarrage de l'app
+export const loadPanierFromStorage = () => async (dispatch) => {
   try {
-    const cartString = await AsyncStorage.getItem('panier');
-    if (cartString) {
-      const cart = JSON.parse(cartString);
-      
-      // Valider et convertir la structure du panier
-      if (Array.isArray(cart) && cart.length > 0) {
-        // Vérifier si c'est le format Redux (avec product)
-        const isReduxFormat = cart.every(item => 
-          item.product && 
-          typeof item.product === 'object' &&
-          item.product._id
-        );
-        
-        if (isReduxFormat) {
-          // Format Redux normal
-          dispatch(setCart(cart));
-        } else {
-          // Format order.prod (format web) - convertir vers format Redux
-          const isOrderProdFormat = cart.every(item => 
-            item._id && 
-            item.name &&
-            typeof item.price !== 'undefined'
-          );
-          
-          if (isOrderProdFormat) {
-            console.log('Conversion du panier depuis order.prod vers format Redux');
-            // Convertir chaque item de order.prod vers le format Redux
-            const convertedCart = cart.map(item => ({
-              product: {
-                _id: item._id || '',
-                nom: item.name || 'Produit',
-                images: item.imageUrl ? [item.imageUrl] : [],
-                prix: item.price || 0,
-                prixPromo: 0, // Pas de promo dans order.prod
-                poid: item.weight || 0,
-                description: item.description || '',
-                categorie: item.category || '',
-                tailles: item.size ? [item.size] : [],
-                couleurs: item.color ? [item.color] : [],
-                stock: 999, // Stock par défaut
-                marque: item.brand || '',
-                dateAjout: item.dateAdded || new Date().toISOString(),
-              },
-              quantity: item.quantity || 1,
-              selectedColor: item.color || '',
-              selectedSize: item.size || '',
-              colorImage: item.imageUrl || '',
-              addedAt: item.addedAt || new Date().toISOString(),
-            }));
-            
-            dispatch(setCart(convertedCart));
-          } else {
-            // Format invalide
-            console.warn('Format de panier invalide, nettoyage...');
-            await AsyncStorage.removeItem('panier');
-            dispatch(clearCart());
-          }
-        }
-      } else {
-        dispatch(setCart(cart));
-      }
-    }
+    const articles = await loadFromAsyncStorage();
+    dispatch(setPanier(articles));
   } catch (error) {
-    console.error('Erreur chargement panier:', error);
-    // En cas d'erreur, nettoyer le panier corrompu
-    try {
-      await AsyncStorage.removeItem('panier');
-      dispatch(clearCart());
-    } catch (e) {
-      console.error('Erreur nettoyage panier:', e);
-    }
+    console.error("Erreur lors du chargement du panier depuis AsyncStorage:", error);
+    dispatch(setPanier([]));
   }
 };
 
-export const saveCart = (cart) => async (dispatch) => {
+export const loadCart = loadPanierFromStorage;
+
+// Ajouter un article et sauvegarder
+export const addArticleToPanier = (article) => async (dispatch, getState) => {
   try {
-    await AsyncStorage.setItem('panier', JSON.stringify(cart));
-    dispatch(setCart(cart));
+    dispatch(addToPanier(article));
+    const { panier } = getState();
+    await saveToAsyncStorage(panier.articles);
   } catch (error) {
-    console.error('Erreur sauvegarde panier:', error);
+    console.error("Erreur lors de l'ajout d'un article au panier:", error);
   }
 };
 
-export const addItemToCart = (item) => async (dispatch, getState) => {
+// Mettre à jour un article et sauvegarder
+export const updateArticlePanier = (article) => async (dispatch, getState) => {
   try {
-    dispatch(addToCart(item));
-    const { cart } = getState();
-    await AsyncStorage.setItem('panier', JSON.stringify(cart.items));
+    dispatch(updatePanier(article));
+    const { panier } = getState();
+    await saveToAsyncStorage(panier.articles);
   } catch (error) {
-    console.error('Erreur ajout panier:', error);
+    console.error("Erreur lors de la mise à jour d'un article du panier:", error);
   }
 };
 
-export const removeItemFromCart = (productId, color, size) => async (dispatch, getState) => {
+// Supprimer un article et sauvegarder
+export const deleteArticlePanier = (id, color, taille) => async (dispatch, getState) => {
   try {
-    dispatch(removeFromCart({ productId, color, size }));
-    const { cart } = getState();
-    await AsyncStorage.setItem('panier', JSON.stringify(cart.items));
+    dispatch(deletePanier({ id, color, taille }));
+    const { panier } = getState();
+    await saveToAsyncStorage(panier.articles);
   } catch (error) {
-    console.error('Erreur suppression panier:', error);
+    console.error("Erreur lors de la suppression d'un article du panier:", error);
   }
 };
 
-export const updateCartQuantity = (productId, color, size, quantity) => async (dispatch, getState) => {
+// Mettre à jour la quantité et sauvegarder
+export const updateArticleQuantity = (id, color, taille, quantite) => async (dispatch, getState) => {
   try {
-    dispatch(updateQuantity({ productId, color, size, quantity }));
-    const { cart } = getState();
-    await AsyncStorage.setItem('panier', JSON.stringify(cart.items));
+    dispatch(updateQuantity({ id, color, taille, quantite }));
+    const { panier } = getState();
+    await saveToAsyncStorage(panier.articles);
   } catch (error) {
-    console.error('Erreur mise à jour panier:', error);
+    console.error("Erreur lors de la mise à jour de la quantité d'un article:", error);
   }
 };
 
-export const clearCartData = () => async (dispatch) => {
+// Vider le panier et sauvegarder
+export const clearPanierData = () => async (dispatch) => {
   try {
     await AsyncStorage.removeItem('panier');
-    dispatch(clearCart());
+    dispatch(clearPanier());
   } catch (error) {
-    console.error('Erreur vidage panier:', error);
+    console.error("Erreur lors du vidage du panier:", error);
   }
 };
 
-export default cartSlice.reducer;
+
+// Aliases pour compatibilité
+export const clearCartData = clearPanierData;
+export const clearCart = clearPanier;
+
+// Selectors (identiques à la version web)
+export const selectPanierArticles = (state) => state.panier.articles;
+
+export const selectPanierCount = (state) =>
+  state.panier.articles.reduce((total, article) => total + article.quantite, 0);
+
+export const selectPanierTotal = (state) =>
+  state.panier.articles.reduce(
+    (total, article) => total + article.prix * article.quantite,
+    0
+  );
+
+export const selectPanierIsLoaded = (state) => state.panier.isLoaded;
+
+export default panierSlice.reducer;

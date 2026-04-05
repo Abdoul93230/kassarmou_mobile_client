@@ -8,35 +8,35 @@ export const STORAGE_KEYS = {
   THEME: 'theme',
 };
 
-// Couleurs du thème Kassarmou - Couleurs du drapeau du Niger
+// Couleurs du thème Ihambaobab - Couleurs du drapeau du Niger
 export const COLORS = {
-  // 🎨 COULEURS PRINCIPALES (Drapeau Niger: Orange, Blanc, Vert)
-  primary: '#E87E04',        // Orange du drapeau Niger
-  secondary: '#008751',      // Vert du drapeau Niger
-  tertiary: '#62aca2',       // Teal clair - Arrière-plans et ambiance
+  // 🎨 COULEURS PRINCIPALES (Branding Niger)
+  primary: '#30A08B',        // Turquoise - Couleur principale
+  secondary: '#B2905F',      // Sahara Sand - Couleur secondaire
+  tertiary: '#B17236',       // Baobab Wood - Couleur tertiaire
   
   // Couleurs de base
-  white: '#FFFFFF',          // Blanc du drapeau Niger
-  black: '#000000',          // Noir
+  white: '#FFFFFF',
+  black: '#000000',
   
   // 📝 Dérivées pour l'interface
-  background: '#FFFFFF',     // Blanc
-  backgroundAlt: '#F5F5F5',  // Gris très clair
-  text: '#000000',           // Noir
-  textLight: '#718096',      // Gris moyen
-  textMuted: '#999999',      // Gris clair
-  border: '#E2E8F0',         // Bordures
+  background: '#FFFFFF',
+  backgroundAlt: '#F5F5F5',
+  text: '#000000',
+  textLight: '#718096',
+  textMuted: '#999999',
+  border: '#E2E8F0',
   
   // 🎯 États
-  success: '#008751',        // Vert - Succès
+  success: '#30A08B',        // Turquoise - Succès
   error: '#E74C3C',          // Rouge - Erreurs
-  warning: '#E87E04',        // Orange - Avertissements
-  info: '#62aca2',           // Teal - Informations
+  warning: '#B17236',        // Baobab Wood - Avertissements
+  info: '#B2905F',           // Sahara Sand - Informations
   
   // Versions claires (pour arrière-plans)
-  primaryLight: '#FFE0B2',   // Orange clair
-  secondaryLight: '#CCFFCC', // Vert clair
-  tertiaryLight: 'rgba(98, 172, 162, 0.1)',
+  primaryLight: 'rgba(48, 160, 139, 0.1)',    // Turquoise clair
+  secondaryLight: 'rgba(178, 144, 95, 0.1)',  // Sahara Sand clair
+  tertiaryLight: 'rgba(177, 114, 54, 0.1)',   // Baobab Wood clair
   
   // Transparences
   overlay: 'rgba(0, 0, 0, 0.5)',

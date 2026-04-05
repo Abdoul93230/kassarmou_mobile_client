@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSelector, useDispatch } from 'react-redux';
 import { logoutUser } from '../redux/authSlice';
+import { fetchUserLikes } from '../redux/likesSlice';
 import useNetworkStatus from '../hooks/useNetworkStatus';
 import LoadingButton from '../components/LoadingButton';
 import CountryCodePicker from '../components/CountryCodePicker';
@@ -28,9 +29,24 @@ import apiClient from '../config/api';
 import * as ImagePicker from 'expo-image-picker';
 import ImageEditorModal from '../components/ImageEditorModal';
 
+// Liste des indicatifs pays
+const countryCodes = [
+  { code: "+227", country: "Niger", flag: "🇳🇪" },
+  { code: "+33", country: "France", flag: "🇫🇷" },
+  { code: "+1", country: "États-Unis", flag: "🇺🇸" },
+  { code: "+221", country: "Sénégal", flag: "🇸🇳" },
+  { code: "+225", country: "Côte d'Ivoire", flag: "🇨🇮" },
+  { code: "+226", country: "Burkina Faso", flag: "🇧🇫" },
+  { code: "+223", country: "Mali", flag: "🇲🇱" },
+  { code: "+229", country: "Bénin", flag: "🇧🇯" },
+  { code: "+228", country: "Togo", flag: "🇹🇬" },
+  { code: "+234", country: "Nigeria", flag: "🇳🇬" },
+];
+
 export default function ProfileScreen({ navigation }) {
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
+  const { likedProducts } = useSelector(state => state.likes);
   const { isConnected } = useNetworkStatus();
   
   // États
@@ -41,35 +57,43 @@ export default function ProfileScreen({ navigation }) {
   const [showImageEditor, setShowImageEditor] = useState(false);
   const [selectedImageUri, setSelectedImageUri] = useState(null);
   const [ordersCount, setOrdersCount] = useState(0);
-  const [favoritesCount, setFavoritesCount] = useState(0);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   
   // Données utilisateur
   const [userData, setUserData] = useState({
     nom: '',
     email: '',
-    telephone: '',
     photo: null,
   });
-  const [countryCode, setCountryCode] = useState('+227');
+  const [selectedCountryCode, setSelectedCountryCode] = useState(countryCodes[0]);
+  const [phoneNumberOnly, setPhoneNumberOnly] = useState('');
   const [whatsapp, setWhatsapp] = useState(true);
 
-  // Extraction de l'indicatif et du numéro
-  const extractPhoneInfo = (fullPhoneNumber) => {
-    if (!fullPhoneNumber) return { code: '+227', number: '' };
-
-    // Liste des indicatifs à vérifier (du plus long au plus court)
-    const codes = ['+1242', '+1809', '+93', '+355', '+213', '+376', '+244', '+54', '+374', '+61', '+43', '+994', '+973', '+880', '+32', '+229', '+975', '+591', '+387', '+267', '+55', '+673', '+359', '+226', '+257', '+855', '+237', '+1', '+238', '+236', '+235', '+56', '+86', '+57', '+242', '+243', '+506', '+225', '+385', '+53', '+357', '+420', '+45', '+253', '+593', '+20', '+503', '+240', '+291', '+372', '+251', '+679', '+358', '+33', '+241', '+220', '+995', '+49', '+233', '+30', '+502', '+224', '+245', '+592', '+509', '+504', '+852', '+36', '+354', '+91', '+62', '+98', '+964', '+353', '+972', '+39', '+81', '+962', '+7', '+254', '+686', '+850', '+82', '+383', '+965', '+996', '+856', '+371', '+961', '+266', '+231', '+218', '+423', '+370', '+352', '+261', '+265', '+60', '+960', '+223', '+356', '+692', '+222', '+230', '+52', '+691', '+373', '+377', '+976', '+382', '+212', '+258', '+95', '+264', '+674', '+977', '+31', '+64', '+505', '+227', '+234', '+47', '+968', '+92', '+680', '+970', '+507', '+675', '+595', '+51', '+63', '+48', '+351', '+974', '+40', '+250', '+685', '+378', '+966', '+221', '+381', '+248', '+232', '+65', '+421', '+386', '+677', '+252', '+27', '+211', '+34', '+94', '+249', '+597', '+268', '+46', '+41', '+963', '+886', '+992', '+255', '+66', '+228', '+676', '+216', '+90', '+993', '+688', '+256', '+380', '+971', '+44', '+598', '+998', '+678', '+58', '+84', '+967', '+260', '+263'];
-    
-    for (const code of codes) {
-      if (fullPhoneNumber.startsWith(code)) {
-        return {
-          code: code,
-          number: fullPhoneNumber.substring(code.length),
-        };
-      }
+  // Fonction pour séparer le numéro de téléphone complet
+  const parsePhoneNumber = (fullPhoneNumber) => {
+    if (!fullPhoneNumber) {
+      return { countryCode: countryCodes[0], phoneOnly: '' };
     }
 
-    return { code: '+227', number: fullPhoneNumber };
+    // Rechercher l'indicatif correspondant
+    const foundCountry = countryCodes.find(country => 
+      fullPhoneNumber.startsWith(country.code)
+    );
+
+    if (foundCountry) {
+      const phoneOnly = fullPhoneNumber.substring(foundCountry.code.length);
+      return { countryCode: foundCountry, phoneOnly };
+    }
+
+    // Si aucun indicatif trouvé, utiliser le premier par défaut
+    return { countryCode: countryCodes[0], phoneOnly: fullPhoneNumber };
+  };
+
+  // Fonction pour construire le numéro complet
+  const buildFullPhoneNumber = () => {
+    return phoneNumberOnly.trim() 
+      ? `${selectedCountryCode.code}${phoneNumberOnly.trim()}`
+      : '';
   };
 
   // Chargement des données utilisateur
@@ -82,10 +106,21 @@ export default function ProfileScreen({ navigation }) {
     try {
       setLoading(true);
 
-      // Récupérer les données utilisateur
-      const userResponse = await apiClient.get('/api/user/getUser', {
-        params: { id: user.id },
-      });
+      // Utiliser EXACTEMENT les mêmes endpoints que la version web
+      const [userResponse, profileResponse] = await Promise.all([
+        apiClient.get('https://ihambackend.onrender.com/user', {
+          params: { id: user.id },
+        }),
+        apiClient.get('https://ihambackend.onrender.com/getUserProfile', {
+          params: { id: user.id },
+        }).catch(error => {
+          // Si le profil n'existe pas (404), ce n'est pas une erreur
+          if (error.response?.status === 404) {
+            return { data: { data: null } };
+          }
+          throw error;
+        })
+      ]);
 
       if (!userResponse.data.user) {
         throw new Error('Données utilisateur non trouvées');
@@ -95,33 +130,28 @@ export default function ProfileScreen({ navigation }) {
       setUserData({
         nom: userResponse.data.user.name || '',
         email: userResponse.data.user.email || '',
-        telephone: '',
         photo: null,
       });
 
-      // Récupérer le profil (peut ne pas exister)
-      try {
-        const profileResponse = await apiClient.get('/api/profilesRoutes/me');
+      // Traiter les données du profil si elles existent
+      const profileData = profileResponse.data?.data;
 
-        const profileData = profileResponse.data?.data;
+      if (profileData) {
+        const fullPhoneNumber = profileData?.numero || userResponse.data.user.phoneNumber || '';
+        const { countryCode, phoneOnly } = parsePhoneNumber(fullPhoneNumber);
 
-        if (profileData) {
-          const { code, number } = extractPhoneInfo(profileData?.numero || '');
+        setSelectedCountryCode(countryCode);
+        setPhoneNumberOnly(phoneOnly);
 
-          setUserData((prev) => ({
-            ...prev,
-            telephone: number,
-            photo: profileData?.image || null,
-          }));
-          
-          setCountryCode(code);
-          setWhatsapp(profileData?.whatsapp !== false);
-        }
-      } catch (profileError) {
-        // Si le profil n'existe pas encore (404), ce n'est pas une erreur
-        if (profileError.response?.status !== 404) {
-          throw profileError;
-        }
+        setUserData(prev => ({
+          ...prev,
+          photo: profileData?.image && 
+                 profileData.image !== "https://chagona.onrender.com/images/image-1688253105925-0.jpeg"
+            ? profileData.image
+            : null,
+        }));
+        
+        setWhatsapp(profileData?.whatsapp !== false);
       }
 
       Toast.show({
@@ -131,17 +161,19 @@ export default function ProfileScreen({ navigation }) {
     } catch (error) {
       console.error('Erreur chargement profil:', error);
 
-      // Si l'erreur est 401, interceptor gère la déconnexion/navigation => éviter les toasts doublons
+      // Si l'erreur est 401, interceptor gère la déconnexion/navigation
       if (error.response?.status === 401) {
         setLoading(false);
         return;
       }
 
       let errorMessage = 'Impossible de charger le profil';
-      if (error.code === 'ECONNABORTED') {
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.code === 'ECONNABORTED') {
         errorMessage = 'Le serveur met trop de temps à répondre';
-      } else if (error.response) {
-        errorMessage = error.response.data?.message || errorMessage;
       } else if (error.request) {
         errorMessage = 'Aucune réponse du serveur';
       }
@@ -161,61 +193,33 @@ export default function ProfileScreen({ navigation }) {
     if (!user || !user.id) return;
     
     try {
-      const response = await apiClient.get(`/api/ordersRoutes/user/${user.id}`);
+      const response = await apiClient.get(`/getCommandesByClefUser/${user.id}`);
       
       if (response.data?.commandes) {
         setOrdersCount(response.data.commandes.length);
       }
     } catch (error) {
       console.error('Erreur chargement commandes:', error);
-      if (error.response?.status === 401) return; // interceptor will handle logout
+      if (error.response?.status === 401) return;
     }
   }, [user]);
 
-  // Charger le nombre de favoris
-  const fetchFavoritesCount = useCallback(async () => {
-    if (!user || !user.id) return;
-    
-    try {
-  const response = await apiClient.get(`/likes/user/${user.id}`);
-      
-      console.log('📊 Données favoris brutes:', response.data);
-      console.log('📊 Nombre total de likes:', response.data.length);
-      
-      // Le backend retourne directement un tableau de likes
-      if (Array.isArray(response.data)) {
-        // Filtrer les likes avec des produits valides (non null)
-        const validLikes = response.data.filter(like => like.produit !== null);
-        console.log('✅ Likes avec produits valides:', validLikes.length);
-        setFavoritesCount(validLikes.length);
-      }
-    } catch (error) {
-      console.error('Erreur chargement favoris:', error);
-      // Si l'endpoint retourne 404, c'est que l'utilisateur n'a pas de favoris
-        if (error.response?.status === 404) {
-        setFavoritesCount(0);
-        }
-      if (error.response?.status === 401) return; // interceptor will handle logout
-    }
-  }, [user]);
 
   useEffect(() => {
     fetchUserData();
     fetchOrdersCount();
-    fetchFavoritesCount();
-  }, [fetchUserData, fetchOrdersCount, fetchFavoritesCount]);
+    
+  }, [fetchUserData, fetchOrdersCount,]);
 
   // Recharger les données quand on revient sur cet écran
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      // Recharger les données du profil
       fetchUserData();
       fetchOrdersCount();
-      fetchFavoritesCount();
     });
 
     return unsubscribe;
-  }, [navigation, fetchUserData, fetchOrdersCount, fetchFavoritesCount]);
+  }, [navigation, fetchUserData, fetchOrdersCount]);
 
   // Validation du formulaire
   const validateForm = () => {
@@ -238,7 +242,8 @@ export default function ProfileScreen({ navigation }) {
       return false;
     }
 
-    if (userData.telephone && userData.telephone.length < 8) {
+    const fullPhoneNumber = buildFullPhoneNumber();
+    if (!fullPhoneNumber || phoneNumberOnly.length < 8) {
       Toast.show({
         type: 'error',
         text1: 'Erreur',
@@ -250,20 +255,22 @@ export default function ProfileScreen({ navigation }) {
     return true;
   };
 
-  // Sauvegarde du profil
+  // Sauvegarde du profil - Utiliser EXACTEMENT le même endpoint que la version web
   const handleSaveProfile = async () => {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
     try {
+      const fullPhoneNumber = buildFullPhoneNumber();
       const formData = new FormData();
       formData.append('name', userData.nom);
       formData.append('email', userData.email);
-      formData.append('phone', `${countryCode}${userData.telephone}`);
+      formData.append('phone', fullPhoneNumber);
       formData.append('whatsapp', whatsapp);
       formData.append('id', user.id);
 
-      await apiClient.post('/api/profilesRoutes/create', formData, {
+      // Utiliser EXACTEMENT le même endpoint que la version web
+      await apiClient.post('https://ihambackend.onrender.com/createProfile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -277,10 +284,18 @@ export default function ProfileScreen({ navigation }) {
       await fetchUserData();
     } catch (error) {
       console.error('Erreur sauvegarde:', error);
+      
+      let errorMessage = 'Impossible de sauvegarder';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
       Toast.show({
         type: 'error',
         text1: 'Erreur',
-        text2: error.response?.data?.message || 'Impossible de sauvegarder',
+        text2: errorMessage,
       });
     } finally {
       setIsSubmitting(false);
@@ -290,7 +305,6 @@ export default function ProfileScreen({ navigation }) {
   // Sélection et upload de photo
   const handleSelectPhoto = async () => {
     try {
-      // Demander à l'utilisateur de choisir entre galerie et caméra
       Alert.alert(
         'Photo de profil',
         'Choisissez une option',
@@ -320,7 +334,6 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Handle take photo with camera
   const handleTakePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -336,7 +349,6 @@ export default function ProfileScreen({ navigation }) {
       });
 
       if (!result.canceled) {
-        // Ouvrir l'éditeur d'image
         setSelectedImageUri(result.assets[0].uri);
         setShowImageEditor(true);
       }
@@ -350,7 +362,6 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Handle pick from gallery
   const handlePickFromGallery = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -362,12 +373,11 @@ export default function ProfileScreen({ navigation }) {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: false, // On désactive l'édition native
-        quality: 1, // Qualité maximale pour l'éditeur
+        allowsEditing: false,
+        quality: 1,
       });
 
       if (!result.canceled) {
-        // Ouvrir l'éditeur d'image
         setSelectedImageUri(result.assets[0].uri);
         setShowImageEditor(true);
       }
@@ -381,14 +391,12 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Handle save edited image
   const handleSaveEditedImage = async (editedUri) => {
     setShowImageEditor(false);
     setSelectedImageUri(null);
     await uploadPhoto(editedUri);
   };
 
-  // Handle cancel image editing
   const handleCancelImageEditing = () => {
     setShowImageEditor(false);
     setSelectedImageUri(null);
@@ -397,6 +405,7 @@ export default function ProfileScreen({ navigation }) {
   const uploadPhoto = async (imageUri) => {
     setIsSubmitting(true);
     try {
+      const fullPhoneNumber = buildFullPhoneNumber();
       const formData = new FormData();
       formData.append('image', {
         uri: imageUri,
@@ -405,11 +414,12 @@ export default function ProfileScreen({ navigation }) {
       });
       formData.append('name', userData.nom);
       formData.append('email', userData.email);
-      formData.append('phone', `${countryCode}${userData.telephone}`);
+      formData.append('phone', fullPhoneNumber);
       formData.append('whatsapp', whatsapp);
       formData.append('id', user.id);
 
-      await apiClient.post('/api/profilesRoutes/create', formData, {
+      // Utiliser EXACTEMENT le même endpoint que la version web
+      await apiClient.post('https://ihambackend.onrender.com/createProfile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -422,10 +432,18 @@ export default function ProfileScreen({ navigation }) {
       await fetchUserData();
     } catch (error) {
       console.error('Erreur upload:', error);
+      
+      let errorMessage = 'Impossible de télécharger la photo';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
       Toast.show({
         type: 'error',
         text1: 'Erreur',
-        text2: 'Impossible de télécharger la photo',
+        text2: errorMessage,
       });
     } finally {
       setIsSubmitting(false);
@@ -474,28 +492,24 @@ export default function ProfileScreen({ navigation }) {
       title: 'Informations personnelles',
       subtitle: 'Modifier votre profil',
       onPress: () => navigation.navigate('EditProfile'),
-      badge: null,
     },
     {
       icon: 'cart-outline',
       title: 'Mes commandes',
       subtitle: 'Historique des achats',
       onPress: () => navigation.navigate('Orders'),
-      badge: null,
     },
     {
       icon: 'heart-outline',
       title: 'Mes favoris',
       subtitle: 'Produits sauvegardés',
       onPress: () => navigation.navigate('MainTabs', { screen: 'Favorites' }),
-      badge: null,
     },
     {
       icon: 'help-circle-outline',
       title: 'Aide et support',
       subtitle: 'FAQ et contact',
       onPress: () => navigation.navigate('Faq'),
-      badge: null,
     },
   ];
 
@@ -507,71 +521,71 @@ export default function ProfileScreen({ navigation }) {
         {!user ? (
           // Utilisateur non connecté
           <ScrollView style={styles.notLoggedInContainer} showsVerticalScrollIndicator={false}>
-          <LinearGradient
-            colors={['#30A08B', '#2D9175', '#26805F']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.notLoggedInHeader}
-          >
-            <View style={styles.notLoggedInAvatarContainer}>
-              <View style={styles.notLoggedInAvatar}>
-                <Ionicons name="person-outline" size={60} color={COLORS.white} />
-              </View>
-            </View>
-            <Text style={styles.notLoggedInTitle}>Bienvenue sur Kassarmou</Text>
-            <Text style={styles.notLoggedInSubtitle}>
-              Connectez-vous pour accéder à votre profil et vos commandes
-            </Text>
-          </LinearGradient>
-
-          <View style={styles.notLoggedInContent}>
-            <TouchableOpacity
-              style={styles.loginButton}
-              onPress={() => navigation.navigate('Login')}
-              activeOpacity={0.8}
+            <LinearGradient
+              colors={['#30A08B', '#2D9175', '#26805F']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.notLoggedInHeader}
             >
-              <LinearGradient
-                colors={['#30A08B', '#26805F']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.loginButtonGradient}
+              <View style={styles.notLoggedInAvatarContainer}>
+                <View style={styles.notLoggedInAvatar}>
+                  <Ionicons name="person-outline" size={60} color={COLORS.white} />
+                </View>
+              </View>
+              <Text style={styles.notLoggedInTitle}>Bienvenue sur Ihambaobab</Text>
+              <Text style={styles.notLoggedInSubtitle}>
+                Connectez-vous pour accéder à votre profil et vos commandes
+              </Text>
+            </LinearGradient>
+
+            <View style={styles.notLoggedInContent}>
+              <TouchableOpacity
+                style={styles.loginButton}
+                onPress={() => navigation.navigate('Login')}
+                activeOpacity={0.8}
               >
-                <Ionicons name="log-in-outline" size={24} color={COLORS.white} />
-                <Text style={styles.loginButtonText}>Se connecter</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={['#30A08B', '#26805F']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.loginButtonGradient}
+                >
+                  <Ionicons name="log-in-outline" size={24} color={COLORS.white} />
+                  <Text style={styles.loginButtonText}>Se connecter</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.registerButton}
-              onPress={() => navigation.navigate('Register')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.registerButtonText}>Créer un compte</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.registerButton}
+                onPress={() => navigation.navigate('Register')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.registerButtonText}>Créer un compte</Text>
+              </TouchableOpacity>
 
-            <View style={styles.featuresContainer}>
-              <Text style={styles.featuresTitle}>Profitez de tous les avantages :</Text>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                <Text style={styles.featureText}>Suivre vos commandes en temps réel</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                <Text style={styles.featureText}>Sauvegarder vos produits favoris</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                <Text style={styles.featureText}>Accéder à l'historique de vos achats</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                <Text style={styles.featureText}>Gérer vos adresses de livraison</Text>
+              <View style={styles.featuresContainer}>
+                <Text style={styles.featuresTitle}>Profitez de tous les avantages :</Text>
+                <View style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                  <Text style={styles.featureText}>Suivre vos commandes en temps réel</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                  <Text style={styles.featureText}>Sauvegarder vos produits favoris</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                  <Text style={styles.featureText}>Accéder à l'historique de vos achats</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                  <Text style={styles.featureText}>Gérer vos adresses de livraison</Text>
+                </View>
               </View>
             </View>
-          </View>
-        </ScrollView>
-      ) : loading ? (
-        <View style={styles.loadingContainer}>
+          </ScrollView>
+        ) : loading ? (
+          <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Chargement du profil...</Text>
         </View>
@@ -647,7 +661,7 @@ export default function ProfileScreen({ navigation }) {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{favoritesCount}</Text>
+                <Text style={styles.statValue}>{likedProducts.length}</Text>
                 <Text style={styles.statLabel}>Favoris</Text>
               </View>
             </View>
@@ -690,7 +704,7 @@ export default function ProfileScreen({ navigation }) {
         {/* Version */}
         <View style={styles.footer}>
           <Text style={styles.versionText}>Version 1.0.0</Text>
-          <Text style={styles.footerText}>© 2025 Kassarmoumarket</Text>
+          <Text style={styles.footerText}>© 2025 Ihambaobab</Text>
         </View>
       </ScrollView>
       )}

@@ -16,11 +16,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearCartData } from '../redux/cartSlice';
+import { clearPanierData, clearCartData } from '../redux/cartSlice';
 import { API_URL } from '../config/api';
-import CountryCodePicker from '../components/CountryCodePicker';
-import { useStripe } from '@stripe/stripe-react-native';
-import StripeCardInput from '../components/StripeCardInput';
+import { formatPrice } from '../utils/formatPrice';
+import SecurityCodeModal from '../components/SecurityCodeModal';
+import PaymentMethodSelector from '../components/PaymentMethodSelector';
+import PaymentDetailsForm from '../components/PaymentDetailsForm';
+import {
+  PaymentMethods,
+  generateUniqueID,
+  formatCardNumber,
+  validatePaymentInfo,
+  getPaymentDescription,
+  preparePayment,
+  invalidatePromoCode,
+} from '../services/paymentHelpers';
 
 const COLORS = {
   primary: '#FF6B35',
@@ -39,8 +49,7 @@ const COLORS = {
 export default function CheckoutScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
-  const cartItems = useSelector((state) => state.cart.items);
-  const { confirmPayment } = useStripe();
+  const cartItems = useSelector((state) => state.panier?.articles || []);
 
   // Récupérer les paramètres depuis le panier
   const {
@@ -53,159 +62,90 @@ export default function CheckoutScreen({ navigation, route }) {
     appliedPromo = null,
   } = route.params || {};
 
-  // États pour le formulaire de livraison
+  // États pour le formulaire de livraison (EXACTEMENT comme sur le WEB)
   const [deliveryInfo, setDeliveryInfo] = useState({
     name: '',
     email: '',
-    phone: '',
-    countryCode: '+227',
+    numero: '',
     region: '',
     quartier: '',
     description: '',
-    appart: '',
-    codePost: '',
   });
 
-  // États pour le paiement
-  const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash', 'stripe', 'paypal'
+  // États pour le paiement (EXACTEMENT comme sur le WEB)
+  const [paymentMethod, setPaymentMethod] = useState(''); // '', 'master Card', 'Visa', 'Mobile Money', 'payé à la livraison', 'nita', 'zeyna', 'amana'
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // 1: delivery, 2: payment, 3: confirmation
-  const [cardDetails, setCardDetails] = useState(null);
-  const [cardError, setCardError] = useState(null);
-  const [clientSecret, setClientSecret] = useState('');
+  const [cardDetails, setCardDetails] = useState({
+    number: '',
+    expiry: '',
+    cvc: '',
+  });
+  const [mobileDetails, setMobileDetails] = useState({
+    number: '',
+    operateur: '227',
+  });
+  const [securityCodeModal, setSecurityCodeModal] = useState({
+    isOpen: false,
+    code: '',
+    error: '',
+  });
+  const [handleSecuritySubmit, setHandleSecuritySubmit] = useState(null);
   const [createdOrderId, setCreatedOrderId] = useState(null);
 
-  // Détecter si c'est un repayment et aller directement à l'étape 2
+  // Charger les informations de livraison sauvegardées (EXACTEMENT comme sur le WEB)
   useEffect(() => {
-    const checkRepayment = async () => {
+    const loadDeliveryInfo = async () => {
       try {
-        const pendingOrderJson = await AsyncStorage.getItem('pendingOrder');
-        if (pendingOrderJson) {
-          const pendingOrder = JSON.parse(pendingOrderJson);
-          if (pendingOrder.commandeId) {
-            console.log('🔄 Repayment détecté, passage direct à l\'étape paiement');
-            setStep(2); // Aller directement à l'étape de paiement
-            setPaymentMethod('stripe'); // Sélectionner automatiquement le paiement par carte
-          }
+        const userId = user?.id || user?._id;
+        if (!userId) {
+          console.log('❌ Aucun utilisateur connecté');
+          return;
+        }
+
+        // Récupérer l'adresse de livraison depuis l'API (EXACTEMENT comme sur le WEB)
+        const response = await axios.get(`${API_URL}/getAddressByUserKey/${userId}`);
+
+        if (response.data.address) {
+          const address = response.data.address;
+          console.log('✅ Adresse chargée depuis API:', address);
+          
+          setDeliveryInfo({
+            name: address.name || '',
+            email: address.email || '',
+            numero: address.numero || '',
+            region: address.region || '',
+            quartier: address.quartier || '',
+            description: address.description || '',
+          });
+        } else {
+          console.log('ℹ️ Aucune adresse sauvegardée');
         }
       } catch (error) {
-        console.error('Erreur lors de la vérification du repayment:', error);
+        console.log('❌ Erreur lors du chargement de l\'adresse:', error);
+        // En cas d'erreur, ne rien faire (laisser les champs vides)
       }
     };
-    
-    checkRepayment();
-  }, []);
 
-  // Charger les informations de livraison sauvegardées
-  useEffect(() => {
     if (user) {
-      loadSavedDeliveryInfo();
+      loadDeliveryInfo();
     }
   }, [user]);
 
-  const loadSavedDeliveryInfo = async () => {
-    try {
-      // D'abord essayer de charger depuis l'API
-      if (user) {
-        try {
-          const response = await axios.get(`${API_URL}/api/shippingAddressRoutes/me`, {
-            headers: {
-              Authorization: `Bearer ${user.token}`,
-            },
-          });
-
-          if (response.data.address) {
-            const address = response.data.address;
-            console.log('✅ Adresse chargée depuis API:', address);
-            
-            // Parser le numéro pour séparer l'indicatif du numéro
-            let countryCode = '+227'; // Valeur par défaut
-            let phoneNumber = '';
-            
-            if (address.numero) {
-              // Si le numéro commence par +, séparer l'indicatif
-              if (address.numero.startsWith('+')) {
-                // Trouver où l'indicatif se termine (après +XXX)
-                // Les indicatifs font entre 1 et 4 chiffres après le +
-                const numStr = address.numero.substring(1); // Enlever le +
-                
-                // Chercher les premiers chiffres qui forment l'indicatif
-                // Pour +227, on prend 227, le reste c'est le numéro
-                let indicatifLength = 3; // Par défaut 3 chiffres (comme 227)
-                
-                // Détecter la longueur de l'indicatif
-                if (numStr.startsWith('1')) indicatifLength = 1; // USA/Canada
-                else if (numStr.startsWith('33') || numStr.startsWith('44') || numStr.startsWith('49')) indicatifLength = 2;
-                else if (numStr.startsWith('212') || numStr.startsWith('213') || numStr.startsWith('227')) indicatifLength = 3;
-                
-                countryCode = '+' + numStr.substring(0, indicatifLength);
-                phoneNumber = numStr.substring(indicatifLength);
-              } else {
-                // Si pas d'indicatif, utiliser le numéro tel quel
-                phoneNumber = address.numero;
-              }
-            }
-            
-            setDeliveryInfo({
-              name: address.name || '',
-              email: address.email || '',
-              phone: phoneNumber,
-              countryCode: countryCode,
-              region: address.region || '',
-              quartier: address.quartier || '',
-              description: address.description || '',
-              appart: address.appart || '',
-              codePost: address.codePost || '',
-            });
-            return;
-          }
-        } catch (apiError) {
-          console.log('ℹ️ Aucune adresse sauvegardée, préremplissage avec les données utilisateur');
-          // Si pas d'adresse dans l'API, utiliser les infos de base de l'utilisateur
-          setDeliveryInfo({
-            name: user?.name || '',
-            email: user?.email || '',
-            phone: user?.phoneNumber || '',
-            countryCode: '+227',
-            region: '',
-            quartier: '',
-            description: '',
-            appart: '',
-            codePost: '',
-          });
-          return;
-        }
-      }
-
-      // Fallback: charger depuis AsyncStorage
-      const saved = await AsyncStorage.getItem('deliveryInfo');
-      if (saved) {
-        const parsedInfo = JSON.parse(saved);
-        console.log('✅ Adresse chargée depuis AsyncStorage:', parsedInfo);
-        setDeliveryInfo(parsedInfo);
-      }
-    } catch (error) {
-      console.error('❌ Erreur chargement infos livraison:', error);
-      // En cas d'erreur, préremplir avec les infos utilisateur de base
-      if (user) {
-        setDeliveryInfo({
-          name: user?.name || '',
-          email: user?.email || '',
-          phone: user?.phoneNumber || '',
-          countryCode: '+227',
-          region: '',
-          quartier: '',
-          description: '',
-          appart: '',
-          codePost: '',
-        });
-      }
-    }
-  };
-
   const saveDeliveryInfo = async () => {
     try {
+      // Sauvegarder localement
       await AsyncStorage.setItem('deliveryInfo', JSON.stringify(deliveryInfo));
+      
+      // Envoyer au backend (comme sur le web)
+      if (user && (user.id || user._id)) {
+        const userId = user.id || user._id;
+        await axios.post(`${API_URL}/createOrUpdateAddress`, {
+          ...deliveryInfo,
+          email: deliveryInfo.email !== "" ? deliveryInfo.email : null,
+          clefUser: userId,
+        });
+      }
     } catch (error) {
       console.error('Erreur sauvegarde infos livraison:', error);
     }
@@ -213,7 +153,7 @@ export default function CheckoutScreen({ navigation, route }) {
 
   // Valider le formulaire de livraison
   const validateDeliveryInfo = () => {
-    const { name, email, phone, region, quartier } = deliveryInfo;
+    const { name, email, numero, region, quartier } = deliveryInfo;
 
     if (!name.trim()) {
       Alert.alert('Erreur', 'Veuillez entrer votre nom complet');
@@ -225,18 +165,18 @@ export default function CheckoutScreen({ navigation, route }) {
       return false;
     }
 
-    if (!phone.trim() || phone.length < 8) {
+    if (!numero.trim() || numero.length < 8) {
       Alert.alert('Erreur', 'Le numéro de téléphone doit contenir au moins 8 chiffres');
       return false;
     }
 
     if (!region.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre pays');
+      Alert.alert('Erreur', 'Veuillez entrer votre région');
       return false;
     }
 
     if (!quartier.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre ville, village ou commune');
+      Alert.alert('Erreur', 'Veuillez entrer votre quartier');
       return false;
     }
 
@@ -251,11 +191,11 @@ export default function CheckoutScreen({ navigation, route }) {
         setStep(2);
       }
     } else if (step === 2) {
-      if (paymentMethod === 'stripe') {
-        handleStripePayment();
-      } else {
-        handlePlaceOrder();
+      if (!paymentMethod) {
+        Alert.alert('Erreur', 'Veuillez sélectionner un mode de paiement');
+        return;
       }
+      handlePaymentSubmit();
     }
   };
 
@@ -441,7 +381,7 @@ export default function CheckoutScreen({ navigation, route }) {
         console.log('✅ Paiement réussi ! Nettoyage des données...');
         
         // Vider le panier et supprimer toutes les données temporaires
-        await dispatch(clearCartData());
+        await dispatch(clearPanierData());
         await AsyncStorage.removeItem('shippingDetails');
         await AsyncStorage.removeItem('pendingOrder');
         await AsyncStorage.removeItem('deliveryInfo');
@@ -466,6 +406,183 @@ export default function CheckoutScreen({ navigation, route }) {
   };
 
   // Passer une commande (paiement à la livraison)
+  // Fonction principale de soumission du paiement (EXACTEMENT comme sur le WEB)
+  const handlePaymentSubmit = async () => {
+    setLoading(true);
+
+    try {
+      // 1. Validation utilisateur
+      const userId = user?.id || user?._id;
+      if (!userId) {
+        Alert.alert('Erreur', 'Veuillez vous connecter pour continuer');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Validation des informations de paiement
+      const paymentErrors = validatePaymentInfo(paymentMethod, cardDetails, mobileDetails);
+      if (paymentErrors.length > 0) {
+        Alert.alert('Erreur', paymentErrors.join(', '));
+        setLoading(false);
+        return;
+      }
+
+      // 3. Vérification du panier
+      if (!cartItems || cartItems.length === 0) {
+        Alert.alert('Erreur', 'Votre panier est vide');
+        setLoading(false);
+        return;
+      }
+
+      // 4. Génération de l'ID de transaction
+      const transactionId = generateUniqueID();
+      const existingOrder = JSON.parse((await AsyncStorage.getItem('pendingOrder')) || 'null');
+
+      // 4. Nettoyage et Normalisation des produits (Parité WEB)
+      const cleanedProducts = cartItems.map((item) => {
+        // Déterminer le prix unitaire correct (après promo si applicable)
+        const unitPrice = item.prixPromo > 0 ? item.prixPromo : item.prix;
+        
+        return {
+          _id: item._id || item.product?._id,
+          name: item.name || item.product?.name,
+          image: item.image1 || item.imageUrl || item.product?.image1, 
+          imageUrl: item.image1 || item.imageUrl || item.product?.image1, // WEB KEY
+          prix: unitPrice, // WEB KEY
+          price: unitPrice, // MOBILE KEY
+          quantity: item.quantity || item.quantite || 1,
+          size: item.selectedSize,
+          color: item.selectedColor,
+          storeId: item.Clefournisseur?._id || item.createdBy,
+          storeName: item.Clefournisseur?.storeName || item.Clefournisseur?.name,
+          ClefType: item.ClefType,
+          weight: item.poids || item.shipping?.weight || 0,
+        };
+      });
+
+      // 5. Création de la commande (FORMAT EXACT DU WEB)
+      const orderData = {
+        clefUser: userId,
+        nbrProduits: cartItems.map((item) => ({
+          produit: item._id || item.product?._id,
+          quantite: item.quantity,
+          tailles: item.sizes || (item.selectedSize ? [item.selectedSize] : []),
+          couleurs: item.colors || (item.selectedColor ? [item.selectedColor] : []),
+        })),
+        prix: total,
+        statusPayment: PaymentMethods.CASH_ON_DELIVERY.includes(paymentMethod)
+          ? 'payé à la livraison'
+          : PaymentMethods.ASSISTED_PAYMENT.includes(paymentMethod)
+            ? 'payé par téléphone'
+            : 'en_attente',
+        reference: transactionId,
+        livraisonDetails: {
+          customerName: deliveryInfo.name,
+          email: deliveryInfo.email || null,
+          region: deliveryInfo.region,
+          quartier: deliveryInfo.quartier,
+          numero: deliveryInfo.numero,
+          description: deliveryInfo.description,
+        },
+        prod: cleanedProducts, // Produits nettoyés sans les objets imbriqués lourds
+        ...(appliedPromo && {
+          codePro: true,
+          idCodePro: appliedPromo._id,
+          codePromo: appliedPromo.code,
+          reduction: appliedPromo.discount || reduction,
+        }),
+        prix: total, // Grand Total (comme le champ 'prix' sur le web)
+        prixTotal: subtotal, // Sous-total HT/Remise (PARITÉ WEB)
+        fraisLivraison: shippingFee,
+        reduction: reduction,
+        fraisSousTotalArticles: subtotal, // Alias déjà présent
+      };
+
+      if (existingOrder?.transactionId) {
+        orderData.oldReference = existingOrder.transactionId;
+        orderData.newReference = transactionId;
+      }
+
+      console.log('📦 Données commande envoyées:', JSON.stringify(orderData, null, 2));
+
+      // 6. Sauvegarder l'adresse de livraison
+      await axios.post(`${API_URL}/createOrUpdateAddress`, {
+        ...deliveryInfo,
+        email: deliveryInfo.email !== '' ? deliveryInfo.email : null,
+        clefUser: userId,
+      });
+
+      // 7. Créer ou mettre à jour la commande (parité web pour repaiement)
+      const orderResponse = existingOrder?.transactionId
+        ? await axios.put(`${API_URL}/updateCommande`, orderData)
+        : await axios.post(`${API_URL}/createCommande`, orderData);
+      
+      if (!orderResponse.data.commande) {
+        throw new Error('Impossible de créer la commande');
+      }
+
+      setCreatedOrderId(orderResponse.data.commande._id);
+
+      // 8. Traiter le paiement (sauf cash) - EXACTEMENT comme sur le WEB
+      if (!PaymentMethods.CASH_ON_DELIVERY.includes(paymentMethod)) {
+        try {
+          // Préparer le paiement (comme sur le web avant la redirection vers payment-page.html)
+          const paymentInfo = await preparePayment(transactionId, total, paymentMethod);
+
+          console.log('💳 Informations de paiement préparées:', paymentInfo);
+
+          // Sur le web : window.location.href = "/payment-page.html"
+          // Sur mobile : navigation vers PaymentWebViewScreen avec iPay Money
+          navigation.navigate('PaymentWebView', {
+            amount: paymentInfo.amount,
+            transactionId: paymentInfo.transactionId,
+            paymentMethod: paymentInfo.paymentMethod,
+          });
+
+          // Ne pas vider le panier ici car l'utilisateur n'a pas encore payé
+          // Le panier sera vidé après confirmation du paiement (dans PaymentWebViewScreen)
+          // comme sur le web où on ne vide le panier qu'après le callback
+
+          // Ne pas continuer le flux ici, l'utilisateur va vers la page de paiement
+          return;
+        } catch (error) {
+          console.error('❌ Erreur préparation paiement:', error);
+          throw error;
+        }
+      }
+
+      // 9. Le backend V2 gère l'invalidation du code promo automatiquement
+      // Plus besoin d'appeler invalidatePromoCode manuellement
+
+      // 10. Vider le panier
+      await dispatch(clearCartData());
+
+      // 11. Succès
+      setStep(3);
+      setLoading(false);
+
+      // Redirection après 3 secondes
+      setTimeout(() => {
+        if (PaymentMethods.CASH_ON_DELIVERY.includes(paymentMethod)) {
+          navigation.navigate('Orders');
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'MainTabs' }],
+          });
+        }
+      }, 3000);
+
+    } catch (error) {
+      console.error('Erreur lors du paiement:', error);
+      Alert.alert(
+        'Erreur',
+        error.response?.data?.message || error.message || 'Une erreur est survenue lors du traitement de votre commande'
+      );
+      setLoading(false);
+    }
+  };
+
   const handlePlaceOrder = async () => {
     setLoading(true);
 
@@ -492,12 +609,10 @@ export default function CheckoutScreen({ navigation, route }) {
         livraisonDetails: {
           customerName: deliveryInfo.name,
           email: deliveryInfo.email,
-          numero: `${deliveryInfo.countryCode}${deliveryInfo.phone}`,
+          numero: deliveryInfo.numero,
           region: deliveryInfo.region,
           quartier: deliveryInfo.quartier,
           description: deliveryInfo.description,
-          appart: deliveryInfo.appart,
-          codePost: deliveryInfo.codePost,
         },
         shippingDetails: parsedShippingDetails,
         prix: subtotal - reduction,
@@ -522,7 +637,7 @@ export default function CheckoutScreen({ navigation, route }) {
 
       if (response.data.commande) {
         // Vider le panier
-        await dispatch(clearCartData());
+        await dispatch(clearPanierData());
         await AsyncStorage.removeItem('shippingDetails');
 
         // Afficher la confirmation
@@ -549,11 +664,6 @@ export default function CheckoutScreen({ navigation, route }) {
     }
   };
 
-  // Formater le prix
-  const formatPrice = (price) => {
-    return parseFloat(price).toFixed(2);
-  };
-
   // Render delivery form
   const renderDeliveryForm = () => (
     <View style={styles.section}>
@@ -565,7 +675,7 @@ export default function CheckoutScreen({ navigation, route }) {
           <Ionicons name="person-outline" size={20} color={COLORS.textLight} />
           <TextInput
             style={styles.input}
-            placeholder="Entrez votre nom complet"
+            placeholder="Votre nom complet"
             placeholderTextColor={COLORS.textLight}
             value={deliveryInfo.name}
             onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, name: text })}
@@ -574,12 +684,12 @@ export default function CheckoutScreen({ navigation, route }) {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Email *</Text>
+        <Text style={styles.inputLabel}>Email</Text>
         <View style={styles.inputContainer}>
           <Ionicons name="mail-outline" size={20} color={COLORS.textLight} />
           <TextInput
             style={styles.input}
-            placeholder="Entrez votre email"
+            placeholder="Votre email"
             placeholderTextColor={COLORS.textLight}
             value={deliveryInfo.email}
             onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, email: text })}
@@ -590,36 +700,27 @@ export default function CheckoutScreen({ navigation, route }) {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Téléphone *</Text>
-        <View style={styles.phoneRow}>
-          <CountryCodePicker
-            value={deliveryInfo.countryCode}
-            onSelect={(code) => setDeliveryInfo({ ...deliveryInfo, countryCode: code })}
+        <Text style={styles.inputLabel}>Numéro de téléphone *</Text>
+        <View style={styles.inputContainer}>
+          <Ionicons name="call-outline" size={20} color={COLORS.textLight} />
+          <TextInput
+            style={styles.input}
+            placeholder="Votre numéro de téléphone"
+            placeholderTextColor={COLORS.textLight}
+            value={deliveryInfo.numero}
+            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, numero: text })}
+            keyboardType="phone-pad"
           />
-          <View style={styles.phoneInputContainer}>
-            <Ionicons name="call-outline" size={20} color={COLORS.textLight} />
-            <TextInput
-              style={styles.input}
-              placeholder="Numéro sans indicatif"
-              placeholderTextColor={COLORS.textLight}
-              value={deliveryInfo.phone}
-              onChangeText={(text) => {
-                const cleaned = text.replace(/\D/g, '');
-                setDeliveryInfo({ ...deliveryInfo, phone: cleaned });
-              }}
-              keyboardType="phone-pad"
-            />
-          </View>
         </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Pays *</Text>
+        <Text style={styles.inputLabel}>Région *</Text>
         <View style={styles.inputContainer}>
           <Ionicons name="location-outline" size={20} color={COLORS.textLight} />
           <TextInput
             style={styles.input}
-            placeholder="Votre pays"
+            placeholder="Votre région"
             placeholderTextColor={COLORS.textLight}
             value={deliveryInfo.region}
             onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, region: text })}
@@ -628,44 +729,15 @@ export default function CheckoutScreen({ navigation, route }) {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Ville | Village | Commune *</Text>
+        <Text style={styles.inputLabel}>Quartier *</Text>
         <View style={styles.inputContainer}>
           <Ionicons name="home-outline" size={20} color={COLORS.textLight} />
           <TextInput
             style={styles.input}
-            placeholder="Votre ville, village ou commune"
+            placeholder="Votre quartier"
             placeholderTextColor={COLORS.textLight}
             value={deliveryInfo.quartier}
             onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, quartier: text })}
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Appart | Immeuble | Etage | Nom de résidence *</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="business-outline" size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.input}
-            placeholder="Ex: Appt 2B, 3ème étage, Résidence XYZ"
-            placeholderTextColor={COLORS.textLight}
-            value={deliveryInfo.appart}
-            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, appart: text })}
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Code Postal *</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="mail-outline" size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.input}
-            placeholder="Votre code postal"
-            placeholderTextColor={COLORS.textLight}
-            value={deliveryInfo.codePost}
-            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, codePost: text })}
-            keyboardType="numeric"
           />
         </View>
       </View>
@@ -675,7 +747,7 @@ export default function CheckoutScreen({ navigation, route }) {
         <View style={[styles.inputContainer, styles.textAreaContainer]}>
           <TextInput
             style={[styles.input, styles.textArea]}
-            placeholder="Ex: Sonner 2 fois, grande porte bleue..."
+            placeholder="Instructions supplémentaires pour la livraison"
             placeholderTextColor={COLORS.textLight}
             value={deliveryInfo.description}
             onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, description: text })}
@@ -688,109 +760,27 @@ export default function CheckoutScreen({ navigation, route }) {
     </View>
   );
 
-  // Render payment methods
+  // Render payment methods (EXACTEMENT comme sur le WEB)
   const renderPaymentMethods = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Mode de paiement</Text>
+      
+      <PaymentMethodSelector
+        selectedMethod={paymentMethod}
+        onSelectMethod={setPaymentMethod}
+      />
 
-      {/* Paiement à la livraison - Désactivé temporairement */}
-      {/* <TouchableOpacity
-        style={[styles.paymentCard, paymentMethod === 'cash' && styles.paymentCardSelected]}
-        onPress={() => setPaymentMethod('cash')}
-        activeOpacity={0.7}
-      >
-        <View style={styles.paymentIcon}>
-          <Ionicons 
-            name="cash-outline" 
-            size={28} 
-            color={paymentMethod === 'cash' ? COLORS.primary : COLORS.textLight} 
-          />
-        </View>
-        <View style={styles.paymentInfo}>
-          <Text style={styles.paymentTitle}>Paiement à la livraison</Text>
-          <Text style={styles.paymentDescription}>
-            Payez en espèces lors de la réception
-          </Text>
-        </View>
-        {paymentMethod === 'cash' && (
-          <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
-        )}
-      </TouchableOpacity> */}
-
-      {/* Carte bancaire */}
-      <TouchableOpacity
-        style={[styles.paymentCard, paymentMethod === 'stripe' && styles.paymentCardSelected]}
-        onPress={() => setPaymentMethod('stripe')}
-        activeOpacity={0.7}
-      >
-        <View style={styles.paymentIcon}>
-          <Ionicons 
-            name="card-outline" 
-            size={28} 
-            color={paymentMethod === 'stripe' ? COLORS.primary : COLORS.textLight} 
-          />
-        </View>
-        <View style={styles.paymentInfo}>
-          <Text style={styles.paymentTitle}>Carte bancaire</Text>
-          <Text style={styles.paymentDescription}>
-            Paiement sécurisé par Stripe
-          </Text>
-        </View>
-        {paymentMethod === 'stripe' && (
-          <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
-        )}
-      </TouchableOpacity>
-
-      {/* PayPal - Désactivé temporairement */}
-      {/* <TouchableOpacity
-        style={[styles.paymentCard, paymentMethod === 'paypal' && styles.paymentCardSelected]}
-        onPress={() => setPaymentMethod('paypal')}
-        activeOpacity={0.7}
-      >
-        <View style={styles.paymentIcon}>
-          <Ionicons 
-            name="logo-paypal" 
-            size={28} 
-            color={paymentMethod === 'paypal' ? COLORS.primary : COLORS.textLight} 
-          />
-        </View>
-        <View style={styles.paymentInfo}>
-          <Text style={styles.paymentTitle}>PayPal</Text>
-          <Text style={styles.paymentDescription}>
-            Paiement via votre compte PayPal
-          </Text>
-        </View>
-        {paymentMethod === 'paypal' && (
-          <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
-        )}
-      </TouchableOpacity> */}
-
-      {/* Stripe Card Input */}
-      {paymentMethod === 'stripe' && (
-        <View style={styles.stripeCardContainer}>
-          <StripeCardInput
-            onCardChange={(details) => {
-              setCardDetails(details);
-              if (details.error) {
-                setCardError(details.error.message);
-              } else {
-                setCardError(null);
-              }
-            }}
-            error={cardError}
-          />
-        </View>
+      {paymentMethod && (
+        <PaymentDetailsForm
+          paymentMethod={paymentMethod}
+          cardDetails={cardDetails}
+          setCardDetails={setCardDetails}
+          mobileDetails={mobileDetails}
+          setMobileDetails={setMobileDetails}
+          formatCardNumber={formatCardNumber}
+          getPaymentDescription={getPaymentDescription}
+        />
       )}
-
-      {/* PayPal Note - Désactivé */}
-      {/* {paymentMethod === 'paypal' && (
-        <View style={styles.paymentNote}>
-          <Ionicons name="information-circle-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.paymentNoteText}>
-            Disponible prochainement
-          </Text>
-        </View>
-      )} */}
     </View>
   );
 
@@ -801,14 +791,14 @@ export default function CheckoutScreen({ navigation, route }) {
       <View style={styles.summaryCard}>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Articles ({cartItems.length})</Text>
-          <Text style={styles.summaryValue}>{formatPrice(subtotal)}€</Text>
+          <Text style={styles.summaryValue}>{formatPrice(subtotal)} CFA</Text>
         </View>
 
         {reduction > 0 && (
           <View style={styles.summaryRow}>
             <Text style={[styles.summaryLabel, { color: COLORS.success }]}>Réduction</Text>
             <Text style={[styles.summaryValue, { color: COLORS.success }]}>
-              -{formatPrice(reduction)}€
+              -{formatPrice(reduction)} CFA
             </Text>
           </View>
         )}
@@ -822,14 +812,14 @@ export default function CheckoutScreen({ navigation, route }) {
 
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Frais de livraison</Text>
-          <Text style={styles.summaryValue}>{formatPrice(shippingFee)}€</Text>
+          <Text style={styles.summaryValue}>{formatPrice(shippingFee)} CFA</Text>
         </View>
 
         <View style={styles.summaryDivider} />
 
         <View style={styles.summaryRow}>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>{formatPrice(total)}€</Text>
+          <Text style={styles.totalValue} numberOfLines={1}>{formatPrice(total)} CFA</Text>
         </View>
       </View>
     </View>
@@ -873,7 +863,7 @@ export default function CheckoutScreen({ navigation, route }) {
         <View style={styles.confirmationDetailRow}>
           <Ionicons name="cash-outline" size={20} color={COLORS.textLight} />
           <Text style={styles.confirmationDetailText}>
-            Total payé: {formatPrice(total)}€
+            Total payé: {formatPrice(total)}\u00a0CFA
           </Text>
         </View>
 
@@ -944,6 +934,7 @@ export default function CheckoutScreen({ navigation, route }) {
     </View>
   );
 
+  // Render logic based on step
   if (step === 3) {
     return (
       <View style={styles.container}>
@@ -1033,6 +1024,18 @@ export default function CheckoutScreen({ navigation, route }) {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {/* Modal pour le code de sécurité Zeyna */}
+      <SecurityCodeModal
+        isOpen={securityCodeModal.isOpen}
+        onClose={() => {
+          setSecurityCodeModal({ isOpen: false, code: '', error: '' });
+          setHandleSecuritySubmit(null);
+          setLoading(false);
+        }}
+        onSubmit={handleSecuritySubmit}
+        error={securityCodeModal.error}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1129,21 +1132,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: 8,
-  },
-  phoneRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  phoneInputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -1246,9 +1234,10 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
   },
   summaryValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    letterSpacing: 0.3,
   },
   summaryDivider: {
     height: 1,
@@ -1256,14 +1245,16 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   totalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#1a1a1a',
   },
   totalValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '800',
     color: COLORS.primary,
+    letterSpacing: 0.5,
+    flexShrink: 0,
   },
   bottomContainer: {
     position: 'absolute',

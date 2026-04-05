@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getTypes } from '../redux/productsSlice';
+import { formatPrice } from '../utils/formatPrice';
 
 const { width } = Dimensions.get('window');
 
@@ -33,8 +35,9 @@ const COLORS = {
   red: '#EF4444',
 };
 
-export default function SearchScreen() {
+export default function SearchScreen({ route }) {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const inputRef = useRef(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,11 +53,29 @@ export default function SearchScreen() {
 
   const allProducts = useSelector((state) => state.products?.data || []);
   const categories = useSelector((state) => state.products?.categories || []);
+  const types = useSelector((state) => state.products?.types || []);
 
-  // Charger l'historique de recherche
+  // Créer le mapping type -> category
+  const typeToCategory = useMemo(() => {
+    const mapping = {};
+    types.forEach(type => {
+      mapping[type._id] = type.clefCategories;
+    });
+    return mapping;
+  }, [types]);
+
+  // Charger l'historique de recherche et les types
   useEffect(() => {
     loadSearchHistory();
-  }, []);
+    dispatch(getTypes());
+  }, [dispatch]);
+
+  useEffect(() => {
+    const initialQuery = route?.params?.initialQuery;
+    if (typeof initialQuery === 'string' && initialQuery.trim().length > 0) {
+      setSearchTerm(initialQuery);
+    }
+  }, [route?.params?.initialQuery]);
 
   const loadSearchHistory = async () => {
     try {
@@ -95,7 +116,7 @@ export default function SearchScreen() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, filters]);
+  }, [searchTerm, filters, typeToCategory]);
 
   const handleSearch = (term) => {
     if (!term.trim() && !filters.category && !filters.minPrice && !filters.maxPrice) {
@@ -115,8 +136,9 @@ export default function SearchScreen() {
         product.name?.toLowerCase().includes(term.toLowerCase()) ||
         cleanDescription.toLowerCase().includes(term.toLowerCase());
 
+      // 🔧 CORRECTION ICI - Utiliser ClefType et typeToCategory
       const matchesCategory =
-        !filters.category || product.ClefCategorie === filters.category;
+        !filters.category || typeToCategory[product.ClefType] === filters.category;
 
       const matchesMinPrice =
         !filters.minPrice || product.prix >= parseFloat(filters.minPrice);
@@ -166,13 +188,13 @@ export default function SearchScreen() {
             {item.nom || item.name}
           </Text>
           <View style={styles.priceRow}>
-            <Text style={styles.resultPrice}>€{price?.toFixed(2)}</Text>
+            <Text style={styles.resultPrice}>{formatPrice(price)} CFA</Text>
             {hasPromo && (
-              <Text style={styles.oldPrice}>€{item.prix?.toFixed(2)}</Text>
+              <Text style={styles.oldPrice}>{formatPrice(item.prix)} CFA</Text>
             )}
           </View>
-          {item.isdisponible ? (
-            <Text style={styles.inStock}>En stock</Text>
+          {(item.quantite > 0) ? (
+            <Text style={styles.inStock}>En stock ({item.quantite})</Text>
           ) : (
             <Text style={styles.outOfStock}>Rupture</Text>
           )}
@@ -518,15 +540,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   resultPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
     marginRight: 8,
+    letterSpacing: 0.2,
+    flexShrink: 0,
   },
   oldPrice: {
-    fontSize: 14,
-    color: COLORS.gray,
+    fontSize: 12,
+    color: '#999',
     textDecorationLine: 'line-through',
+    fontWeight: '400',
   },
   inStock: {
     fontSize: 12,

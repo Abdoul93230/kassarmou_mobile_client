@@ -642,7 +642,7 @@ export default function RegisterScreen({ navigation }) {
                 </LinearGradient>
               </View>
               <Text style={styles.title}>CRÉER UN COMPTE</Text>
-              <Text style={styles.subtitle}>Rejoignez Kassarmoumarket aujourd'hui</Text>
+              <Text style={styles.subtitle}>Rejoignez Ihambaobab aujourd'hui</Text>
             </View>
           </LinearGradient>
 

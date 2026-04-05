@@ -20,8 +20,9 @@ import { useSelector, useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { getProducts } from '../redux/productsSlice';
+import { getProducts, getTypes } from '../redux/productsSlice';
 import { toggleLike, fetchUserLikes } from '../redux/likesSlice';
+import { formatPrice } from '../utils/formatPrice';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,10 +40,6 @@ const getResponsiveValues = () => {
 const { columns: NUM_COLUMNS, cardMargin: CARD_MARGIN } = getResponsiveValues();
 const CARD_WIDTH = (width - (NUM_COLUMNS + 1) * CARD_MARGIN) / NUM_COLUMNS;
 
-const formatPrice = (price) => {
-  return price?.toFixed(2) || '0.00';
-};
-
 // Function to strip HTML tags from description
 const stripHtmlTags = (html) => {
   if (!html) return '';
@@ -58,23 +55,37 @@ const stripHtmlTags = (html) => {
     .trim();
 };
 
+// Images de couverture par défaut pour les catégories sans image
+const DEFAULT_CATEGORY_IMAGES = {
+  'Promotions': 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80', // Sale/Promo
+  'Nouveautés': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80', // New arrivals
+  'default': 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&q=80', // Shopping bags
+};
+
 export default function ProductListScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const dispatch = useDispatch();
 
-  const { categoryId, categoryName, marque, title } = route.params || {};
+  const { categoryId, categoryName, marque, title, filter } = route.params || {};
+  const decodedCategoryName = categoryName ? decodeURIComponent(categoryName) : null;
   
   // Determine the display title
   const displayTitle = title || categoryName || 'Produits';
   
   const products = useSelector((state) => state.products?.data || []);
   const categories = useSelector((state) => state.products?.categories || []);
+  const types = useSelector((state) => state.products?.types || []); // 👈 AJOUTER
   const loading = useSelector((state) => state.products?.loading || false);
   const { likedProducts } = useSelector((state) => state.likes || { likedProducts: [] });
   const { user } = useSelector((state) => state.auth || {});
   
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [displayedProducts, setDisplayedProducts] = useState([]); // Produits affichés avec pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const PRODUCTS_PER_PAGE = 10; // Charger 10 produits à la fois
+  
   const [refreshing, setRefreshing] = useState(false);
   const [sortBy, setSortBy] = useState('default');
   const [viewMode, setViewMode] = useState('grid'); // grid or list
@@ -83,29 +94,109 @@ export default function ProductListScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchBar, setShowSearchBar] = useState(false);
 
-  // Get category details
-  const currentCategory = useMemo(() => {
-    return categories.find(cat => cat._id === categoryId);
-  }, [categories, categoryId]);
+  // Animation pour le spinner de chargement
+  const spinnerRotation = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
-    console.log('📦 [ProductListScreen] Params:', { categoryName, categoryId, marque, title });
-    dispatch(getProducts());
+    const spinAnimation = Animated.loop(
+      Animated.timing(spinnerRotation, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    );
+    spinAnimation.start();
+    return () => spinAnimation.stop();
+  }, []);
+
+  const spin = spinnerRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const typeToCategory = useMemo(() => {
+  const mapping = {};
+  types.forEach(type => {
+    mapping[type._id] = type.clefCategories;
+  });
+  return mapping;
+}, [types]);
+
+  // Get category details
+  const currentCategory = useMemo(() => {
+    if (categoryId) {
+      return categories.find(cat => cat._id === categoryId);
+    }
+
+    if (decodedCategoryName) {
+      return categories.find(
+        (cat) => String(cat.name || '').toLowerCase() === decodedCategoryName.toLowerCase()
+      );
+    }
+
+    return null;
+  }, [categories, categoryId, decodedCategoryName]);
+
+  const resolvedCategoryId = currentCategory?._id || categoryId;
+
+  // Obtenir l'image de couverture (catégorie, filter, ou défaut)
+  const getCoverImage = useMemo(() => {
+    // Si la catégorie a une image, l'utiliser
+    if (currentCategory?.image) {
+      return currentCategory.image;
+    }
     
+    // Si c'est un filtre spécial (promo/nouveautés), utiliser l'image dédiée
+    if (filter === 'promo' && categoryName === 'Promotions') {
+      return DEFAULT_CATEGORY_IMAGES['Promotions'];
+    }
+    if (filter === 'new' && categoryName === 'Nouveautés') {
+      return DEFAULT_CATEGORY_IMAGES['Nouveautés'];
+    }
+    
+    // Sinon, utiliser l'image par défaut
+    return DEFAULT_CATEGORY_IMAGES['default'];
+  }, [currentCategory, filter, categoryName]);
+
+  useEffect(() => {
+    console.log('📦 [ProductListScreen] Params:', {
+      categoryName,
+      categoryId,
+      resolvedCategoryId,
+      marque,
+      title,
+      filter,
+    });
+    dispatch(getProducts());
+    dispatch(getTypes()); 
     if (user?.id) {
       dispatch(fetchUserLikes(user.id));
     }
-  }, [dispatch, categoryId, marque, user?.id]);
+  }, [dispatch, categoryId, resolvedCategoryId, marque, filter, user?.id]);
 
   useEffect(() => {
     if (products.length > 0) {
       let filtered = products;
       
-      // Filter by category if categoryId is provided
-      if (categoryId) {
-        filtered = filtered.filter((product) => product.ClefCategorie === categoryId);
-        console.log('📦 [ProductListScreen] Filtered by category:', filtered.length);
+      // Filter by special filters (promo, new)
+      if (filter === 'promo') {
+        // Filter products with prixPromo > 0 (same logic as HomeScreen)
+        filtered = filtered.filter((product) => product.prixPromo > 0);
+        console.log('🎁 [ProductListScreen] Filtered by promo:', filtered.length);
+      } else if (filter === 'new') {
+        // Take first 20 products (same logic as HomeScreen - latest products)
+        filtered = products.slice(0, 20);
+        console.log('✨ [ProductListScreen] Filtered by new:', filtered.length);
       }
+      
+      // Filter by category if categoryId is provided
+      if (resolvedCategoryId) {
+      filtered = filtered.filter((product) => {
+        const productCategoryId = typeToCategory[product.ClefType];
+        return productCategoryId === resolvedCategoryId;
+      });
+      console.log('📦 [ProductListScreen] Filtered by category:', filtered.length);
+    }
       
       // Filter by marque if marque is provided
       if (marque) {
@@ -115,7 +206,7 @@ export default function ProductListScreen() {
       
       applyFiltersAndSort(filtered);
     }
-  }, [products, categoryId, marque, sortBy, searchQuery]);
+  }, [products, resolvedCategoryId, marque, filter, sortBy, searchQuery, typeToCategory]);
 
   const applyFiltersAndSort = (productsToProcess) => {
     let filtered = [...productsToProcess];
@@ -168,7 +259,41 @@ export default function ProductListScreen() {
     }
     
     setFilteredProducts(sorted);
+    // Réinitialiser la pagination quand les filtres changent
+    setCurrentPage(1);
+    setDisplayedProducts(sorted.slice(0, PRODUCTS_PER_PAGE));
   };
+
+  // Effet pour mettre à jour les produits affichés quand filteredProducts change
+  useEffect(() => {
+    if (filteredProducts.length > 0) {
+      setDisplayedProducts(filteredProducts.slice(0, currentPage * PRODUCTS_PER_PAGE));
+    }
+  }, [filteredProducts, currentPage]);
+
+  // Fonction pour charger plus de produits
+  const loadMoreProducts = () => {
+    if (isLoadingMore) return;
+    
+    const totalProducts = filteredProducts.length;
+    const currentlyDisplayed = displayedProducts.length;
+    
+    if (currentlyDisplayed >= totalProducts) {
+      // Tous les produits sont déjà affichés
+      return;
+    }
+    
+    setIsLoadingMore(true);
+    
+    // Simuler un délai de chargement pour l'expérience utilisateur
+    setTimeout(() => {
+      setCurrentPage(prev => prev + 1);
+      setIsLoadingMore(false);
+    }, 500);
+  };
+
+  // Déterminer si on peut charger plus
+  const hasMoreProducts = displayedProducts.length < filteredProducts.length;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -330,11 +455,11 @@ export default function ProductListScreen() {
             {/* Prix */}
             <View style={styles.priceWrapper}>
               <Text style={[styles.price, viewMode === 'list' && { fontSize: 17 }]}>
-                €{formatPrice(currentPrice)}
+                {formatPrice(currentPrice)} CFA
               </Text>
               {hasPromotion && (
                 <Text style={[styles.originalPrice, viewMode === 'list' && { fontSize: 13 }]}>
-                  €{formatPrice(item.prix)}
+                  {formatPrice(item.prix)} CFA
                 </Text>
               )}
             </View>
@@ -488,9 +613,9 @@ export default function ProductListScreen() {
         </>
       )}
       
-      {/* Product List avec Header intégré */}
+      {/* Product List avec Header intégré et Pagination Infinie */}
       <Animated.FlatList
-        data={filteredProducts}
+        data={displayedProducts}
         renderItem={renderProductCard}
         keyExtractor={(item) => item._id}
         numColumns={viewMode === 'grid' ? NUM_COLUMNS : 1}
@@ -517,18 +642,48 @@ export default function ProductListScreen() {
           }
         )}
         scrollEventThrottle={16}
+        onEndReached={loadMoreProducts}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={
+          hasMoreProducts ? (
+            <View style={styles.loadingMoreContainer}>
+              <View style={styles.loadingMoreContent}>
+                <View style={styles.loadingSpinner}>
+                  <Animated.View style={[styles.spinner, { transform: [{ rotate: spin }] }]} />
+                </View>
+                <Text style={styles.loadingMoreText}>
+                  Chargement de plus de produits...
+                </Text>
+                <Text style={styles.loadingMoreSubtext}>
+                  {displayedProducts.length} / {filteredProducts.length} produits
+                </Text>
+              </View>
+            </View>
+          ) : filteredProducts.length > 0 ? (
+            <View style={styles.endOfListContainer}>
+              <View style={styles.endOfListContent}>
+                <MaterialCommunityIcons name="check-circle" size={24} color="#30A08B" />
+                <Text style={styles.endOfListText}>
+                  Tous les produits affichés
+                </Text>
+                <Text style={styles.endOfListSubtext}>
+                  {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''} au total
+                </Text>
+              </View>
+            </View>
+          ) : null
+        }
         ListHeaderComponent={
           <>
             {/* Animated Hero Header - Auto Height */}
             <View style={styles.heroHeader}>
-              {currentCategory?.image && (
-                <Animated.Image
-                  source={{ uri: currentCategory.image }}
-                  style={[styles.heroImage, { opacity: headerImageOpacity }]}
-                  resizeMode="cover"
-                  blurRadius={0}
-                />
-              )}
+              {/* Image de couverture (catégorie ou par défaut) */}
+              <Animated.Image
+                source={{ uri: getCoverImage }}
+                style={[styles.heroImage, { opacity: headerImageOpacity }]}
+                resizeMode="cover"
+                blurRadius={0}
+              />
               {/* Dark overlay for better text visibility */}
               <View style={styles.darkOverlay} />
               
@@ -611,7 +766,7 @@ export default function ProductListScreen() {
                               <Ionicons name="pricetag" size={13} color="#FC913A" />
                             </View>
                             <Text style={styles.statText}>
-                              Dès €{formatPrice(Math.min(...filteredProducts.map(p => p.prixPromo > 0 ? p.prixPromo : p.prix)))}
+                              Dès {formatPrice(Math.min(...filteredProducts.map(p => p.prixPromo > 0 ? p.prixPromo : p.prix)))} CFA
                             </Text>
                           </View>
                         </>
@@ -948,13 +1103,15 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     margin: CARD_MARGIN / 2,
     backgroundColor: '#FFF',
-    borderRadius: 20,
+    borderRadius: 14,
     overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
+    elevation: 2,
+    shadowColor: '#30A08B',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.08,
     shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(48, 160, 139, 0.06)',
   },
   productCardList: {
     width: width - (CARD_MARGIN * 2),
@@ -966,8 +1123,11 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: '100%',
     aspectRatio: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#f8f9fa',
     position: 'relative',
+    borderTopLeftRadius: 13,
+    borderTopRightRadius: 13,
+    overflow: 'hidden',
   },
   imageContainerList: {
     width: 120,
@@ -1045,7 +1205,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   productInfo: {
-    padding: 14,
+    padding: 12,
+    backgroundColor: '#FFF',
   },
   productInfoList: {
     flex: 1,
@@ -1073,15 +1234,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   price: {
-    fontSize: 19,
-    fontWeight: 'bold',
-    color: '#30A08B',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    letterSpacing: 0.2,
+    flexShrink: 0,
   },
   originalPrice: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#999',
     textDecorationLine: 'line-through',
-    fontWeight: '500',
+    fontWeight: '400',
   },
   stockIndicator: {
     flexDirection: 'row',
@@ -1286,6 +1449,66 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.3)',
   },
+  // Loading More Styles
+  loadingMoreContainer: {
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  loadingMoreContent: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingSpinner: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  spinner: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 3,
+    borderColor: '#E5E7EB',
+    borderTopColor: '#30A08B',
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  loadingMoreSubtext: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  
+  // End of List Styles
+  endOfListContainer: {
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  endOfListContent: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 20,
+    paddingHorizontal: 30,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  endOfListText: {
+    fontSize: 14,
+    color: '#166534',
+    fontWeight: '600',
+  },
+  endOfListSubtext: {
+    fontSize: 12,
+    color: '#16A34A',
+  },
+  
   heroSearchIcon: {
     marginRight: 0,
   },
