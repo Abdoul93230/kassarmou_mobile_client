@@ -3,7 +3,25 @@ import { View, TextInput, StyleSheet, TouchableOpacity, Text } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../config/constants';
 
-const OTPInput = ({ otp, setOtp, length = 6, onComplete }) => {
+const formatDuration = (seconds = 0) => {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
+const OTPInput = ({
+  otp,
+  setOtp,
+  length = 6,
+  onComplete,
+  timerValue = null,
+  timerLabel = 'Temps d\'attente',
+  timerHint = '',
+  onResendPress = null,
+  resendText = 'Renvoyer le code',
+  resendDisabled = false,
+}) => {
   const inputRefs = useRef([]);
   const [showPasteHelper, setShowPasteHelper] = useState(false);
 
@@ -106,6 +124,31 @@ const OTPInput = ({ otp, setOtp, length = 6, onComplete }) => {
           Vous pouvez coller le code directement dans n'importe quel champ
         </Text>
       </View>
+
+      {(timerValue !== null || onResendPress) && (
+        <View style={styles.timerCard}>
+          <Text style={styles.timerLabel}>{timerLabel}</Text>
+          {timerValue !== null && (
+            <Text style={styles.timerValue}>{formatDuration(timerValue)}</Text>
+          )}
+          {timerHint ? <Text style={styles.timerHint}>{timerHint}</Text> : null}
+          {onResendPress ? (
+            <TouchableOpacity
+              style={[styles.resendButton, resendDisabled && styles.resendButtonDisabled]}
+              onPress={onResendPress}
+              disabled={resendDisabled}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="refresh" size={16} color={resendDisabled ? COLORS.textMuted : COLORS.primary} />
+              <Text style={[styles.resendText, resendDisabled && styles.resendTextDisabled]}>
+                {resendDisabled && timerValue !== null
+                  ? `${resendText} dans ${formatDuration(timerValue)}`
+                  : resendText}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 };
@@ -157,6 +200,57 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     textAlign: 'center',
     lineHeight: 16,
+  },
+  timerCard: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: COLORS.backgroundAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  timerLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  timerValue: {
+    marginTop: 4,
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  timerHint: {
+    marginTop: 4,
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+  },
+  resendButton: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  resendButtonDisabled: {
+    opacity: 0.6,
+  },
+  resendText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  resendTextDisabled: {
+    color: COLORS.textMuted,
   },
 });
 

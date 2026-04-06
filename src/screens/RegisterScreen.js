@@ -45,6 +45,12 @@ const COUNTRY_CODES = [
   { code: '+20', country: 'Égypte', flag: '🇪🇬' },
 ];
 
+const pickDevOtp = (payload = {}) => payload?.devOTP || payload?.devOtp || payload?.otp || null;
+const getErrorMessage = (value) => {
+  if (typeof value === 'string') return value;
+  return value?.message || value?.error || 'Une erreur est survenue';
+};
+
 export default function RegisterScreen({ navigation }) {
   const dispatch = useDispatch();
   const { loading, error, isAuthenticated } = useSelector(state => state.auth);
@@ -68,7 +74,9 @@ export default function RegisterScreen({ navigation }) {
   // État OTP
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [otpToken, setOtpToken] = useState('');
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
+  const [devOtpCode, setDevOtpCode] = useState(null);
+  const [expiresIn, setExpiresIn] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [canResend, setCanResend] = useState(false);
   
   const [showPassword, setShowPassword] = useState(false);
@@ -98,11 +106,10 @@ export default function RegisterScreen({ navigation }) {
 
   // Timer OTP
   useEffect(() => {
-    if (currentStep === 'otp' && timeLeft > 0) {
+    if (currentStep === 'otp' && expiresIn > 0) {
       const timer = setInterval(() => {
-        setTimeLeft((prev) => {
+        setExpiresIn((prev) => {
           if (prev <= 1) {
-            setCanResend(true);
             clearInterval(timer);
             return 0;
           }
@@ -112,7 +119,24 @@ export default function RegisterScreen({ navigation }) {
 
       return () => clearInterval(timer);
     }
-  }, [currentStep, timeLeft]);
+  }, [currentStep, expiresIn]);
+
+  useEffect(() => {
+    if (currentStep === 'otp' && resendCooldown > 0) {
+      const timer = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setCanResend(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [currentStep, resendCooldown]);
 
   // Afficher les erreurs Redux
   useEffect(() => {
@@ -121,7 +145,7 @@ export default function RegisterScreen({ navigation }) {
       Toast.show({
         type: 'error',
         text1: 'Erreur',
-        text2: error,
+        text2: getErrorMessage(error),
         position: 'top',
         visibilityTime: 4000,
       });
@@ -243,13 +267,19 @@ export default function RegisterScreen({ navigation }) {
     }
 
     try {
+      const phoneWithCode = formData.phoneNumber
+        ? `${formData.countryCode}${formData.phoneNumber}`
+        : null;
+
       console.log('📤 Envoi de la requête sendOtp...');
       const result = await dispatch(sendOtp({
+        phoneNumber: phoneWithCode,
         email: formData.email,
         name: formData.name,
       })).unwrap();
 
       console.log('✅ OTP envoyé avec succès:', result);
+      setDevOtpCode(pickDevOtp(result));
       Toast.show({
         type: 'success',
         text1: 'Code envoyé',
@@ -258,8 +288,9 @@ export default function RegisterScreen({ navigation }) {
       });
 
       setCurrentStep('otp');
-      setTimeLeft(300);
-      setCanResend(false);
+      setExpiresIn(Number(result.expiresInSeconds) || 300);
+      setResendCooldown(Number(result.cooldownSeconds) || 0);
+      setCanResend((Number(result.cooldownSeconds) || 0) === 0);
     } catch (err) {
       const errorInfo = getUserFriendlyError(err);
       Toast.show({
@@ -287,6 +318,7 @@ export default function RegisterScreen({ navigation }) {
     try {
       // 1. Vérifier l'OTP
       const verifyResult = await dispatch(verifyOtp({
+        phoneNumber: formData.phoneNumber ? `${formData.countryCode}${formData.phoneNumber}` : null,
         email: formData.email,
         otp: otpCode,
       })).unwrap();
@@ -341,13 +373,21 @@ export default function RegisterScreen({ navigation }) {
   // Renvoyer OTP
   const handleResendOtp = async () => {
     try {
-      await dispatch(sendOtp({
+      const phoneWithCode = formData.phoneNumber
+        ? `${formData.countryCode}${formData.phoneNumber}`
+        : null;
+
+      const resendResult = await dispatch(sendOtp({
+        phoneNumber: phoneWithCode,
         email: formData.email,
         name: formData.name,
       })).unwrap();
 
-      setTimeLeft(300);
-      setCanResend(false);
+      setDevOtpCode(pickDevOtp(resendResult));
+
+      setExpiresIn(Number(resendResult.expiresInSeconds) || 300);
+      setResendCooldown(Number(resendResult.cooldownSeconds) || 0);
+      setCanResend((Number(resendResult.cooldownSeconds) || 0) === 0);
       setOtp(['', '', '', '', '', '']);
       otpRefs.current[0]?.focus();
 
@@ -461,6 +501,13 @@ export default function RegisterScreen({ navigation }) {
                 <Text style={styles.emailText}>{formData.email}</Text>
               </View>
 
+            {devOtpCode ? (
+              <View style={styles.devBadge}>
+                <Text style={styles.devTitle}>Mode developpement</Text>
+                <Text style={styles.devCode}>Code test: {devOtpCode}</Text>
+              </View>
+            ) : null}
+
             {/* OTP Inputs */}
             <View style={styles.otpInputsContainer}>
               {otp.map((digit, index) => (
@@ -482,13 +529,20 @@ export default function RegisterScreen({ navigation }) {
 
             {/* Timer */}
             <View style={styles.timerContainer}>
-              {!canResend ? (
+              {expiresIn > 0 ? (
                 <Text style={styles.timerText}>
-                  Code expire dans: <Text style={styles.timerValue}>{formatTime(timeLeft)}</Text>
+                  Code expire dans: <Text style={styles.timerValue}>{formatTime(expiresIn)}</Text>
                 </Text>
               ) : (
                 <Text style={styles.expiredText}>Vous n'avez pas reçu le code ?</Text>
               )}
+            </View>
+
+            <View style={styles.cooldownBox}>
+              <Text style={styles.cooldownLabel}>Renvoyer possible</Text>
+              <Text style={styles.cooldownValue}>
+                {resendCooldown > 0 ? formatTime(resendCooldown) : 'maintenant'}
+              </Text>
             </View>
 
             {/* Bouton Renvoyer */}
@@ -797,7 +851,6 @@ export default function RegisterScreen({ navigation }) {
 
           {/* Bouton Inscription */}
           <LoadingButton
-            title="Continuer"
             onPress={handleSendOtp}
             loading={loading}
             disabled={!isConnected || loading}
@@ -809,7 +862,7 @@ export default function RegisterScreen({ navigation }) {
           {/* Lien Connexion */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Déjà membre ? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+            <TouchableOpacity onPress={() => navigation.navigate('QuickAuth')}>
               <Text style={styles.footerLink}>Connectez-vous</Text>
             </TouchableOpacity>
           </View>
@@ -1134,6 +1187,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
+  devBadge: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 16,
+  },
+  devTitle: {
+    color: '#047857',
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  devCode: {
+    color: '#065F46',
+    fontSize: 14,
+  },
   otpInputsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1167,6 +1237,25 @@ const styles = StyleSheet.create({
   timerContainer: {
     alignItems: 'center',
     marginBottom: 16,
+  },
+  cooldownBox: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  cooldownLabel: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginBottom: 4,
+  },
+  cooldownValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   timerText: {
     fontSize: 14,

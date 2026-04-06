@@ -7,12 +7,10 @@ import Toast from 'react-native-toast-message';
 import store from './src/redux/store';
 import AppNavigator from './src/navigation/AppNavigator';
 import NetworkIndicator from './src/components/NetworkIndicator';
-import { verifyAuth } from './src/redux/authSlice';
 import { loadCart } from './src/redux/cartSlice';
 export default function App() {
   useEffect(() => {
     // Charger les données au démarrage
-    store.dispatch(verifyAuth());
     store.dispatch(loadCart());
   }, []);
 

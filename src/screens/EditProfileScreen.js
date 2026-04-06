@@ -106,7 +106,7 @@ const EditProfileScreen = ({ navigation }) => {
         text1: 'Erreur',
         text2: 'Veuillez vous connecter',
       });
-      navigation.navigate('Login');
+      navigation.navigate('QuickAuth');
       return;
     }
 

@@ -541,7 +541,11 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.notLoggedInContent}>
               <TouchableOpacity
                 style={styles.loginButton}
-                onPress={() => navigation.navigate('Login')}
+                onPress={() => navigation.navigate('QuickAuth', {
+                  pendingAction: 'open-profile',
+                  returnScreen: 'MainTabs',
+                  returnParams: { screen: 'Profile' },
+                })}
                 activeOpacity={0.8}
               >
                 <LinearGradient
@@ -557,7 +561,11 @@ export default function ProfileScreen({ navigation }) {
 
               <TouchableOpacity
                 style={styles.registerButton}
-                onPress={() => navigation.navigate('Register')}
+                onPress={() => navigation.navigate('QuickAuth', {
+                  pendingAction: 'open-profile',
+                  returnScreen: 'MainTabs',
+                  returnParams: { screen: 'Profile' },
+                })}
                 activeOpacity={0.8}
               >
                 <Text style={styles.registerButtonText}>Créer un compte</Text>

@@ -308,11 +308,19 @@ export default function BoutiqueScreen({ route, navigation }) {
           { text: 'Plus tard', style: 'cancel' },
           {
             text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'boutique-like',
+              returnScreen: 'Boutique',
+              returnParams: { storeName },
+            }),
           },
           {
             text: 'Créer un compte',
-            onPress: () => navigation.navigate('Register'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'boutique-like',
+              returnScreen: 'Boutique',
+              returnParams: { storeName },
+            }),
           },
         ]
       );
@@ -351,11 +359,19 @@ export default function BoutiqueScreen({ route, navigation }) {
           { text: 'Plus tard', style: 'cancel' },
           {
             text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'boutique-follow',
+              returnScreen: 'Boutique',
+              returnParams: { storeName },
+            }),
           },
           {
             text: 'Créer un compte',
-            onPress: () => navigation.navigate('Register'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'boutique-follow',
+              returnScreen: 'Boutique',
+              returnParams: { storeName },
+            }),
           },
         ]
       );

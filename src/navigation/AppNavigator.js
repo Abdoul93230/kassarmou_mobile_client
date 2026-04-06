@@ -14,6 +14,8 @@ import SplashScreen from '../screens/SplashScreen';
 import HomeScreen from '../screens/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import QuickAuthScreen from '../screens/QuickAuthScreen';
+import VerifyOTPScreen from '../screens/VerifyOTPScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import ProductDetailScreen from '../screens/ProductDetailScreen';
@@ -40,6 +42,7 @@ const Tab = createBottomTabNavigator();
 // Navigation principale avec Tabs
 function MainTabs() {
   const cartItemCount = useSelector(selectPanierCount);
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
   const insets = useSafeAreaInsets();
   
   return (
@@ -105,6 +108,18 @@ function MainTabs() {
         name="Favorites" 
         component={FavoritesScreen}
         options={{ title: 'Favoris' }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            if (!isAuthenticated) {
+              e.preventDefault();
+              navigation.navigate('QuickAuth', {
+                pendingAction: 'open-favorites',
+                returnScreen: 'MainTabs',
+                returnParams: { screen: 'Favorites' },
+              });
+            }
+          },
+        })}
       />
       <Tab.Screen 
         name="Profile" 
@@ -240,6 +255,16 @@ function AppNavigator() {
         <Stack.Screen 
           name="Register" 
           component={RegisterScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="QuickAuth"
+          component={QuickAuthScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="VerifyOTP"
+          component={VerifyOTPScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen 

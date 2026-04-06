@@ -36,6 +36,11 @@ export default function LoginScreen({ navigation }) {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
+  
+  const getErrorMessage = (value) => {
+    if (typeof value === 'string') return value;
+    return value?.message || value?.error || 'Une erreur est survenue';
+  };
 
   // Validation regex
   const regexMail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -47,7 +52,7 @@ export default function LoginScreen({ navigation }) {
       Toast.show({
         type: 'error',
         text1: 'Erreur de connexion',
-        text2: error,
+        text2: getErrorMessage(error),
         position: 'top',
         visibilityTime: 4000,
       });
@@ -294,7 +299,7 @@ export default function LoginScreen({ navigation }) {
 
           {/* Mot de passe oublié */}
           <TouchableOpacity
-            onPress={() => navigation.navigate('ForgotPassword')}
+            onPress={() => navigation.navigate('QuickAuth')}
             style={styles.forgotPassword}
             activeOpacity={0.7}
           >
@@ -328,7 +333,7 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>Pas encore membre ? </Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate('Register')}
+              onPress={() => navigation.navigate('QuickAuth')}
               activeOpacity={0.7}
             >
               <Text style={styles.signupLink}>Inscrivez-vous</Text>

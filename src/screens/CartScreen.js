@@ -492,7 +492,10 @@ export default function CartScreen({ navigation }) {
           { text: 'Annuler', style: 'cancel' },
           {
             text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'checkout',
+              returnScreen: 'Cart',
+            }),
           },
         ]
       );
@@ -614,7 +617,10 @@ export default function CartScreen({ navigation }) {
           { text: 'Annuler', style: 'cancel' },
           {
             text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'checkout',
+              returnScreen: 'Cart',
+            }),
           },
         ]
       );

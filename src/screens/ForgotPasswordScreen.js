@@ -70,7 +70,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
     setError('');
 
     try {
-      const response = await axios.post(`${BackendUrl}/api/user/forgotPassword`, {
+      const response = await axios.post(`${BackendUrl}/forgotPassword`, {
         email,
       });
 
@@ -182,7 +182,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
             <LoadingButton
               title="Retour à la connexion"
-              onPress={() => navigation.navigate('Login')}
+              onPress={() => navigation.navigate('QuickAuth')}
               variant="outline"
               style={styles.backToLoginButton}
               leftIcon={<Ionicons name="arrow-back" size={18} color={COLORS.primary} />}

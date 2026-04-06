@@ -178,11 +178,19 @@ export default function SellerDetailScreen({ route, navigation }) {
           { text: 'Plus tard', style: 'cancel' },
           {
             text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'seller-follow',
+              returnScreen: 'SellerDetail',
+              returnParams: { sellerId },
+            }),
           },
           {
             text: 'Créer un compte',
-            onPress: () => navigation.navigate('SignUp'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'seller-follow',
+              returnScreen: 'SellerDetail',
+              returnParams: { sellerId },
+            }),
           },
         ]
       );
@@ -223,11 +231,19 @@ export default function SellerDetailScreen({ route, navigation }) {
           { text: 'Plus tard', style: 'cancel' },
           {
             text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'seller-like',
+              returnScreen: 'SellerDetail',
+              returnParams: { sellerId },
+            }),
           },
           {
             text: 'Créer un compte',
-            onPress: () => navigation.navigate('SignUp'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'seller-like',
+              returnScreen: 'SellerDetail',
+              returnParams: { sellerId },
+            }),
           },
         ]
       );
@@ -265,11 +281,19 @@ export default function SellerDetailScreen({ route, navigation }) {
           { text: 'Plus tard', style: 'cancel' },
           {
             text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'seller-review-like',
+              returnScreen: 'SellerDetail',
+              returnParams: { sellerId },
+            }),
           },
           {
             text: 'Créer un compte',
-            onPress: () => navigation.navigate('SignUp'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'seller-review-like',
+              returnScreen: 'SellerDetail',
+              returnParams: { sellerId },
+            }),
           },
         ]
       );
@@ -299,11 +323,19 @@ export default function SellerDetailScreen({ route, navigation }) {
           { text: 'Plus tard', style: 'cancel' },
           {
             text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'seller-review-create',
+              returnScreen: 'SellerDetail',
+              returnParams: { sellerId },
+            }),
           },
           {
             text: 'Créer un compte',
-            onPress: () => navigation.navigate('SignUp'),
+            onPress: () => navigation.navigate('QuickAuth', {
+              pendingAction: 'seller-review-create',
+              returnScreen: 'SellerDetail',
+              returnParams: { sellerId },
+            }),
           },
         ]
       );
@@ -961,7 +993,11 @@ export default function SellerDetailScreen({ route, navigation }) {
                     <View style={styles.loginPromptButtons}>
                       <TouchableOpacity
                         style={styles.loginButton}
-                        onPress={() => navigation.navigate('Login')}
+                        onPress={() => navigation.navigate('QuickAuth', {
+                          pendingAction: 'seller-review',
+                          returnScreen: 'SellerDetail',
+                          returnParams: { sellerId },
+                        })}
                       >
                         <LinearGradient
                           colors={[COLORS.primary, COLORS.secondary]}
@@ -976,7 +1012,11 @@ export default function SellerDetailScreen({ route, navigation }) {
 
                       <TouchableOpacity
                         style={styles.signupButton}
-                        onPress={() => navigation.navigate('SignUp')}
+                        onPress={() => navigation.navigate('QuickAuth', {
+                          pendingAction: 'seller-review',
+                          returnScreen: 'SellerDetail',
+                          returnParams: { sellerId },
+                        })}
                       >
                         <MaterialCommunityIcons name="account-plus" size={20} color={COLORS.primary} />
                         <Text style={styles.signupButtonText}>Créer un compte</Text>

@@ -9,6 +9,9 @@ const initialState = {
   loading: false,
   error: null,
   authChecked: false,
+  pendingAction: null,
+  returnScreen: null,
+  returnParams: null,
 };
 
 // Variable globale pour éviter les appels parallèles
@@ -282,6 +285,136 @@ export const resetPassword = createAsyncThunk(
   }
 );
 
+export const checkPhoneAvailability = createAsyncThunk(
+  'auth/checkPhoneAvailability',
+  async (phone, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post('/auth/check-phone', { phone });
+      return response.data?.data || response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de la verification du numero');
+    }
+  }
+);
+
+const extractDevOtp = (responseData = {}) => {
+  const data = responseData?.data || {};
+  return data?.devOTP || responseData?.devOTP || data?.otp || responseData?.otp || null;
+};
+
+// QuickAuth/OTP - enregistrement progressif utilise par RegisterScreen
+export const sendOtp = createAsyncThunk(
+  'auth/sendOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const phone = payload?.phone || payload?.phoneNumber || null;
+      if (!phone) {
+        return rejectWithValue('Numero de telephone requis');
+      }
+      const response = await apiClient.post('/auth/send-otp', {
+        phone,
+        name: payload?.name || null,
+      });
+      const baseData = response.data?.data || response.data || {};
+      return {
+        ...baseData,
+        devOTP: extractDevOtp(response.data),
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de l\'envoi OTP');
+    }
+  }
+);
+
+export const verifyOtp = createAsyncThunk(
+  'auth/verifyOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const phone = payload?.phone || payload?.phoneNumber || null;
+      if (!phone) {
+        return rejectWithValue('Numero de telephone requis');
+      }
+      const response = await apiClient.post('/auth/verify-otp', {
+        phone,
+        code: payload?.otp || payload?.code || null,
+      });
+
+      const data = response.data?.data || {};
+      return {
+        ...data,
+        token: `otp-verified-${Date.now()}`,
+      };
+    } catch (error) {
+      const responseData = error.response?.data || {};
+      return rejectWithValue({
+        message: responseData.message || 'Code OTP invalide',
+        attemptsRemaining: responseData?.data?.attemptsRemaining,
+      });
+    }
+  }
+);
+
+export const registerWithOtp = createAsyncThunk(
+  'auth/registerWithOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const phone = payload?.phone || payload?.phoneNumber || null;
+      if (!phone) {
+        return rejectWithValue('Numero de telephone requis');
+      }
+      const response = await apiClient.post('/auth/quick-register', {
+        phone,
+        name: payload?.name,
+        password: payload?.password,
+      });
+
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de l\'inscription OTP');
+    }
+  }
+);
+
+export const requestPasswordResetOtp = createAsyncThunk(
+  'auth/requestPasswordResetOtp',
+  async (phone, { rejectWithValue }) => {
+    try {
+      if (!phone) {
+        return rejectWithValue('Numero de telephone requis');
+      }
+
+      const response = await apiClient.post('/auth/request-password-reset-otp', { phone });
+      const baseData = response.data?.data || response.data || {};
+      return {
+        ...baseData,
+        devOTP: extractDevOtp(response.data),
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de la demande OTP');
+    }
+  }
+);
+
+export const resetPasswordWithPhoneOtp = createAsyncThunk(
+  'auth/resetPasswordWithPhoneOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post('/auth/reset-password-phone', {
+        phone: payload?.phone,
+        code: payload?.code,
+        newPassword: payload?.newPassword,
+      });
+      return response.data;
+    } catch (error) {
+      const responseData = error.response?.data || {};
+      return rejectWithValue({
+        message: responseData.message || 'Erreur de reinitialisation',
+        attemptsRemaining: responseData?.data?.attemptsRemaining,
+      });
+    }
+  }
+);
+
 // ==================== SLICE ====================
 
 const authSlice = createSlice({
@@ -323,6 +456,18 @@ const authSlice = createSlice({
     // Marquer comme vérifié
     setAuthChecked: (state, action) => {
       state.authChecked = action.payload;
+    },
+
+    setQuickAuthContext: (state, action) => {
+      state.pendingAction = action.payload?.pendingAction || null;
+      state.returnScreen = action.payload?.returnScreen || null;
+      state.returnParams = action.payload?.returnParams || null;
+    },
+
+    clearQuickAuthContext: (state) => {
+      state.pendingAction = null;
+      state.returnScreen = null;
+      state.returnParams = null;
     },
   },
   extraReducers: (builder) => {
@@ -436,6 +581,98 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       });
+
+    // Send OTP
+    builder
+      .addCase(checkPhoneAvailability.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(checkPhoneAvailability.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(checkPhoneAvailability.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
+
+    builder
+      .addCase(sendOtp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(sendOtp.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(sendOtp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
+
+    // Verify OTP
+    builder
+      .addCase(verifyOtp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyOtp.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(verifyOtp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || action.payload || 'Code OTP invalide';
+      });
+
+    // Register with OTP
+    builder
+      .addCase(registerWithOtp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(registerWithOtp.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        if (action.payload?.user) {
+          state.user = action.payload.user;
+        }
+      })
+      .addCase(registerWithOtp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || action.payload;
+      });
+
+    // Request password reset OTP
+    builder
+      .addCase(requestPasswordResetOtp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(requestPasswordResetOtp.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(requestPasswordResetOtp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || action.payload;
+      });
+
+    // Reset password with phone OTP
+    builder
+      .addCase(resetPasswordWithPhoneOtp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(resetPasswordWithPhoneOtp.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(resetPasswordWithPhoneOtp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || action.payload;
+      });
   },
 });
 
@@ -444,7 +681,9 @@ export const {
   logout,
   clearError, 
   updateUserProfile, 
-  setAuthChecked 
+  setAuthChecked,
+  setQuickAuthContext,
+  clearQuickAuthContext,
 } = authSlice.actions;
 
 // Selectors (comme sur le web)
@@ -453,5 +692,10 @@ export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 export const selectAuthLoading = (state) => state.auth.loading;
 export const selectAuthError = (state) => state.auth.error;
 export const selectAuthChecked = (state) => state.auth.authChecked;
+export const selectQuickAuthContext = (state) => ({
+  pendingAction: state.auth.pendingAction,
+  returnScreen: state.auth.returnScreen,
+  returnParams: state.auth.returnParams,
+});
 
 export default authSlice.reducer;

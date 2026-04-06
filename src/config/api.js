@@ -46,6 +46,25 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const requestUrl = String(originalRequest?.url || '').toLowerCase();
+    const authEndpoints = [
+      '/login',
+      '/adminlogin',
+      '/auth/check-phone',
+      '/auth/send-otp',
+      '/auth/resend-otp',
+      '/auth/verify-otp',
+      '/auth/quick-register',
+      '/auth/request-password-reset-otp',
+      '/auth/reset-password-phone',
+      '/forgot_password',
+      '/forgotpassword',
+      '/reset_password',
+      '/forgotpassword_seller',
+      '/reset_password_seller',
+    ];
+    const isPublicAuthRequest = authEndpoints.some((endpoint) => requestUrl.includes(endpoint));
+    const hasBearerToken = Boolean(originalRequest?.headers?.Authorization);
     
     // Gérer erreur 502 (serveur qui redémarre) avec retry
     if (error.response?.status === 502 && !originalRequest._retry) {
@@ -62,8 +81,9 @@ apiClient.interceptors.response.use(
       }
     }
     
-    // Gérer erreur 401 (token expiré) : déconnecter l'utilisateur globalement
-    if (error.response?.status === 401) {
+    // Gérer erreur 401 uniquement pour les requêtes protégées portant un token
+    // Les endpoints publics d'auth/OTP peuvent aussi répondre 401 sans signifier une session expirée.
+    if (error.response?.status === 401 && hasBearerToken && !isPublicAuthRequest) {
       try {
         // Supprimer le token du storage
         await AsyncStorage.removeItem('userEcomme');
@@ -98,13 +118,13 @@ apiClient.interceptors.response.use(
           console.warn('Toast unavailable:', tErr);
         }
 
-        // Naviguer vers l'écran Login si possible
+        // Naviguer vers le flux QuickAuth si possible
         try {
           if (navigationRef && navigationRef.isReady && navigationRef.isReady()) {
-            navigate('Login');
+            navigate('QuickAuth');
           }
         } catch (navErr) {
-          console.warn('Navigation to Login failed:', navErr);
+          console.warn('Navigation to QuickAuth failed:', navErr);
         }
       } catch (e) {
         console.error('Erreur lors du nettoyage après 401:', e);

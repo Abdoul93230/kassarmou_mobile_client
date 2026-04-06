@@ -133,7 +133,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${BackendUrl}/api/user/reset_password`, {
+      const response = await axios.post(`${BackendUrl}/reset_password`, {
         email,
         otp: otp.join(''),
         newPassword,
@@ -171,7 +171,7 @@ const ResetPasswordScreen = ({ route, navigation }) => {
     if (!canResend) return;
 
     try {
-      await axios.post(`${BackendUrl}/api/user/forgotPassword`, { email });
+      await axios.post(`${BackendUrl}/forgotPassword`, { email });
       
       Toast.show({
         type: 'success',
@@ -255,38 +255,22 @@ const ResetPasswordScreen = ({ route, navigation }) => {
                 <Text style={styles.otpLabel}>Code de vérification</Text>
               </View>
               
-              <OTPInput otp={otp} setOtp={setOtp} />
+              <OTPInput
+                otp={otp}
+                setOtp={setOtp}
+                timerValue={timeLeft}
+                timerLabel="Temps restant"
+                timerHint={canResend ? 'Vous pouvez demander un nouveau code.' : `Patientez encore ${formatTime(timeLeft)} avant de renvoyer un code.`}
+                onResendPress={handleResendOtp}
+                resendText="Renvoyer le code"
+                resendDisabled={!canResend}
+              />
               
               {errors.otp && (
                 <View style={styles.errorContainer}>
                   <Ionicons name="alert-circle" size={16} color={COLORS.error} />
                   <Text style={styles.errorText}>{errors.otp}</Text>
                 </View>
-              )}
-
-              <View style={styles.timerContainer}>
-                <Ionicons 
-                  name="time-outline" 
-                  size={16} 
-                  color={timeLeft < 60 ? COLORS.error : COLORS.textLight} 
-                />
-                <Text style={[
-                  styles.timerText,
-                  timeLeft < 60 && styles.timerTextDanger
-                ]}>
-                  {formatTime(timeLeft)}
-                </Text>
-              </View>
-
-              {canResend && (
-                <TouchableOpacity
-                  onPress={handleResendOtp}
-                  style={styles.resendButton}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="refresh" size={16} color={COLORS.primary} />
-                  <Text style={styles.resendText}>Renvoyer le code</Text>
-                </TouchableOpacity>
               )}
             </View>
 
