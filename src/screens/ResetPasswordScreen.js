@@ -16,6 +16,7 @@ import axios from 'axios';
 import CustomInput from '../components/CustomInput';
 import LoadingButton from '../components/LoadingButton';
 import OTPInput from '../components/OTPInput';
+import PasswordChecklist from '../components/PasswordChecklist';
 import { COLORS } from '../config/constants';
 import { BackendUrl } from '../config/api';
 import useNetworkStatus from '../hooks/useNetworkStatus';
@@ -307,6 +308,9 @@ const ResetPasswordScreen = ({ route, navigation }) => {
               required
             />
 
+            {/* Checklist de validation du mot de passe */}
+            <PasswordChecklist password={newPassword} />
+
             {/* Confirmer mot de passe */}
             <CustomInput
               label="Confirmer le mot de passe"
@@ -324,6 +328,28 @@ const ResetPasswordScreen = ({ route, navigation }) => {
               error={errors.confirmPassword}
               required
             />
+
+            {/* Indicateur de correspondance des mots de passe */}
+            {confirmPassword.length > 0 && (
+              <View style={[
+                styles.passwordMatchIndicator,
+                confirmPassword === newPassword ? styles.passwordMatch : styles.passwordMismatch
+              ]}>
+                <Ionicons 
+                  name={confirmPassword === newPassword ? 'checkmark-circle' : 'alert-circle'} 
+                  size={18} 
+                  color={confirmPassword === newPassword ? COLORS.success : COLORS.error}
+                />
+                <Text style={[
+                  styles.passwordMatchText,
+                  { color: confirmPassword === newPassword ? COLORS.success : COLORS.error }
+                ]}>
+                  {confirmPassword === newPassword 
+                    ? 'Les mots de passe correspondent ✓' 
+                    : 'Les mots de passe ne correspondent pas'}
+                </Text>
+              </View>
+            )}
 
             {/* Boutons */}
             <LoadingButton
@@ -345,32 +371,12 @@ const ResetPasswordScreen = ({ route, navigation }) => {
             />
           </View>
 
-          {/* Exigences du mot de passe */}
-          <View style={styles.requirementsBox}>
-            <View style={styles.requirementHeader}>
-              <Ionicons name="information-circle" size={20} color={COLORS.primary} />
-              <Text style={styles.requirementsTitle}>
-                Le mot de passe doit contenir :
-              </Text>
-            </View>
-            <View style={styles.requirement}>
-              <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-              <Text style={styles.requirementText}>
-                Au moins 8 caractères
-              </Text>
-            </View>
-            <View style={styles.requirement}>
-              <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-              <Text style={styles.requirementText}>
-                Une lettre majuscule et une minuscule
-              </Text>
-            </View>
-            <View style={styles.requirement}>
-              <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-              <Text style={styles.requirementText}>
-                Un chiffre et un caractère spécial
-              </Text>
-            </View>
+          {/* Info sécurité */}
+          <View style={styles.securityInfo}>
+            <Ionicons name="shield-checkmark" size={20} color={COLORS.primary} />
+            <Text style={styles.securityText}>
+              Choisissez un mot de passe fort pour protéger votre compte
+            </Text>
           </View>
         </Animated.View>
       </KeyboardAwareScrollView>
@@ -556,7 +562,31 @@ const styles = StyleSheet.create({
   cancelButton: {
     marginBottom: 20,
   },
-  requirementsBox: {
+  passwordMatchIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  passwordMatch: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  passwordMismatch: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  passwordMatchText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  securityInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.white,
     paddingVertical: 16,
     paddingHorizontal: 20,
@@ -564,34 +594,19 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 30,
     borderLeftWidth: 4,
-    borderLeftColor: COLORS.success,
+    borderLeftColor: COLORS.primary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
+    gap: 12,
   },
-  requirementHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  requirementsTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginLeft: 8,
-  },
-  requirement: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingLeft: 28,
-  },
-  requirementText: {
+  securityText: {
+    flex: 1,
     fontSize: 13,
     color: COLORS.textLight,
-    marginLeft: 8,
+    lineHeight: 20,
   },
 });
 

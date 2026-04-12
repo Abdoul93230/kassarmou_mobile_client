@@ -18,6 +18,8 @@ import Toast from 'react-native-toast-message';
 import CustomInput from '../components/CustomInput';
 import LoadingButton from '../components/LoadingButton';
 import CountryCodePicker from '../components/CountryCodePicker';
+// TODO: Google OAuth - À implémenter dans une prochaine mise à jour
+// import GoogleSignInButton from '../components/GoogleSignInButton';
 import { login, clearError } from '../redux/authSlice';
 import { COLORS } from '../config/constants';
 import useNetworkStatus from '../hooks/useNetworkStatus';
@@ -31,7 +33,7 @@ export default function LoginScreen({ navigation }) {
   const [formData, setFormData] = useState({
     email: '',
     phoneNumber: '',
-    countryCode: '+227',
+    countryCode: '+32',
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -292,6 +294,19 @@ export default function LoginScreen({ navigation }) {
             required
           />
 
+          {/* Message d'aide pour le mot de passe */}
+          {errors.password && (
+            <View style={styles.passwordHelpBox}>
+              <Ionicons name="information-circle" size={18} color={COLORS.primary} />
+              <View style={styles.passwordHelpContent}>
+                <Text style={styles.passwordHelpTitle}>Rappel :</Text>
+                <Text style={styles.passwordHelpText}>
+                  Le mot de passe doit contenir au moins 8 caractères avec une majuscule, une minuscule, un chiffre et un caractère spécial.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Mot de passe oublié */}
           <TouchableOpacity
             onPress={() => navigation.navigate('ForgotPassword')}
@@ -309,12 +324,18 @@ export default function LoginScreen({ navigation }) {
             style={styles.loginButton}
           />
 
-          {/* Séparateur */}
+          {/* TODO: Google OAuth - À implémenter dans une prochaine mise à jour
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>OU</Text>
             <View style={styles.dividerLine} />
           </View>
+
+          <GoogleSignInButton 
+            navigation={navigation}
+            text="Continuer avec Google"
+          />
+          */}
 
           {/* Continuer sans compte */}
           <LoadingButton
@@ -444,6 +465,33 @@ const styles = StyleSheet.create({
   },
   phoneInputContainer: {
     flex: 1,
+  },
+  passwordHelpBox: {
+    flexDirection: 'row',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 10,
+  },
+  passwordHelpContent: {
+    flex: 1,
+  },
+  passwordHelpTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E40AF',
+    marginBottom: 4,
+  },
+  passwordHelpText: {
+    fontSize: 12,
+    color: '#1E3A8A',
+    lineHeight: 18,
   },
   forgotPassword: {
     alignSelf: 'flex-end',

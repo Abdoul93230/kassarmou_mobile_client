@@ -1,5 +1,6 @@
 // Configuration Stripe
-export const STRIPE_PUBLISHABLE_KEY = 'pk_live_51RKO4OFMhcWQWlbyWHqDypco5L0DrXDS4d6hEDfemzIzkzcKlodzbynkRLP2bsJGi0cxL4oy7CtJnhIGnq6tjH2A00AftfkRRQ';
+// export const STRIPE_PUBLISHABLE_KEY = 'pk_live_51RKO4OFMhcWQWlbyWHqDypco5L0DrXDS4d6hEDfemzIzkzcKlodzbynkRLP2bsJGi0cxL4oy7CtJnhIGnq6tjH2A00AftfkRRQ';
+export const STRIPE_PUBLISHABLE_KEY = 'pk_live_51SgXbBE3LmrX4AGzOpyi2PBGkrd06DxwhblPyMCk1ma5H6DiFhx55nv9O3M3tcUlvrEMhH4dW5R0cf1fr16haHJx00gcrxUXY0';
 
 // Clés de stockage AsyncStorage
 export const STORAGE_KEYS = {

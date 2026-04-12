@@ -129,7 +129,7 @@ export const loadCart = () => async (dispatch) => {
         } else {
           // Format order.prod (format web) - convertir vers format Redux
           const isOrderProdFormat = cart.every(item => 
-            item._id && 
+            (item._id || item.id) && 
             item.name &&
             typeof item.price !== 'undefined'
           );
@@ -139,24 +139,25 @@ export const loadCart = () => async (dispatch) => {
             // Convertir chaque item de order.prod vers le format Redux
             const convertedCart = cart.map(item => ({
               product: {
-                _id: item._id || '',
+                _id: item._id || item.id || '',
+                name: item.name || 'Produit',
                 nom: item.name || 'Produit',
-                images: item.imageUrl ? [item.imageUrl] : [],
+                images: (item.imageUrl || item.image) ? [item.imageUrl || item.image] : [],
                 prix: item.price || 0,
                 prixPromo: 0, // Pas de promo dans order.prod
                 poid: item.weight || 0,
                 description: item.description || '',
                 categorie: item.category || '',
-                tailles: item.size ? [item.size] : [],
-                couleurs: item.color ? [item.color] : [],
+                tailles: (item.size || item.taille) ? [item.size || item.taille] : [],
+                couleurs: (item.color || item.couleur) ? [item.color || item.couleur] : [],
                 stock: 999, // Stock par défaut
                 marque: item.brand || '',
                 dateAjout: item.dateAdded || new Date().toISOString(),
               },
               quantity: item.quantity || 1,
-              selectedColor: item.color || '',
-              selectedSize: item.size || '',
-              colorImage: item.imageUrl || '',
+              selectedColor: item.color || item.couleur || '',
+              selectedSize: item.size || item.taille || '',
+              colorImage: item.imageUrl || item.image || '',
               addedAt: item.addedAt || new Date().toISOString(),
             }));
             

@@ -13,9 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
 import { useSelector } from 'react-redux';
-import { API_URL } from '../config/api';
+import apiClient from '../config/api';
 import { COLORS } from '../config/constants';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -38,11 +37,7 @@ export default function OrderDetailScreen({ route, navigation }) {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`${API_URL}/api/ordersRoutes/${orderId}`, {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
-      });
+      const response = await apiClient.get(`/api/ordersRoutes/${orderId}`);
       console.log('Order details response:', response.data);
       setOrder(response.data.commande);
     } catch (err) {
@@ -417,6 +412,21 @@ export default function OrderDetailScreen({ route, navigation }) {
             <Text style={styles.priceLabel}>Sous-total</Text>
             <Text style={styles.priceValue}>{formatPrice(order.prix)}</Text>
           </View>
+          
+          {/* Code promo */}
+          {order.codePro && order.reduction > 0 && (
+            <View style={styles.priceRow}>
+              <View style={styles.promoLabelContainer}>
+                <Ionicons name="pricetag" size={16} color={COLORS.success} />
+                <Text style={[styles.priceLabel, { color: COLORS.success, marginLeft: 6 }]}>
+                  Code promo
+                </Text>
+              </View>
+              <Text style={[styles.priceValue, { color: COLORS.success }]}>
+                - {formatPrice(order.reduction)}
+              </Text>
+            </View>
+          )}
           
           {order.shipping && order.shipping.coutTotal > 0 && (
             <>
@@ -856,6 +866,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textLight,
     fontWeight: '500',
+  },
+  promoLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   priceValue: {
     fontSize: 15,

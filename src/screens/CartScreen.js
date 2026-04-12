@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
+import PromoCodeInput from '../components/PromoCodeInput';
 import {
   removeItemFromCart,
   updateCartQuantity,
@@ -119,9 +120,9 @@ export default function CartScreen({ navigation }) {
   const { items: cartItems } = useSelector((state) => state.cart);
   const user = useSelector((state) => state.auth.user);
 
-  const [codePromo, setCodePromo] = useState('');
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [reduction, setReduction] = useState(0);
+  const [promoData, setPromoData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
@@ -309,72 +310,29 @@ export default function CartScreen({ navigation }) {
         {
           text: 'Vider',
           style: 'destructive',
-          onPress: () => dispatch(clearCartData()),
+          onPress: async () => {
+            dispatch(clearCartData());
+            // Nettoyer aussi le pendingOrder pour éviter les conflits
+            await AsyncStorage.removeItem('pendingOrder');
+            console.log('✅ Panier vidé et pendingOrder nettoyé');
+          },
         },
       ]
     );
   }, [dispatch]);
 
-  // Appliquer code promo
-  const handleApplyPromo = useCallback(async () => {
-    if (!codePromo.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un code promo');
-      return;
-    }
-
-    if (!user) {
-      Alert.alert(
-        'Connexion requise',
-        'Vous devez être connecté pour utiliser un code promo',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'Se connecter',
-            onPress: () => navigation.navigate('Login'),
-          },
-        ]
-      );
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API_URL}/getCodePromoByHashedCode`, {
-        params: {
-          hashedCode: codePromo,
-          welcom: codePromo === 'BIENVENUE20',
-          id: user.id || user._id,
-        },
-      });
-
-      const promoData = response.data.data;
-
-      if (promoData.isValide) {
-        if (promoData.isWelcomeCode) {
-          const calculatedReduction = Math.min(
-            (subtotal * promoData.prixReduiction) / 100,
-            2000
-          );
-          setReduction(calculatedReduction);
-        } else {
-          setReduction(promoData.prixReduiction);
-        }
-
-        setAppliedPromo(promoData);
-        Alert.alert('Succès', 'Code promo appliqué avec succès !');
-      } else {
-        Alert.alert('Erreur', 'Ce code promo a expiré');
-        setReduction(0);
-        setAppliedPromo(null);
-      }
-    } catch (error) {
-      Alert.alert('Erreur', 'Code promo invalide');
+  // Gérer l'application du code promo
+  const handlePromoApplied = useCallback((data) => {
+    if (data && data.discount) {
+      setReduction(data.discount);
+      setPromoData(data);
+      setAppliedPromo(data);
+    } else {
       setReduction(0);
+      setPromoData(null);
       setAppliedPromo(null);
-    } finally {
-      setLoading(false);
     }
-  }, [codePromo, user, subtotal, navigation]);
+  }, []);
 
   // Refresh
   const onRefresh = useCallback(async () => {
@@ -642,56 +600,13 @@ export default function CartScreen({ navigation }) {
           </View>
 
           {/* Code promo */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Code promo</Text>
-            <View style={styles.promoCard}>
-              <View style={styles.promoInputContainer}>
-                <Ionicons name="pricetag" size={20} color={COLORS.primary} />
-                <TextInput
-                  style={styles.promoInput}
-                  placeholder="Entrez votre code promo"
-                  placeholderTextColor={COLORS.textLight}
-                  value={codePromo}
-                  onChangeText={setCodePromo}
-                  editable={!appliedPromo}
-                />
-              </View>
-              
-              {!appliedPromo ? (
-                <TouchableOpacity
-                  style={styles.applyButton}
-                  onPress={handleApplyPromo}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={[COLORS.primary, COLORS.tertiary]}
-                    style={styles.applyButtonGradient}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <Text style={styles.applyButtonText}>Appliquer</Text>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.promoApplied}>
-                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                  <Text style={styles.promoAppliedText}>Appliqué</Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setAppliedPromo(null);
-                      setReduction(0);
-                      setCodePromo('');
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={20} color={COLORS.error} />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          </View>
+          <PromoCodeInput
+            orderAmount={subtotal}
+            onPromoApplied={handlePromoApplied}
+            userId={user?.id || user?._id}
+            products={cartItems}
+            initialPromo={appliedPromo}
+          />
 
           {/* Méthode d'expédition */}
           <View style={styles.section}>
@@ -1052,58 +967,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.error + '10',
-  },
-  
-  // Promo styles
-  promoCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  promoInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  promoInput: {
-    flex: 1,
-    fontSize: 15,
-    color: COLORS.text,
-  },
-  applyButton: {
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  applyButtonGradient: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  applyButtonText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  promoApplied: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 8,
-  },
-  promoAppliedText: {
-    fontSize: 15,
-    color: COLORS.success,
-    fontWeight: '600',
   },
   
   // Shipping zone styles

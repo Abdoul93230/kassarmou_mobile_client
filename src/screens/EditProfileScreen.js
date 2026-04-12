@@ -16,8 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useSelector } from 'react-redux';
-import axios from 'axios';
-import { API_URL } from '../config/api';
+import apiClient from '../config/api';
 import ImageEditorModal from '../components/ImageEditorModal';
 
 const COLORS = {
@@ -104,11 +103,8 @@ const EditProfileScreen = ({ navigation }) => {
       }
 
       // Fetch user info avec ID en query params
-      const userResponse = await axios.get(`${API_URL}/api/user/getUser`, {
+      const userResponse = await apiClient.get('/api/user/getUser', {
         params: { id: user.id },
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
       });
 
       if (!userResponse.data || !userResponse.data.user) {
@@ -125,11 +121,7 @@ const EditProfileScreen = ({ navigation }) => {
 
       // Try to fetch profile info (might not exist yet)
       try {
-        const profileResponse = await axios.get(`${API_URL}/api/profilesRoutes/me`, {
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
-        });
+        const profileResponse = await apiClient.get('/api/profilesRoutes/me');
 
         const profileData = profileResponse.data?.data;
 
@@ -328,12 +320,11 @@ const EditProfileScreen = ({ navigation }) => {
         });
       }
 
-      const response = await axios.post(
-        `${API_URL}/api/profilesRoutes/create`,
+      const response = await apiClient.post(
+        '/api/profilesRoutes/create',
         formData,
         {
           headers: {
-            Authorization: `Bearer ${user?.token}`,
             'Content-Type': 'multipart/form-data',
           },
         }

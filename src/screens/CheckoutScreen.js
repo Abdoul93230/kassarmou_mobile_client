@@ -14,10 +14,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearCartData } from '../redux/cartSlice';
-import { API_URL } from '../config/api';
+import apiClient, { API_URL } from '../config/api';
 import CountryCodePicker from '../components/CountryCodePicker';
 import { useStripe } from '@stripe/stripe-react-native';
 import StripeCardInput from '../components/StripeCardInput';
@@ -83,9 +82,26 @@ export default function CheckoutScreen({ navigation, route }) {
         if (pendingOrderJson) {
           const pendingOrder = JSON.parse(pendingOrderJson);
           if (pendingOrder.commandeId) {
-            console.log('🔄 Repayment détecté, passage direct à l\'étape paiement');
-            setStep(2); // Aller directement à l'étape de paiement
-            setPaymentMethod('stripe'); // Sélectionner automatiquement le paiement par carte
+            console.log('🔄 Repayment détecté, vérification de la commande...');
+            
+            // Vérifier si la commande existe encore dans la DB
+            try {
+              const response = await apiClient.get(
+                `/api/ordersRoutes/${pendingOrder.commandeId}`
+              );
+              
+              if (response.data && response.data.commande) {
+                console.log('✅ Commande trouvée, passage à l\'étape paiement');
+                setStep(2); // Aller directement à l'étape de paiement
+                setPaymentMethod('stripe'); // Sélectionner automatiquement le paiement par carte
+              } else {
+                console.log('⚠️ Commande non trouvée, nettoyage du pendingOrder');
+                await AsyncStorage.removeItem('pendingOrder');
+              }
+            } catch (error) {
+              console.log('❌ Commande n\'existe plus (erreur 404), nettoyage du pendingOrder');
+              await AsyncStorage.removeItem('pendingOrder');
+            }
           }
         }
       } catch (error) {
@@ -108,11 +124,7 @@ export default function CheckoutScreen({ navigation, route }) {
       // D'abord essayer de charger depuis l'API
       if (user) {
         try {
-          const response = await axios.get(`${API_URL}/api/shippingAddressRoutes/me`, {
-            headers: {
-              Authorization: `Bearer ${user.token}`,
-            },
-          });
+          const response = await apiClient.get('/api/shippingAddressRoutes/me');
 
           if (response.data.address) {
             const address = response.data.address;
@@ -299,7 +311,7 @@ export default function CheckoutScreen({ navigation, route }) {
         prixTotal: total,
         reduction: reduction,
         codePro: appliedPromo ? true : false,
-        idCodePro: appliedPromo ? appliedPromo._id : null,
+        idCodePro: appliedPromo ? (appliedPromo.promoCodeId || appliedPromo._id) : null,
         statusPayment: 'en cours',
         statusLivraison: 'en cours',
         reference: `CMD-${Date.now()}`,
@@ -319,17 +331,44 @@ export default function CheckoutScreen({ navigation, route }) {
         console.log('📝 Mise à jour de la commande existante:', pendingOrder.commandeId);
         orderData.id = pendingOrder.commandeId;
         
-        const updateResponse = await axios.put(
-          `${API_URL}/api/ordersRoutes/updateCommande`,
-          orderData
-        );
-        
-        console.log('✅ Commande mise à jour:', updateResponse.data);
-        commandeId = updateResponse.data.commande._id;
+        try {
+          const updateResponse = await apiClient.put(
+            '/api/ordersRoutes/updateCommande',
+            orderData
+          );
+          
+          console.log('✅ Commande mise à jour:', updateResponse.data);
+          commandeId = updateResponse.data.commande._id;
+        } catch (updateError) {
+          // Si la commande n'existe plus (404), supprimer le pendingOrder et créer une nouvelle commande
+          if (updateError.response?.status === 404) {
+            console.log('⚠️ Commande non trouvée, création d\'une nouvelle commande');
+            await AsyncStorage.removeItem('pendingOrder');
+            
+            // Créer une nouvelle commande
+            delete orderData.id;
+            const orderResponse = await apiClient.post('/api/ordersRoutes/create', orderData);
+            
+            if (!orderResponse.data.commande) {
+              throw new Error('Impossible de créer la commande');
+            }
+            
+            commandeId = orderResponse.data.commande._id;
+            
+            // Sauvegarder la nouvelle commande en attente
+            await AsyncStorage.setItem('pendingOrder', JSON.stringify({
+              commandeId,
+              reference: orderData.reference,
+              timestamp: Date.now(),
+            }));
+          } else {
+            throw updateError;
+          }
+        }
       } else {
         // Créer une nouvelle commande
         console.log('📦 Création de la commande avec orderData:', orderData);
-        const orderResponse = await axios.post(`${API_URL}/api/ordersRoutes/create`, orderData);
+        const orderResponse = await apiClient.post('/api/ordersRoutes/create', orderData);
 
         console.log('✅ Commande créée:', orderResponse.data);
 
@@ -358,17 +397,12 @@ export default function CheckoutScreen({ navigation, route }) {
       });
 
       // Initialiser le paiement Stripe
-      const paymentResponse = await axios.post(
-        `${API_URL}/api/payment/create-payment-intent`,
+      const paymentResponse = await apiClient.post(
+        '/api/payment/create-payment-intent',
         {
           commandeId,
           customer_email: deliveryInfo.email || user?.email || '',
           userId: user.id || user._id,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
         }
       );
 
@@ -445,6 +479,7 @@ export default function CheckoutScreen({ navigation, route }) {
         await AsyncStorage.removeItem('shippingDetails');
         await AsyncStorage.removeItem('pendingOrder');
         await AsyncStorage.removeItem('deliveryInfo');
+        await AsyncStorage.removeItem('appliedPromoCode');
         
         Alert.alert('Succès', 'Paiement effectué avec succès !');
         setStep(3);
@@ -504,7 +539,7 @@ export default function CheckoutScreen({ navigation, route }) {
         prixTotal: total,
         reduction: reduction,
         codePro: appliedPromo ? true : false,
-        idCodePro: appliedPromo ? appliedPromo._id : null,
+        idCodePro: appliedPromo ? (appliedPromo.promoCodeId || appliedPromo._id) : null,
         statusPayment: paymentMethod === 'cash' ? 'en cours' : 'en attente',
         statusLivraison: 'en cours',
         reference: `CMD-${Date.now()}`,
@@ -518,12 +553,13 @@ export default function CheckoutScreen({ navigation, route }) {
       };
 
       // Envoyer la commande au backend
-      const response = await axios.post(`${API_URL}/api/ordersRoutes/create`, orderData);
+      const response = await apiClient.post('/api/ordersRoutes/create', orderData);
 
       if (response.data.commande) {
         // Vider le panier
         await dispatch(clearCartData());
         await AsyncStorage.removeItem('shippingDetails');
+        await AsyncStorage.removeItem('appliedPromoCode');
 
         // Afficher la confirmation
         setStep(3);
@@ -973,7 +1009,7 @@ export default function CheckoutScreen({ navigation, route }) {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
             if (step > 1) {
@@ -984,7 +1020,7 @@ export default function CheckoutScreen({ navigation, route }) {
           }}
         >
           <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <Text style={styles.headerTitle}>Commander</Text>
         <View style={styles.backButton} />
       </LinearGradient>
@@ -1043,8 +1079,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    paddingTop: 50,
-    paddingBottom: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
     paddingHorizontal: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1067,7 +1103,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingVertical: 10,
     paddingHorizontal: 20,
     backgroundColor: COLORS.white,
   },
@@ -1075,13 +1111,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: COLORS.border,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   stepCircleActive: {
     backgroundColor: COLORS.primary,

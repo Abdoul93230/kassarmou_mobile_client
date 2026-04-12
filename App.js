@@ -12,7 +12,8 @@ import { verifyAuth } from './src/redux/authSlice';
 import { loadCart } from './src/redux/cartSlice';
 
 // Clé publique Stripe - Même clé que l'app web
-const STRIPE_PUBLISHABLE_KEY = 'pk_live_51RKO4OFMhcWQWlbyWHqDypco5L0DrXDS4d6hEDfemzIzkzcKlodzbynkRLP2bsJGi0cxL4oy7CtJnhIGnq6tjH2A00AftfkRRQ';
+// const STRIPE_PUBLISHABLE_KEY = 'pk_live_51RKO4OFMhcWQWlbyWHqDypco5L0DrXDS4d6hEDfemzIzkzcKlodzbynkRLP2bsJGi0cxL4oy7CtJnhIGnq6tjH2A00AftfkRRQ';
+const STRIPE_PUBLISHABLE_KEY = 'pk_live_51SgXbBE3LmrX4AGzOpyi2PBGkrd06DxwhblPyMCk1ma5H6DiFhx55nv9O3M3tcUlvrEMhH4dW5R0cf1fr16haHJx00gcrxUXY0';
 
 export default function App() {
   useEffect(() => {

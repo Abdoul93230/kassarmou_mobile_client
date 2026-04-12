@@ -2,11 +2,12 @@
   "expo": {
     "name": "Kassarmou",
     "slug": "kassarmou-mobile-client",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/vraisLogo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "kassarmoumarket",
     "splash": {
       "image": "./assets/vraisLogo.png",
       "resizeMode": "contain",
@@ -14,7 +15,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kassarmou.mobile"
+      "bundleIdentifier": "com.kassarmou.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "L'application a besoin d'accéder à votre caméra pour prendre des photos.",
+        "NSPhotoLibraryUsageDescription": "L'application a besoin d'accéder à vos photos."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +27,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.kassarmou.mobile",
-      "versionCode": 1,
+      "versionCode": 3,
       "permissions": [
         "INTERNET",
         "READ_EXTERNAL_STORAGE",
@@ -42,6 +47,16 @@
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "plugins": [
+      "expo-web-browser",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.kassarmou.mobile",
+          "enableGooglePay": true
+        }
+      ]
+    ]
   }
 }

@@ -690,7 +690,7 @@ export default function ProfileScreen({ navigation }) {
         {/* Version */}
         <View style={styles.footer}>
           <Text style={styles.versionText}>Version 1.0.0</Text>
-          <Text style={styles.footerText}>© 2025 Kassarmoumarket</Text>
+          <Text style={styles.footerText}>© 2025 Kassarmou</Text>
         </View>
       </ScrollView>
       )}

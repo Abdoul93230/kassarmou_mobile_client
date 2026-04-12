@@ -13,8 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
-import axios from 'axios';
-import { API_URL } from '../config/api';
+import apiClient from '../config/api';
 import { COLORS } from '../config/constants';
 
 export default function OrdersScreen({ navigation }) {
@@ -32,11 +31,7 @@ export default function OrdersScreen({ navigation }) {
     }
 
     try {
-      const response = await axios.get(`${API_URL}/api/ordersRoutes/user/${user.id}`, {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
-      });
+      const response = await apiClient.get(`/api/ordersRoutes/user/${user.id}`);
       setOrders(response.data.commandes || []);
       setError(null);
     } catch (err) {
@@ -75,9 +70,13 @@ export default function OrdersScreen({ navigation }) {
     return 'rejected';
   };
 
-  const filteredOrders = orders.filter(
-    (order) => getOrderStatus(order) === activeTab
-  );
+  const filteredOrders = [...orders]
+    .filter((order) => getOrderStatus(order) === activeTab)
+    .sort((a, b) => {
+      const dateA = new Date(a.date || a.createdAt || 0).getTime();
+      const dateB = new Date(b.date || b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -92,7 +91,7 @@ export default function OrdersScreen({ navigation }) {
   const formatPrice = (price) => {
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
-      currency: 'XOF',
+      currency: 'EUR',
     }).format(price);
   };
 
@@ -129,7 +128,12 @@ export default function OrdersScreen({ navigation }) {
             <Ionicons name="cash-outline" size={20} color={COLORS.primary} />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Total</Text>
-              <Text style={styles.infoValue}>{formatPrice(order.prixTotal || order.prix || 0)}</Text>
+              <View style={styles.totalValueContainer}>
+                <Text style={styles.infoValue}>{formatPrice(order.prixTotal || order.prix || 0)}</Text>
+                {order.codePro && order.reduction > 0 && (
+                  <Ionicons name="pricetag" size={14} color={COLORS.success} style={{ marginLeft: 4 }} />
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -437,6 +441,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: COLORS.text,
+  },
+  totalValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   statusContainer: {
     flexDirection: 'row',

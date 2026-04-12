@@ -10,7 +10,7 @@ const FAQ_DATA = [
   {
     question: '1. Quels sont les modes de paiement acceptés sur votre site ?',
     answer:
-      "Nous acceptons les paiements par carte de crédit/débit (Visa, MasterCard), Mobile Money (Airtel, Orange, Moov).",
+      "Nous acceptons les paiements par carte de crédit/débit (Visa, MasterCard)",
   },
   {
     question: '2. Quelle est la politique de livraison et combien de temps cela prendra-t-il ?',

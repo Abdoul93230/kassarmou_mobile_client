@@ -20,29 +20,190 @@ import { LinearGradient } from 'expo-linear-gradient';
 import CustomInput from '../components/CustomInput';
 import LoadingButton from '../components/LoadingButton';
 import CountryCodePicker from '../components/CountryCodePicker';
+// TODO: Google OAuth - À implémenter dans une prochaine mise à jour
+// import GoogleSignInButton from '../components/GoogleSignInButton';
+import PasswordChecklist from '../components/PasswordChecklist';
 import { sendOtp, verifyOtp, registerWithOtp, login, clearError } from '../redux/authSlice';
 import { COLORS } from '../config/constants';
 import useNetworkStatus from '../hooks/useNetworkStatus';
 
 // Liste des indicatifs avec drapeaux
 const COUNTRY_CODES = [
+
+ // Europe
+  { code: '+33', country: 'France', flag: '🇫🇷' },
+  { code: '+32', country: 'Belgique', flag: '🇧🇪' },
+  { code: '+352', country: 'Luxembourg', flag: '🇱🇺' },
+  { code: '+41', country: 'Suisse', flag: '🇨🇭' },
+  { code: '+44', country: 'Royaume-Uni', flag: '🇬🇧' },
+  { code: '+353', country: 'Irlande', flag: '🇮🇪' },
+  { code: '+49', country: 'Allemagne', flag: '🇩🇪' },
+  { code: '+43', country: 'Autriche', flag: '🇦🇹' },
+  { code: '+31', country: 'Pays-Bas', flag: '🇳🇱' },
+  { code: '+34', country: 'Espagne', flag: '🇪🇸' },
+  { code: '+351', country: 'Portugal', flag: '🇵🇹' },
+  { code: '+39', country: 'Italie', flag: '🇮🇹' },
+  { code: '+30', country: 'Grèce', flag: '🇬🇷' },
+  { code: '+46', country: 'Suède', flag: '🇸🇪' },
+  { code: '+47', country: 'Norvège', flag: '🇳🇴' },
+  { code: '+45', country: 'Danemark', flag: '🇩🇰' },
+  { code: '+358', country: 'Finlande', flag: '🇫🇮' },
+  { code: '+354', country: 'Islande', flag: '🇮🇸' },
+  { code: '+48', country: 'Pologne', flag: '🇵🇱' },
+  { code: '+420', country: 'Tchéquie', flag: '🇨🇿' },
+  { code: '+421', country: 'Slovaquie', flag: '🇸🇰' },
+  { code: '+36', country: 'Hongrie', flag: '🇭🇺' },
+  { code: '+40', country: 'Roumanie', flag: '🇷🇴' },
+  { code: '+359', country: 'Bulgarie', flag: '🇧🇬' },
+  { code: '+385', country: 'Croatie', flag: '🇭🇷' },
+  { code: '+386', country: 'Slovénie', flag: '🇸🇮' },
+  { code: '+381', country: 'Serbie', flag: '🇷🇸' },
+  { code: '+382', country: 'Monténégro', flag: '🇲🇪' },
+  { code: '+387', country: 'Bosnie-Herzégovine', flag: '🇧🇦' },
+  { code: '+389', country: 'Macédoine du Nord', flag: '🇲🇰' },
+  { code: '+355', country: 'Albanie', flag: '🇦🇱' },
+  { code: '+383', country: 'Kosovo', flag: '🇽🇰' },
+  { code: '+7', country: 'Russie', flag: '🇷🇺' },
+  { code: '+380', country: 'Ukraine', flag: '🇺🇦' },
+  { code: '+375', country: 'Biélorussie', flag: '🇧🇾' },
+  { code: '+370', country: 'Lituanie', flag: '🇱🇹' },
+  { code: '+371', country: 'Lettonie', flag: '🇱🇻' },
+  { code: '+372', country: 'Estonie', flag: '🇪🇪' },
+  { code: '+373', country: 'Moldavie', flag: '🇲🇩' },
+  { code: '+374', country: 'Arménie', flag: '🇦🇲' },
+  { code: '+995', country: 'Géorgie', flag: '🇬🇪' },
+  { code: '+994', country: 'Azerbaïdjan', flag: '🇦🇿' },
+  { code: '+356', country: 'Malte', flag: '🇲🇹' },
+  { code: '+357', country: 'Chypre', flag: '🇨🇾' },
+  { code: '+376', country: 'Andorre', flag: '🇦🇩' },
+  { code: '+377', country: 'Monaco', flag: '🇲🇨' },
+  { code: '+378', country: 'Saint-Marin', flag: '🇸🇲' },
+  { code: '+379', country: 'Vatican', flag: '🇻🇦' },
+
+
+  // Afrique de l'Ouest (priorité)
   { code: '+227', country: 'Niger', flag: '🇳🇪' },
   { code: '+229', country: 'Bénin', flag: '🇧🇯' },
   { code: '+226', country: 'Burkina Faso', flag: '🇧🇫' },
-  { code: '+225', country: 'Côte d\'Ivoire', flag: '🇨🇮' },
+  { code: '+225', country: "Côte d'Ivoire", flag: '🇨🇮' },
   { code: '+223', country: 'Mali', flag: '🇲🇱' },
   { code: '+221', country: 'Sénégal', flag: '🇸🇳' },
   { code: '+228', country: 'Togo', flag: '🇹🇬' },
   { code: '+234', country: 'Nigeria', flag: '🇳🇬' },
   { code: '+233', country: 'Ghana', flag: '🇬🇭' },
   { code: '+237', country: 'Cameroun', flag: '🇨🇲' },
-  { code: '+33', country: 'France', flag: '🇫🇷' },
-  { code: '+1', country: 'États-Unis/Canada', flag: '🇺🇸' },
-  { code: '+44', country: 'Royaume-Uni', flag: '🇬🇧' },
+  { code: '+224', country: 'Guinée', flag: '🇬🇳' },
+  { code: '+232', country: 'Sierra Leone', flag: '🇸🇱' },
+  { code: '+231', country: 'Liberia', flag: '🇱🇷' },
+  { code: '+220', country: 'Gambie', flag: '🇬🇲' },
+  { code: '+245', country: 'Guinée-Bissau', flag: '🇬🇼' },
+  { code: '+238', country: 'Cap-Vert', flag: '🇨🇻' },
+  { code: '+222', country: 'Mauritanie', flag: '🇲🇷' },
+
+  // Afrique Centrale
+  { code: '+236', country: 'République Centrafricaine', flag: '🇨🇫' },
+  { code: '+235', country: 'Tchad', flag: '🇹🇩' },
+  { code: '+242', country: 'Congo', flag: '🇨🇬' },
+  { code: '+243', country: 'RD Congo', flag: '🇨🇩' },
+  { code: '+241', country: 'Gabon', flag: '🇬🇦' },
+  { code: '+240', country: 'Guinée Équatoriale', flag: '🇬🇶' },
+  { code: '+239', country: 'Sao Tomé-et-Príncipe', flag: '🇸🇹' },
+
+  // Afrique de l'Est
+  { code: '+251', country: 'Éthiopie', flag: '🇪🇹' },
+  { code: '+254', country: 'Kenya', flag: '🇰🇪' },
+  { code: '+255', country: 'Tanzanie', flag: '🇹🇿' },
+  { code: '+256', country: 'Ouganda', flag: '🇺🇬' },
+  { code: '+250', country: 'Rwanda', flag: '🇷🇼' },
+  { code: '+257', country: 'Burundi', flag: '🇧🇮' },
+  { code: '+252', country: 'Somalie', flag: '🇸🇴' },
+  { code: '+253', country: 'Djibouti', flag: '🇩🇯' },
+  { code: '+291', country: 'Érythrée', flag: '🇪🇷' },
+  { code: '+249', country: 'Soudan', flag: '🇸🇩' },
+  { code: '+211', country: 'Soudan du Sud', flag: '🇸🇸' },
+
+  // Afrique du Nord
   { code: '+213', country: 'Algérie', flag: '🇩🇿' },
   { code: '+212', country: 'Maroc', flag: '🇲🇦' },
   { code: '+216', country: 'Tunisie', flag: '🇹🇳' },
   { code: '+20', country: 'Égypte', flag: '🇪🇬' },
+  { code: '+218', country: 'Libye', flag: '🇱🇾' },
+
+  // Afrique Australe
+  { code: '+27', country: 'Afrique du Sud', flag: '🇿🇦' },
+  { code: '+263', country: 'Zimbabwe', flag: '🇿🇼' },
+  { code: '+260', country: 'Zambie', flag: '🇿🇲' },
+  { code: '+258', country: 'Mozambique', flag: '🇲🇿' },
+  { code: '+267', country: 'Botswana', flag: '🇧🇼' },
+  { code: '+264', country: 'Namibie', flag: '🇳🇦' },
+  { code: '+268', country: 'Eswatini', flag: '🇸🇿' },
+  { code: '+266', country: 'Lesotho', flag: '🇱🇸' },
+  { code: '+261', country: 'Madagascar', flag: '🇲🇬' },
+  { code: '+230', country: 'Maurice', flag: '🇲🇺' },
+  { code: '+248', country: 'Seychelles', flag: '🇸🇨' },
+
+  // Amérique du Nord & Caraïbes
+  { code: '+1', country: 'États-Unis / Canada', flag: '🇺🇸' },
+  { code: '+52', country: 'Mexique', flag: '🇲🇽' },
+  { code: '+509', country: 'Haïti', flag: '🇭🇹' },
+  { code: '+1-809', country: 'République Dominicaine', flag: '🇩🇴' },
+  { code: '+53', country: 'Cuba', flag: '🇨🇺' },
+  { code: '+1-876', country: 'Jamaïque', flag: '🇯🇲' },
+  { code: '+596', country: 'Martinique', flag: '🇲🇶' },
+  { code: '+590', country: 'Guadeloupe', flag: '🇬🇵' },
+  { code: '+594', country: 'Guyane française', flag: '🇬🇫' },
+
+  // Amérique du Sud
+  { code: '+55', country: 'Brésil', flag: '🇧🇷' },
+  { code: '+54', country: 'Argentine', flag: '🇦🇷' },
+  { code: '+57', country: 'Colombie', flag: '🇨🇴' },
+  { code: '+51', country: 'Pérou', flag: '🇵🇪' },
+  { code: '+56', country: 'Chili', flag: '🇨🇱' },
+  { code: '+58', country: 'Venezuela', flag: '🇻🇪' },
+  { code: '+593', country: 'Équateur', flag: '🇪🇨' },
+  { code: '+591', country: 'Bolivie', flag: '🇧🇴' },
+  { code: '+595', country: 'Paraguay', flag: '🇵🇾' },
+  { code: '+598', country: 'Uruguay', flag: '🇺🇾' },
+
+  // Moyen-Orient
+  { code: '+966', country: 'Arabie Saoudite', flag: '🇸🇦' },
+  { code: '+971', country: 'Émirats Arabes Unis', flag: '🇦🇪' },
+  { code: '+974', country: 'Qatar', flag: '🇶🇦' },
+  { code: '+965', country: 'Koweït', flag: '🇰🇼' },
+  { code: '+973', country: 'Bahreïn', flag: '🇧🇭' },
+  { code: '+968', country: 'Oman', flag: '🇴🇲' },
+  { code: '+967', country: 'Yémen', flag: '🇾🇪' },
+  { code: '+962', country: 'Jordanie', flag: '🇯🇴' },
+  { code: '+961', country: 'Liban', flag: '🇱🇧' },
+  { code: '+963', country: 'Syrie', flag: '🇸🇾' },
+  { code: '+964', country: 'Irak', flag: '🇮🇶' },
+  { code: '+98', country: 'Iran', flag: '🇮🇷' },
+  { code: '+972', country: 'Israël', flag: '🇮🇱' },
+  { code: '+90', country: 'Turquie', flag: '🇹🇷' },
+
+  // Asie
+  { code: '+86', country: 'Chine', flag: '🇨🇳' },
+  { code: '+81', country: 'Japon', flag: '🇯🇵' },
+  { code: '+82', country: 'Corée du Sud', flag: '🇰🇷' },
+  { code: '+91', country: 'Inde', flag: '🇮🇳' },
+  { code: '+92', country: 'Pakistan', flag: '🇵🇰' },
+  { code: '+880', country: 'Bangladesh', flag: '🇧🇩' },
+  { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
+  { code: '+977', country: 'Népal', flag: '🇳🇵' },
+  { code: '+62', country: 'Indonésie', flag: '🇮🇩' },
+  { code: '+63', country: 'Philippines', flag: '🇵🇭' },
+  { code: '+66', country: 'Thaïlande', flag: '🇹🇭' },
+  { code: '+84', country: 'Vietnam', flag: '🇻🇳' },
+  { code: '+60', country: 'Malaisie', flag: '🇲🇾' },
+  { code: '+65', country: 'Singapour', flag: '🇸🇬' },
+  { code: '+855', country: 'Cambodge', flag: '🇰🇭' },
+  { code: '+856', country: 'Laos', flag: '🇱🇦' },
+  { code: '+95', country: 'Myanmar', flag: '🇲🇲' },
+  { code: '+93', country: 'Afghanistan', flag: '🇦🇫' },
+
+  // Océanie
+  { code: '+61', country: 'Australie', flag: '🇦🇺' },
+  { code: '+64', country: 'Nouvelle-Zélande', flag: '🇳🇿' },
 ];
 
 export default function RegisterScreen({ navigation }) {
@@ -58,7 +219,7 @@ export default function RegisterScreen({ navigation }) {
     name: '',
     email: '',
     phoneNumber: '',
-    countryCode: '+227',
+    countryCode: '+32',
     password: '',
     passwordConf: '',
     whatsapp: true,
@@ -642,7 +803,7 @@ export default function RegisterScreen({ navigation }) {
                 </LinearGradient>
               </View>
               <Text style={styles.title}>CRÉER UN COMPTE</Text>
-              <Text style={styles.subtitle}>Rejoignez Kassarmoumarket aujourd'hui</Text>
+              <Text style={styles.subtitle}>Rejoignez Kassarmou aujourd'hui</Text>
             </View>
           </LinearGradient>
 
@@ -748,9 +909,9 @@ export default function RegisterScreen({ navigation }) {
             showPassword={showPassword}
             onTogglePassword={() => setShowPassword(!showPassword)}
           />
-          <Text style={styles.helpText}>
-            Minimum 8 caractères avec majuscule, minuscule, chiffre et caractère spécial
-          </Text>
+          
+          {/* Checklist de validation du mot de passe */}
+          <PasswordChecklist password={formData.password} />
 
           {/* Confirmer mot de passe */}
           <CustomInput
@@ -764,6 +925,28 @@ export default function RegisterScreen({ navigation }) {
             showPassword={showConfirmPassword}
             onTogglePassword={() => setShowConfirmPassword(!showConfirmPassword)}
           />
+          
+          {/* Indicateur de correspondance des mots de passe */}
+          {formData.passwordConf.length > 0 && (
+            <View style={[
+              styles.passwordMatchIndicator,
+              formData.password === formData.passwordConf ? styles.passwordMatch : styles.passwordMismatch
+            ]}>
+              <Ionicons 
+                name={formData.password === formData.passwordConf ? 'checkmark-circle' : 'alert-circle'} 
+                size={18} 
+                color={formData.password === formData.passwordConf ? COLORS.success : COLORS.error}
+              />
+              <Text style={[
+                styles.passwordMatchText,
+                { color: formData.password === formData.passwordConf ? COLORS.success : COLORS.error }
+              ]}>
+                {formData.password === formData.passwordConf 
+                  ? 'Les mots de passe correspondent ✓' 
+                  : 'Les mots de passe ne correspondent pas'}
+              </Text>
+            </View>
+          )}
 
           {/* Info OTP */}
           <View style={styles.infoBox}>
@@ -805,6 +988,19 @@ export default function RegisterScreen({ navigation }) {
             style={styles.submitButton}
             rightIcon={<Ionicons name="arrow-forward" size={18} color="#FFF" />}
           />
+
+          {/* TODO: Google OAuth - À implémenter dans une prochaine mise à jour
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OU</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <GoogleSignInButton 
+            navigation={navigation}
+            text="S'inscrire avec Google"
+          />
+          */}
 
           {/* Lien Connexion */}
           <View style={styles.footer}>
@@ -1015,6 +1211,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textLight,
   },
+  passwordMatchIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  passwordMatch: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  passwordMismatch: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  passwordMatchText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
   infoBox: {
     flexDirection: 'row',
     backgroundColor: '#EFF6FF',
@@ -1069,6 +1287,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    fontSize: 14,
+    color: COLORS.textLight,
+    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
