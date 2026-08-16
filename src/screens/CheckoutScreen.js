@@ -66,7 +66,7 @@ export default function CheckoutScreen({ navigation, route }) {
   });
 
   // États pour le paiement
-  const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash', 'stripe', 'paypal'
+  const [paymentMethod, setPaymentMethod] = useState('stripe'); // 'stripe', 'cash', 'paypal'
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // 1: delivery, 2: payment, 3: confirmation
   const [cardDetails, setCardDetails] = useState(null);
@@ -266,7 +266,7 @@ export default function CheckoutScreen({ navigation, route }) {
       if (paymentMethod === 'stripe') {
         handleStripePayment();
       } else {
-        handlePlaceOrder();
+        Alert.alert('Erreur', 'Veuillez sélectionner le paiement par carte bancaire.');
       }
     }
   };
@@ -307,9 +307,9 @@ export default function CheckoutScreen({ navigation, route }) {
           codePost: deliveryInfo.codePost,
         },
         shippingDetails: parsedShippingDetails,
-        prix: subtotal - reduction,
-        prixTotal: total,
-        reduction: reduction,
+        prix: Math.max(0, Math.round((subtotal - Math.min(reduction, subtotal)) * 100) / 100),
+        prixTotal: Math.max(0, total),
+        reduction: Math.min(reduction, subtotal),
         codePro: appliedPromo ? true : false,
         idCodePro: appliedPromo ? (appliedPromo.promoCodeId || appliedPromo._id) : null,
         statusPayment: 'en cours',
@@ -466,28 +466,29 @@ export default function CheckoutScreen({ navigation, route }) {
           'Erreur de paiement',
           error.message || 'Le paiement a échoué. Veuillez réessayer.'
         );
-        setLoading(false);
         return;
       }
 
       if (paymentIntent?.status === 'Succeeded') {
-        // Paiement réussi
         console.log('✅ Paiement réussi ! Nettoyage des données...');
-        
-        // Vider le panier et supprimer toutes les données temporaires
+
         await dispatch(clearCartData());
         await AsyncStorage.removeItem('shippingDetails');
         await AsyncStorage.removeItem('pendingOrder');
         await AsyncStorage.removeItem('deliveryInfo');
         await AsyncStorage.removeItem('appliedPromoCode');
-        
+
         Alert.alert('Succès', 'Paiement effectué avec succès !');
         setStep(3);
 
-        // Rediriger vers les commandes après 3 secondes
         setTimeout(() => {
           navigation.navigate('Orders');
         }, 3000);
+      } else {
+        Alert.alert(
+          'Paiement non finalisé',
+          'Le paiement n\'a pas abouti. Veuillez réessayer.'
+        );
       }
     } catch (error) {
       console.error('Erreur paiement Stripe:', error);
@@ -535,9 +536,9 @@ export default function CheckoutScreen({ navigation, route }) {
           codePost: deliveryInfo.codePost,
         },
         shippingDetails: parsedShippingDetails,
-        prix: subtotal - reduction,
-        prixTotal: total,
-        reduction: reduction,
+        prix: Math.max(0, Math.round((subtotal - Math.min(reduction, subtotal)) * 100) / 100),
+        prixTotal: Math.max(0, total),
+        reduction: Math.min(reduction, subtotal),
         codePro: appliedPromo ? true : false,
         idCodePro: appliedPromo ? (appliedPromo.promoCodeId || appliedPromo._id) : null,
         statusPayment: paymentMethod === 'cash' ? 'en cours' : 'en attente',

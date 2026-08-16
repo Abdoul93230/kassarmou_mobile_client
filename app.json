@@ -17,9 +17,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.kassarmou.mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "L'application a besoin d'accéder à votre caméra pour prendre des photos.",
-        "NSPhotoLibraryUsageDescription": "L'application a besoin d'accéder à vos photos."
-      }
+        "NSCameraUsageDescription": "Kassarmou utilise votre caméra pour vous permettre de prendre une photo de profil. Par exemple, vous pouvez photographier votre visage pour personnaliser votre compte.",
+        "NSPhotoLibraryUsageDescription": "Kassarmou accède à votre bibliothèque de photos pour vous permettre de choisir une photo de profil existante depuis votre galerie. Par exemple, vous pouvez sélectionner un portrait enregistré sur votre appareil.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
@@ -53,10 +55,10 @@
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "merchant.com.kassarmou.mobile",
-          "enableGooglePay": true
+          "enableGooglePay": false
         }
-      ]
+      ],
+      "expo-status-bar"
     ]
   }
 }

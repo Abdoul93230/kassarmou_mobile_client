@@ -238,9 +238,10 @@ export default function CartScreen({ navigation }) {
     }, 0);
   }, [cartItems]);
 
-  // Calculer le total
+  // Calculer le total (la réduction ne peut jamais dépasser le sous-total)
   const total = useMemo(() => {
-    return subtotal - reduction + shippingFee;
+    const reductionAppliquee = Math.min(reduction, subtotal);
+    return Math.round((subtotal - reductionAppliquee + shippingFee) * 100) / 100;
   }, [subtotal, reduction, shippingFee]);
 
   // Formater le prix

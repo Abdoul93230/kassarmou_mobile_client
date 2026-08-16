@@ -432,6 +432,53 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Supprimer le compte',
+      'Cette action est irréversible. Toutes vos données personnelles seront supprimées définitivement. Vos commandes passées seront conservées de manière anonyme.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer mon compte',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirmation finale',
+              'Êtes-vous absolument sûr ? Cette action ne peut pas être annulée.',
+              [
+                { text: 'Annuler', style: 'cancel' },
+                {
+                  text: 'Oui, supprimer',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      setLoading(true);
+                      await apiClient.delete('/api/user/deleteAccount');
+                      await dispatch(logoutUser());
+                      Toast.show({
+                        type: 'success',
+                        text1: 'Compte supprimé',
+                        text2: 'Vos données ont été supprimées.',
+                      });
+                    } catch (error) {
+                      Toast.show({
+                        type: 'error',
+                        text1: 'Erreur',
+                        text2: error.response?.data?.message || 'Impossible de supprimer le compte',
+                      });
+                    } finally {
+                      setLoading(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
   const handleLogout = () => {
     Alert.alert(
       'Déconnexion',
@@ -687,6 +734,18 @@ export default function ProfileScreen({ navigation }) {
           />
         </View>
 
+        {/* Bouton suppression de compte */}
+        <View style={styles.deleteAccountContainer}>
+          <TouchableOpacity
+            style={styles.deleteAccountButton}
+            onPress={handleDeleteAccount}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF476F" />
+            <Text style={styles.deleteAccountText}>Supprimer mon compte</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Version */}
         <View style={styles.footer}>
           <Text style={styles.versionText}>Version 1.0.0</Text>
@@ -913,6 +972,23 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     color: COLORS.error,
     fontWeight: '700',
+  },
+  deleteAccountContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+  },
+  deleteAccountText: {
+    color: '#EF476F',
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   footer: {
     alignItems: 'center',
