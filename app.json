@@ -21,7 +21,7 @@
         "NSPhotoLibraryUsageDescription": "Kassarmou accède à votre bibliothèque de photos pour vous permettre de choisir une photo de profil existante depuis votre galerie. Par exemple, vous pouvez sélectionner un portrait enregistré sur votre appareil.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "2"
+      "buildNumber": "4"
     },
     "android": {
       "adaptiveIcon": {
