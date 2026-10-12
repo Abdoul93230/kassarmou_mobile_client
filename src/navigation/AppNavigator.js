@@ -11,6 +11,7 @@ import { selectPanierCount } from '../redux/cartSlice';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
+import TabBar from './TabBar';
 import HomeScreen from '../screens/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -44,48 +45,11 @@ const Tab = createBottomTabNavigator();
 function MainTabs() {
   const cartItemCount = useSelector(selectPanierCount);
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
-  const insets = useSafeAreaInsets();
   
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Categories') {
-            iconName = focused ? 'grid' : 'grid-outline';
-          } else if (route.name === 'Cart') {
-            iconName = focused ? 'cart' : 'cart-outline';
-          } else if (route.name === 'Favorites') {
-            iconName = focused ? 'heart' : 'heart-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#30A08B',      // Primary - Teal
-        tabBarInactiveTintColor: '#999999',    // Gris
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',          // Blanc
-          borderTopColor: '#E0E0E0',           // Bordure grise
-          borderTopWidth: 1,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 5, // Adapte au safe area
-          paddingTop: 5,
-          height: 60 + (insets.bottom > 0 ? insets.bottom : 0), // Hauteur adaptative
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
-        tabBarBadgeStyle: {
-          backgroundColor: '#FC913A',          // Secondary - Orange
-          color: '#FFFFFF',
-        },
-        headerShown: false,
-      })}
+      tabBar={(props) => <TabBar {...props} />}
+      screenOptions={{ headerShown: false }}
     >
       <Tab.Screen 
         name="Home" 

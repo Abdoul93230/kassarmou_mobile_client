@@ -5,6 +5,7 @@ import authReducer from "./authSlice";
 import cartReducer from "./cartSlice";
 import categoriesReducer from "./categoriesSlice";
 import gamificationReducer from "./gamificationSlice";
+import { catalogApi } from "./catalogApi";
 
 const store = configureStore({
   reducer: {
@@ -14,14 +15,14 @@ const store = configureStore({
     panier: cartReducer,
     categories: categoriesReducer,
     gamification: gamificationReducer,
+    [catalogApi.reducerPath]: catalogApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
-      serializableCheck: {
-        // Ignorer ces actions pour les vérifications de sérialisation
-        ignoredActions: ['persist/PERSIST'],
-      },
-    }),
+      // Vérifications de dev désactivées : trop lentes sur les gros payloads catalogue
+      serializableCheck: false,
+      immutableCheck: false,
+    }).concat(catalogApi.middleware),
 });
 
 export default store;

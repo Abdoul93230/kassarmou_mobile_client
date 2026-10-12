@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useSelector } from 'react-redux';
 import apiClient from '../config/api';
+import { LEGACY_DEFAULT_AVATAR } from '../config/env';
 import ImageEditorModal from '../components/ImageEditorModal';
 import Toast from 'react-native-toast-message';
 import {
@@ -85,10 +86,10 @@ const EditProfileScreen = ({ navigation }) => {
 
       // Utiliser EXACTEMENT les mêmes endpoints que la version web
       const [userResponse, profileResponse] = await Promise.all([
-        apiClient.get('https://ihambackend.onrender.com/user', {
+        apiClient.get('/user', {
           params: { id: user.id },
         }),
-        apiClient.get('https://ihambackend.onrender.com/getUserProfile', {
+        apiClient.get('/getUserProfile', {
           params: { id: user.id },
         }).catch(error => {
           // Si le profil n'existe pas (404), ce n'est pas une erreur
@@ -126,7 +127,7 @@ const EditProfileScreen = ({ navigation }) => {
           ...prev,
           telephone: display,
           photo: profileData?.image && 
-                 profileData.image !== "https://chagona.onrender.com/images/image-1688253105925-0.jpeg"
+                 profileData.image !== LEGACY_DEFAULT_AVATAR
             ? profileData.image
             : null,
         }));
@@ -340,7 +341,7 @@ const EditProfileScreen = ({ navigation }) => {
 
       // Utiliser EXACTEMENT le même endpoint que la version web
       const response = await apiClient.post(
-        'https://ihambackend.onrender.com/createProfile',
+        '/createProfile',
         formData,
         {
           headers: {

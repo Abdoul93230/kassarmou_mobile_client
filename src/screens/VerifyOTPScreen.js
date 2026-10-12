@@ -86,10 +86,12 @@ export default function VerifyOTPScreen({ navigation, route }) {
     );
 
     if (returnScreen) {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: returnScreen, params: returnParams || {} }],
-      });
+      // Toujours garder l'accueil sous l'écran de retour (sinon « retour » quitte l'app)
+      navigation.reset(
+        returnScreen === 'MainTabs'
+          ? { index: 0, routes: [{ name: 'MainTabs', params: returnParams || {} }] }
+          : { index: 1, routes: [{ name: 'MainTabs' }, { name: returnScreen, params: returnParams || {} }] }
+      );
       return;
     }
 

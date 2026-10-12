@@ -190,7 +190,7 @@ export default function LoginScreen({ navigation }) {
           {/* Logo */}
           <View style={styles.logoWrapper}>
             <Image
-              source={require('../../assets/vraisLogo.png')}
+              source={require('../../assets/brand/logo-horizontal.png')}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -499,8 +499,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   logo: {
-    width: 140,
-    height: 70,
+    width: 180,
+    height: 46,
   },
   heroTitle: {
     fontSize: 30,

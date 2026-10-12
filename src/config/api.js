@@ -3,15 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { navigationRef, navigate } from '../navigation/RootNavigation';
 
-// URL du backend - API en ligne
-export const BackendUrl = 'https://ihambackend.onrender.com';
-export const API_URL = BackendUrl; // Alias pour compatibilité
+import { API_URL } from './env';
+
+// URL du backend — définie une seule fois dans ./env.js
+export const BackendUrl = API_URL;
+export { API_URL };
 
 
 // Configuration Axios
 const apiClient = axios.create({
   baseURL: BackendUrl,
-  timeout: 45000, // Augmenté pour laisser le temps au serveur de redémarrer
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },

@@ -18,31 +18,29 @@ export const fetchUserLikes = createAsyncThunk(
   }
 );
 
+/**
+ * Like optimiste : l'UI change immédiatement (reducer pending), l'API suit,
+ * et on revient en arrière seulement si l'appel échoue.
+ */
 export const toggleLike = createAsyncThunk(
   "likes/toggleLike",
   async ({ userId, product }, { getState, rejectWithValue }) => {
+    // État AVANT le clic, mémorisé par le reducer pending
+    const wasLiked = getState().likes.toggling[product._id];
     try {
-      const state = getState();
-      const isLiked = state.likes.likedProducts.includes(product._id);
-
-      console.log(`[LikesActions] Toggling like for product ${product._id}, isLiked: ${isLiked}`);
-
-      if (isLiked) {
+      if (wasLiked) {
         await apiClient.delete(`/likes/${userId}/${product._id}`);
-        console.log('[LikesActions] Like removed successfully');
         return { productId: product._id, action: "remove" };
-      } else {
-        await apiClient.post('/likes', {
-          userId,
-          produitId: product._id,
-        });
-        console.log('[LikesActions] Like added successfully');
-        return { productId: product._id, action: "add" };
       }
+      await apiClient.post('/likes', { userId, produitId: product._id });
+      return { productId: product._id, action: "add" };
     } catch (error) {
-      console.log('[LikesActions] Error toggling like:', error.message);
       return rejectWithValue(error.response?.data?.message || error.message);
     }
+  },
+  {
+    // Ignore les doubles taps pendant qu'un toggle est en cours
+    condition: ({ product }, { getState }) => !(product?._id in getState().likes.toggling),
   }
 );
 
@@ -51,14 +49,15 @@ const likesSlice = createSlice({
   name: "likes",
   initialState: {
     likedProducts: [],
+    toggling: {},
     loading: false,
     error: null,
   },
   reducers: {
     clearLikes: (state) => {
       state.likedProducts = [];
+      state.toggling = {};
       state.error = null;
-      console.log('[LikesActions] Likes cleared');
     },
   },
   extraReducers: (builder) => {
@@ -80,26 +79,26 @@ const likesSlice = createSlice({
         state.error = action.payload || action.error.message;
       })
       
-      // Toggle Like
-      .addCase(toggleLike.pending, (state) => {
-        // Optionnel: afficher un loader pendant le toggle
+      // Toggle Like (optimiste)
+      .addCase(toggleLike.pending, (state, action) => {
+        const id = action.meta.arg.product._id;
+        const wasLiked = state.likedProducts.includes(id);
+        state.toggling[id] = wasLiked;
+        state.likedProducts = wasLiked
+          ? state.likedProducts.filter((x) => x !== id)
+          : [...state.likedProducts, id];
         state.error = null;
       })
       .addCase(toggleLike.fulfilled, (state, action) => {
-        const { productId, action: likeAction } = action.payload;
-        if (likeAction === "add") {
-          // Éviter les doublons
-          if (!state.likedProducts.includes(productId)) {
-            state.likedProducts.push(productId);
-          }
-        } else {
-          state.likedProducts = state.likedProducts.filter(
-            (id) => id !== productId
-          );
-        }
-        state.error = null;
+        delete state.toggling[action.payload.productId];
       })
       .addCase(toggleLike.rejected, (state, action) => {
+        const id = action.meta.arg.product._id;
+        const wasLiked = state.toggling[id];
+        delete state.toggling[id];
+        const isLiked = state.likedProducts.includes(id);
+        if (wasLiked && !isLiked) state.likedProducts.push(id);
+        if (!wasLiked && isLiked) state.likedProducts = state.likedProducts.filter((x) => x !== id);
         state.error = action.payload || action.error.message;
       });
   },

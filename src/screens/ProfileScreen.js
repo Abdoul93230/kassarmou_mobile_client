@@ -26,6 +26,7 @@ import CountryCodePicker from '../components/CountryCodePicker';
 import { COLORS } from '../config/constants';
 import Toast from 'react-native-toast-message';
 import apiClient from '../config/api';
+import { LEGACY_DEFAULT_AVATAR } from '../config/env';
 import * as ImagePicker from 'expo-image-picker';
 import ImageEditorModal from '../components/ImageEditorModal';
 
@@ -108,10 +109,10 @@ export default function ProfileScreen({ navigation }) {
 
       // Utiliser EXACTEMENT les mêmes endpoints que la version web
       const [userResponse, profileResponse] = await Promise.all([
-        apiClient.get('https://ihambackend.onrender.com/user', {
+        apiClient.get('/user', {
           params: { id: user.id },
         }),
-        apiClient.get('https://ihambackend.onrender.com/getUserProfile', {
+        apiClient.get('/getUserProfile', {
           params: { id: user.id },
         }).catch(error => {
           // Si le profil n'existe pas (404), ce n'est pas une erreur
@@ -146,7 +147,7 @@ export default function ProfileScreen({ navigation }) {
         setUserData(prev => ({
           ...prev,
           photo: profileData?.image &&
-                 profileData.image !== "https://chagona.onrender.com/images/image-1688253105925-0.jpeg"
+                 profileData.image !== LEGACY_DEFAULT_AVATAR
             ? profileData.image
             : null,
         }));
@@ -270,7 +271,7 @@ export default function ProfileScreen({ navigation }) {
       formData.append('id', user.id);
 
       // Utiliser EXACTEMENT le même endpoint que la version web
-      await apiClient.post('https://ihambackend.onrender.com/createProfile', formData, {
+      await apiClient.post('/createProfile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -419,7 +420,7 @@ export default function ProfileScreen({ navigation }) {
       formData.append('id', user.id);
 
       // Utiliser EXACTEMENT le même endpoint que la version web
-      await apiClient.post('https://ihambackend.onrender.com/createProfile', formData, {
+      await apiClient.post('/createProfile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 

@@ -1,94 +1,46 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../config/constants';
+import { StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import { Text } from '../ui';
+import { colors } from '../theme';
 
-const SplashScreen = () => {
+/** Écran affiché pendant la vérification de session — même fond que le splash natif (aucun flash) */
+export default function SplashScreen() {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withRepeat(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }), -1, false);
+  }, [progress]);
+
+  const barStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -60 + progress.value * 120 }],
+  }));
+
   return (
-    <LinearGradient
-      colors={['#30A08B', '#2D9175', '#26805F']}
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('../../assets/vraisLogo.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
+    <View style={styles.container}>
+      <Animated.View entering={FadeIn.duration(400)} style={styles.center}>
+        <Image source={require('../../assets/brand/logo-horizontal.png')} style={styles.logo} contentFit="contain" />
+        <Text variant="small" color="textSecondary" style={styles.tagline}>
+          La marketplace du Niger
+        </Text>
+        <View style={styles.track}>
+          <Animated.View style={[styles.bar, barStyle]} />
         </View>
-
-        {/* App Name */}
-        <Text style={styles.appName}>Ihambaobab</Text>
-        <Text style={styles.tagline}>Votre marketplace de confiance</Text>
-
-        {/* Loading Indicator */}
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.white} />
-          <Text style={styles.loadingText}>Chargement...</Text>
-        </View>
-      </View>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Ionicons name="shield-checkmark" size={16} color="rgba(255,255,255,0.7)" />
-        <Text style={styles.footerText}>Paiement sécurisé • Livraison rapide</Text>
-      </View>
-    </LinearGradient>
+      </Animated.View>
+      <Text variant="caption" color="textMuted" style={styles.footer}>
+        Paiement sécurisé · Livraison partout au Niger
+      </Text>
+    </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    alignItems: 'center',
-  },
-  logoContainer: {
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  logoImage: {
-    width: 160,
-    height: 80,
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginBottom: 8,
-  },
-  tagline: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 48,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  footerText: {
-    marginLeft: 8,
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
+  container: { flex: 1, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  center: { alignItems: 'center' },
+  logo: { width: 230, height: 59 },
+  tagline: { marginTop: 10 },
+  track: { width: 120, height: 3, borderRadius: 2, backgroundColor: colors.primarySoft, marginTop: 28, overflow: 'hidden' },
+  bar: { width: 60, height: 3, borderRadius: 2, backgroundColor: colors.primary },
+  footer: { position: 'absolute', bottom: 48 },
 });
-
-export default SplashScreen;

@@ -1,5 +1,5 @@
-// Configuration Stripe
-export const STRIPE_PUBLISHABLE_KEY = 'pk_live_51RKO4OFMhcWQWlbyWHqDypco5L0DrXDS4d6hEDfemzIzkzcKlodzbynkRLP2bsJGi0cxL4oy7CtJnhIGnq6tjH2A00AftfkRRQ';
+
+
 
 // Clés de stockage AsyncStorage
 export const STORAGE_KEYS = {

@@ -1,3 +1,4 @@
+import { API_URL, SITE_URL } from '../config/env';
 import * as Linking from 'expo-linking';
 import { Alert, Platform } from 'react-native';
 
@@ -9,8 +10,8 @@ class DeepLinkingService {
   constructor() {
     this.listeners = [];
     this.navigationRef = null;
-    this.baseWebUrl = 'https://ihambaobab.com';
-    this.baseApiUrl = 'https://ihambackend.onrender.com';
+    this.baseWebUrl = SITE_URL;
+    this.baseApiUrl = API_URL;
   }
 
   /**

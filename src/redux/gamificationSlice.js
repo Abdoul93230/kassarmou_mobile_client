@@ -155,6 +155,7 @@ export const selectConfig = (state) => state.gamification.config;
 export const selectCheckinResult = (state) => state.gamification.checkinResult;
 export const selectIsLoadingWallet = (state) => state.gamification.isLoadingWallet;
 export const selectIsLoadingCheckin = (state) => state.gamification.isLoadingCheckin;
-export const selectActiveEvents = (state) => state.gamification.config?.activeEvents ?? [];
+const NO_EVENTS = [];
+export const selectActiveEvents = (state) => state.gamification.config?.activeEvents ?? NO_EVENTS;
 
 export default gamificationSlice.reducer;

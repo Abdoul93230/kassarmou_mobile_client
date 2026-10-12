@@ -674,7 +674,7 @@ export default function RegisterScreen({ navigation }) {
 
             <View style={styles.logoWrapper}>
               <Image
-                source={require('../../assets/vraisLogo.png')}
+                source={require('../../assets/brand/logo-horizontal.png')}
                 style={styles.logo}
                 resizeMode="contain"
               />
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  logo: { width: 140, height: 70 },
+  logo: { width: 180, height: 46 },
   heroTitle: {
     fontSize: 28,
     fontWeight: 'bold',

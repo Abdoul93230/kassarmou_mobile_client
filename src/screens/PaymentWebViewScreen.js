@@ -1,3 +1,4 @@
+import { IPAY, SITE_URL } from '../config/env';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Alert, BackHandler } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -33,13 +34,7 @@ const PaymentWebViewScreen = () => {
   const hasShownPendingLimitAlertRef = useRef(false);
   const backendSyncKeysRef = useRef(new Set());
 
-  const IPAY_CONFIG = {
-    environment: 'live',
-    publicKey: 'pk_f83a240bd0df4393b35a819925863e16',
-    redirectUrl: 'https://www.ihambaobab.com/commandesReference',
-    cancelUrl: 'https://www.ihambaobab.com/error',
-    callbackUrl: 'https://ihambackend.onrender.com/payment_callback2',
-  };
+  const IPAY_CONFIG = IPAY;
 
   const normalizeText = (value = '') => String(value || '').toLowerCase().trim();
 
@@ -659,7 +654,7 @@ const PaymentWebViewScreen = () => {
   return (
     <View style={styles.container}>
       <WebView
-        source={{ html: paymentHTML, baseUrl: 'https://www.ihambaobab.com/' }}
+        source={{ html: paymentHTML, baseUrl: `${SITE_URL}/` }}
         onMessage={handleWebViewMessage}
         onNavigationStateChange={handleNavigationStateChange}
         onLoadStart={() => setLoading(true)}

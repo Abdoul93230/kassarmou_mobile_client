@@ -1,0 +1,12 @@
+// Point d'entrée unique du design system : import { Text, Button, ProductCard } from '../ui';
+export { default as Text } from './Text';
+export { default as Button } from './Button';
+export { default as IconButton } from './IconButton';
+export { default as PressableScale } from './PressableScale';
+export { default as SmartImage } from './SmartImage';
+export { default as Skeleton, ProductCardSkeleton } from './Skeleton';
+export { default as Price, getPricing } from './Price';
+export { default as ProductCard } from './ProductCard';
+export { default as SectionHeader } from './SectionHeader';
+export { default as Chip } from './Chip';
+export { default as EmptyState } from './EmptyState';
