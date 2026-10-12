@@ -10,3 +10,4 @@ export { default as ProductCard } from './ProductCard';
 export { default as SectionHeader } from './SectionHeader';
 export { default as Chip } from './Chip';
 export { default as EmptyState } from './EmptyState';
+export { default as Stars } from './Stars';

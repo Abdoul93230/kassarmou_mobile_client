@@ -44,6 +44,7 @@ export const catalogApi = createApi({
   baseQuery: axiosBaseQuery,
   keepUnusedDataFor: 300, // 5 min : retour instantané sur un écran déjà visité
   refetchOnReconnect: true,
+  tagTypes: ['Reviews'],
   endpoints: (build) => ({
     /** Liste de produits (une page) — rails de l'accueil. args : { sort, promo, category, type, limit } */
     products: build.query({
@@ -83,10 +84,36 @@ export const catalogApi = createApi({
       transformResponse: (res) => res?.data || null,
     }),
 
-    /** Avis d'un produit */
+    /** Avis d'un produit (plus récents d'abord) */
     productReviews: build.query({
       query: (id) => ({ url: `/getAllCommenteProduitById/${id}` }),
-      transformResponse: (res) => (Array.isArray(res?.data) ? res.data : []),
+      transformResponse: (res) =>
+        (Array.isArray(res?.data) ? res.data : []).sort(
+          (a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0),
+        ),
+      providesTags: (_r, _e, id) => [{ type: 'Reviews', id }],
+    }),
+
+    /** Publier un avis — même format que le web */
+    addReview: build.mutation({
+      query: ({ product, rating, text, userName }) => ({
+        url: '/createCommenteProduit',
+        method: 'post',
+        data: {
+          description: text,
+          clefProduct: product._id,
+          clefType: product.ClefType,
+          etoil: rating,
+          userName,
+        },
+      }),
+      invalidatesTags: (_r, _e, { product }) => [{ type: 'Reviews', id: product._id }],
+    }),
+
+    /** Produits d'un même type (produits similaires) */
+    productsByType: build.query({
+      query: (type) => ({ url: `/searchProductByType/${type}`, params: { page: 1, limit: 12 } }),
+      transformResponse: (res) => toPage(res).items,
     }),
 
     /** Boutiques visibles par les clients */
@@ -110,6 +137,8 @@ export const {
   useHomeFeedQuery,
   useProductQuery,
   useProductReviewsQuery,
+  useAddReviewMutation,
+  useProductsByTypeQuery,
   useStoresQuery,
   useStoreProductsQuery,
 } = catalogApi;
