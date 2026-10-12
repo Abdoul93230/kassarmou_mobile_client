@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../config/constants';
@@ -13,12 +13,11 @@ const SplashScreen = () => {
       <View style={styles.content}>
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <LinearGradient
-            colors={['#FFF', '#F0FFF4']}
-            style={styles.logoCircle}
-          >
-            <Text style={styles.logoText}>K</Text>
-          </LinearGradient>
+          <Image
+            source={require('../../assets/vraisLogo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </View>
 
         {/* App Name */}
@@ -52,23 +51,11 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     marginBottom: 24,
-  },
-  logoCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 15,
   },
-  logoText: {
-    fontSize: 64,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+  logoImage: {
+    width: 160,
+    height: 80,
   },
   appName: {
     fontSize: 32,

@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import CustomInput from '../components/CustomInput';
 import LoadingButton from '../components/LoadingButton';
+import CountryCodePicker from '../components/CountryCodePicker';
 import {
   checkPhoneAvailability,
   login,
@@ -24,13 +25,19 @@ import {
 } from '../redux/authSlice';
 import { COLORS } from '../config/constants';
 import useNetworkStatus from '../hooks/useNetworkStatus';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  PHONE_COUNTRIES,
+  applyPhoneInputChange,
+  getPhonePlaceholder,
+  toBackendPhone,
+  validatePhone,
+} from '../utils/phoneRules';
 
 const STEP_PHONE = 'phone';
 const STEP_LOGIN = 'login';
 const STEP_REGISTER = 'register';
 
-const normalizePhoneDigits = (value = '') => value.replace(/\D/g, '');
-const pickDevOtp = (payload = {}) => payload?.devOTP || payload?.devOtp || payload?.otp || null;
 const getErrorMessage = (value) => {
   if (typeof value === 'string') return value;
   return value?.message || value?.error || 'Une erreur est survenue';
@@ -42,19 +49,23 @@ export default function QuickAuthScreen({ navigation, route }) {
   const { isConnected } = useNetworkStatus();
 
   const [step, setStep] = useState(STEP_PHONE);
-  const [countryCode, setCountryCode] = useState('+227');
+  const [country, setCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [phoneDigits, setPhoneDigits] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [refCode, setRefCode] = useState('');
 
   const pendingAction = route?.params?.pendingAction || null;
   const returnScreen = route?.params?.returnScreen || null;
   const returnParams = route?.params?.returnParams || null;
 
   const fullPhone = useMemo(() => {
-    const cleaned = normalizePhoneDigits(phoneDigits);
-    return cleaned ? `${countryCode}${cleaned}` : '';
-  }, [countryCode, phoneDigits]);
+    return toBackendPhone(country, phoneDigits);
+  }, [country, phoneDigits]);
+
+  const formattedPhone = useMemo(() => applyPhoneInputChange(country, phoneDigits).display, [country, phoneDigits]);
 
   const navigateAfterAuth = () => {
     dispatch(
@@ -79,19 +90,41 @@ export default function QuickAuthScreen({ navigation, route }) {
     });
   };
 
-  const validatePhone = () => {
-    if (!fullPhone) {
-      Alert.alert('Champ requis', 'Veuillez saisir votre numero de telephone.');
-      return false;
-    }
-
-    const valid = /^\+[1-9]\d{7,14}$/.test(fullPhone);
-    if (!valid) {
-      Alert.alert('Numero invalide', 'Utilisez un numero international valide.');
+  const validatePhoneField = () => {
+    const validation = validatePhone(country, phoneDigits, true);
+    setPhoneError(validation.message);
+    if (!validation.isValid) {
+      Alert.alert('Numero invalide', validation.message);
       return false;
     }
 
     return true;
+  };
+
+  const handlePhoneChange = (rawValue) => {
+    const next = applyPhoneInputChange(country, rawValue);
+    setPhoneDigits(next.digits);
+    if (!next.digits) {
+      setPhoneError('');
+      return;
+    }
+    const validation = validatePhone(country, next.digits, true);
+    setPhoneError(validation.message);
+  };
+
+  const handleCountryChange = (dialCode) => {
+    const nextCountry = PHONE_COUNTRIES.find((entry) => entry.dialCode === dialCode) || DEFAULT_PHONE_COUNTRY;
+    setCountry(nextCountry);
+    setShowCountryPicker(false);
+
+    const next = applyPhoneInputChange(nextCountry, phoneDigits);
+    setPhoneDigits(next.digits);
+    if (!next.digits) {
+      setPhoneError('');
+      return;
+    }
+    const validation = validatePhone(nextCountry, next.digits, true);
+    setPhoneError(validation.message);
   };
 
   const handleCheckPhone = async () => {
@@ -100,7 +133,7 @@ export default function QuickAuthScreen({ navigation, route }) {
       return;
     }
 
-    if (!validatePhone()) return;
+    if (!validatePhoneField()) return;
 
     try {
       dispatch(clearError());
@@ -138,14 +171,13 @@ export default function QuickAuthScreen({ navigation, route }) {
   };
 
   const handleForgotPassword = async () => {
-    if (!validatePhone()) return;
+    if (!validatePhoneField()) return;
 
     try {
       const resetOtp = await dispatch(requestPasswordResetOtp(fullPhone)).unwrap();
 
       navigation.navigate('VerifyOTP', {
         type: 'password-reset',
-        devCode: pickDevOtp(resetOtp),
         attemptsRemaining: resetOtp.attemptsRemaining,
         cooldownSeconds: resetOtp.cooldownSeconds,
         expiresInSeconds: resetOtp.expiresInSeconds,
@@ -178,7 +210,6 @@ export default function QuickAuthScreen({ navigation, route }) {
 
       navigation.navigate('VerifyOTP', {
         type: 'quick-register',
-        devCode: pickDevOtp(otpResult),
         attemptsRemaining: otpResult.attemptsRemaining,
         cooldownSeconds: otpResult.cooldownSeconds,
         expiresInSeconds: otpResult.expiresInSeconds,
@@ -188,6 +219,7 @@ export default function QuickAuthScreen({ navigation, route }) {
         formData: {
           phoneNumber: fullPhone,
           name: name.trim(),
+          refCode: refCode.trim().toUpperCase() || undefined,
         },
       });
     } catch (error) {
@@ -217,19 +249,27 @@ export default function QuickAuthScreen({ navigation, route }) {
             <Text style={styles.stepTitle}>Etape 1: Votre numero</Text>
             <Text style={styles.stepHint}>Entrez votre numero pour verifier si vous avez deja un compte.</Text>
             <View style={styles.phoneRow}>
-              <View style={styles.codeBox}>
-                <Text style={styles.codeText}>{countryCode}</Text>
-              </View>
+              <TouchableOpacity style={styles.codeBox} onPress={() => setShowCountryPicker(true)} activeOpacity={0.8}>
+                <Text style={styles.codeText}>{country.flag} {country.dialCode}</Text>
+              </TouchableOpacity>
               <View style={styles.phoneInputWrap}>
                 <CustomInput
-                  value={phoneDigits}
-                  onChangeText={(v) => setPhoneDigits(normalizePhoneDigits(v))}
-                  placeholder="90123456"
+                  value={formattedPhone}
+                  onChangeText={handlePhoneChange}
+                  placeholder={getPhonePlaceholder(country)}
                   keyboardType="phone-pad"
                   icon="call-outline"
+                  error={phoneError}
+                  maxLength={country.nationalLength + country.groups.length - 1}
                 />
               </View>
             </View>
+            <CountryCodePicker
+              visible={showCountryPicker}
+              onClose={() => setShowCountryPicker(false)}
+              selectedCode={country.dialCode}
+              onSelectCode={handleCountryChange}
+            />
             <LoadingButton
               title="Continuer"
               onPress={handleCheckPhone}
@@ -277,6 +317,15 @@ export default function QuickAuthScreen({ navigation, route }) {
               placeholder="Votre nom"
               icon="person-outline"
             />
+            <CustomInput
+              label="Code parrainage (optionnel)"
+              value={refCode}
+              onChangeText={(v) => setRefCode(v.toUpperCase())}
+              placeholder="Ex: MOUSSA-AB12"
+              icon="leaf-outline"
+              autoCapitalize="characters"
+            />
+            <Text style={styles.refCodeHint}>Entrez le code d'un ami pour gagner des Baobab Points a votre premiere commande.</Text>
             <LoadingButton
               title="Envoyer le code OTP"
               onPress={handleSendOtp}
@@ -398,5 +447,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     marginTop: 4,
     borderRadius: 10,
+  },
+  refCodeHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: -6,
+    marginBottom: 12,
+    lineHeight: 17,
   },
 });

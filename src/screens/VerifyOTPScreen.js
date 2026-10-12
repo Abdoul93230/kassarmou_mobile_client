@@ -25,13 +25,13 @@ import {
   setQuickAuthContext,
 } from '../redux/authSlice';
 import { COLORS } from '../config/constants';
+import { getPasswordChecks, getPasswordStrength, validatePassword } from '../utils/passwordRules';
 
 const OTP_LENGTH = 6;
 const STEP_VERIFY_OTP = 'verify-otp';
 const STEP_SET_PASSWORD = 'set-password';
 const FLOW_QUICK_REGISTER = 'quick-register';
 const FLOW_PASSWORD_RESET = 'password-reset';
-const pickDevOtp = (payload = {}) => payload?.devOTP || payload?.devOtp || payload?.otp || null;
 const getErrorMessage = (value) => {
   if (typeof value === 'string') return value;
   return value?.message || value?.error || 'Une erreur est survenue';
@@ -49,7 +49,6 @@ export default function VerifyOTPScreen({ navigation, route }) {
 
   const [step, setStep] = useState(STEP_VERIFY_OTP);
   const [otp, setOtp] = useState('');
-  const [devCode, setDevCode] = useState(route?.params?.devCode || null);
   const [attemptsRemaining, setAttemptsRemaining] = useState(route?.params?.attemptsRemaining ?? null);
   const [resendCooldown, setResendCooldown] = useState(route?.params?.cooldownSeconds ?? 0);
   const [expiresIn, setExpiresIn] = useState(route?.params?.expiresInSeconds ?? 0);
@@ -63,6 +62,8 @@ export default function VerifyOTPScreen({ navigation, route }) {
   const returnParams = route?.params?.returnParams || null;
 
   const canSubmitOtp = useMemo(() => otp.length === OTP_LENGTH, [otp.length]);
+  const passwordChecks = useMemo(() => getPasswordChecks(password), [password]);
+  const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
 
   useEffect(() => {
     if (resendCooldown <= 0 && expiresIn <= 0) return;
@@ -135,8 +136,9 @@ export default function VerifyOTPScreen({ navigation, route }) {
   };
 
   const handleFinalizeRegister = async () => {
-    if (!password || password.length < 6) {
-      Alert.alert('Mot de passe', 'Choisissez un mot de passe de 6 caracteres minimum.');
+    const validation = validatePassword(password);
+    if (!validation.valid) {
+      Alert.alert('Mot de passe', validation.message);
       return;
     }
 
@@ -170,6 +172,8 @@ export default function VerifyOTPScreen({ navigation, route }) {
             phoneNumber: formData.phoneNumber,
             name: formData.name,
             password,
+            code: otp,
+            ...(formData.refCode ? { refCode: formData.refCode } : {}),
           })
         ).unwrap();
 
@@ -199,7 +203,6 @@ export default function VerifyOTPScreen({ navigation, route }) {
             })
           ).unwrap();
 
-      setDevCode(pickDevOtp(resendResult));
       setAttemptsRemaining(resendResult.attemptsRemaining ?? null);
       setResendCooldown(resendResult.cooldownSeconds ?? 0);
       setExpiresIn(resendResult.expiresInSeconds ?? 0);
@@ -228,13 +231,6 @@ export default function VerifyOTPScreen({ navigation, route }) {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.card}>
-
-        {devCode ? (
-          <View style={styles.devBadge}>
-            <Text style={styles.devTitle}>Mode developpement</Text>
-            <Text style={styles.devCode}>Code test: {devCode}</Text>
-          </View>
-        ) : null}
 
         {typeof attemptsRemaining === 'number' ? (
           <Text style={styles.attemptsText}>Tentatives restantes: {attemptsRemaining}</Text>
@@ -295,6 +291,29 @@ export default function VerifyOTPScreen({ navigation, route }) {
               secureTextEntry
               icon="lock-closed-outline"
             />
+            <View style={styles.passwordChecklistBox}>
+              <View style={styles.passwordStrengthRow}>
+                <Text style={styles.passwordStrengthLabel}>Force</Text>
+                <Text style={[styles.passwordStrengthValue, { color: passwordStrength.color }]}>{passwordStrength.label}</Text>
+              </View>
+              <View style={styles.passwordStrengthTrack}>
+                <View
+                  style={[
+                    styles.passwordStrengthFill,
+                    {
+                      width: `${Math.max(8, (passwordStrength.score / 6) * 100)}%`,
+                      backgroundColor: passwordStrength.color,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.passwordRuleItem, passwordChecks.minLength && styles.passwordRuleOk]}>• 8 caracteres minimum</Text>
+              <Text style={[styles.passwordRuleItem, passwordChecks.upper && styles.passwordRuleOk]}>• Au moins une majuscule</Text>
+              <Text style={[styles.passwordRuleItem, passwordChecks.lower && styles.passwordRuleOk]}>• Au moins une minuscule</Text>
+              <Text style={[styles.passwordRuleItem, passwordChecks.number && styles.passwordRuleOk]}>• Au moins un chiffre</Text>
+              <Text style={[styles.passwordRuleItem, passwordChecks.special && styles.passwordRuleOk]}>• Au moins un caractere special</Text>
+              <Text style={[styles.passwordRuleItem, passwordChecks.noSpaces && styles.passwordRuleOk]}>• Sans espace</Text>
+            </View>
             <CustomInput
               label="Confirmer le mot de passe"
               value={confirmPassword}
@@ -444,6 +463,48 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     marginBottom: 10,
     textAlign: 'center',
+  },
+  passwordChecklistBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+  },
+  passwordStrengthRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  passwordStrengthLabel: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    fontWeight: '600',
+  },
+  passwordStrengthValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  passwordStrengthTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  passwordStrengthFill: {
+    height: 6,
+    borderRadius: 999,
+  },
+  passwordRuleItem: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  passwordRuleOk: {
+    color: '#15803D',
+    fontWeight: '600',
   },
   primaryButton: {
     borderRadius: 10,

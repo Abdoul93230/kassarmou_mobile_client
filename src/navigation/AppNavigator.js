@@ -35,6 +35,7 @@ import FaqScreen from '../screens/FaqScreen';
 import BoutiqueScreen from '../screens/BoutiqueScreen';
 import AllStoresScreen from '../screens/AllStoresScreen';
 import SellerDetailScreen from '../screens/SellerDetailScreen';
+import WalletScreen from '../screens/WalletScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -286,8 +287,13 @@ function AppNavigator() {
         {/* Écrans protégés (nécessitent authentification) */}
         {isAuthenticated && (
           <>
-            <Stack.Screen 
-              name="EditProfile" 
+            <Stack.Screen
+              name="Wallet"
+              component={WalletScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="EditProfile"
               component={EditProfileScreen}
               options={{ headerShown: false }}
             />

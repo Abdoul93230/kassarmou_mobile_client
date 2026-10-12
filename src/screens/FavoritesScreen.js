@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { toggleLike, fetchUserLikes } from '../redux/likesSlice';
-import { addItemToCart } from '../redux/cartSlice';
+import { addArticleToPanier } from '../redux/cartSlice';
 import { formatPrice } from '../utils/formatPrice';
 
 const { width } = Dimensions.get('window');
@@ -28,84 +28,345 @@ const CARD_WIDTH = (width - 48) / 2;
 
 const COLORS = {
   primary: '#30A08B',
-  secondary: '#FC913A',
+  secondary: '#B2905F',
   tertiary: '#62aca2',
   white: '#FFFFFF',
   black: '#1A202C',
   gray: '#718096',
   lightGray: '#E2E8F0',
-  paleGreen: '#E6FFEA',
+  paleGreen: '#F0FAF8',
   red: '#EF4444',
   green: '#10B981',
   darkGray: '#4A5568',
   orange: '#E87E04',
+  bg: '#F7F8FA',
 };
 
+// ─────────────────────────────────────────────────────────
+//  Pill horizontale de filtre
+// ─────────────────────────────────────────────────────────
+const FilterPill = ({ label, active, onPress, count }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.75}
+    style={[styles.pill, active && styles.pillActive]}
+  >
+    <Text style={[styles.pillText, active && styles.pillTextActive]}>
+      {label}
+      {count != null ? ` (${count})` : ''}
+    </Text>
+  </TouchableOpacity>
+);
+
+// ─────────────────────────────────────────────────────────
+//  Sélecteur de tri
+// ─────────────────────────────────────────────────────────
+const SORT_OPTIONS = [
+  { value: 'dateAdded', label: "Date d'ajout", icon: 'calendar-outline' },
+  { value: 'price',     label: 'Prix croissant', icon: 'trending-up-outline' },
+  { value: 'priceDesc', label: 'Prix décroissant', icon: 'trending-down-outline' },
+  { value: 'name',      label: 'Nom A → Z', icon: 'text-outline' },
+];
+
+const SortSelector = ({ current, onChange }) => (
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.sortScroll}
+  >
+    {SORT_OPTIONS.map((opt) => {
+      const active = current === opt.value;
+      return (
+        <TouchableOpacity
+          key={opt.value}
+          onPress={() => onChange(opt.value)}
+          activeOpacity={0.8}
+          style={[styles.sortChip, active && styles.sortChipActive]}
+        >
+          <Ionicons
+            name={opt.icon}
+            size={13}
+            color={active ? COLORS.white : COLORS.primary}
+            style={{ marginRight: 4 }}
+          />
+          <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>
+            {opt.label}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+  </ScrollView>
+);
+
+// ─────────────────────────────────────────────────────────
+//  Carte produit
+// ─────────────────────────────────────────────────────────
+const ProductCard = React.memo(({ item, fadeAnim, onUnlike, onAddToCart, onPress }) => {
+  const hasPromo = item.prixPromo > 0 && item.prixPromo < item.prix;
+  const discount = hasPromo
+    ? Math.round(((item.prix - item.prixPromo) / item.prix) * 100)
+    : null;
+  const finalPrice = hasPromo ? item.prixPromo : item.prix;
+
+  return (
+    <Animated.View
+      style={[
+        styles.cardWrapper,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
+        },
+      ]}
+    >
+      <View style={styles.card}>
+        {/* ── Image ── */}
+        <TouchableOpacity onPress={onPress} activeOpacity={0.92}>
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: item.image1 }}
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.18)']}
+              style={styles.imageGradient}
+            />
+
+            {/* Badge remise */}
+            {hasPromo && discount && (
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountText}>-{discount}%</Text>
+              </View>
+            )}
+
+            {/* Bouton cœur rouge actif */}
+            <TouchableOpacity
+              style={styles.heartBtn}
+              onPress={() => onUnlike(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <View style={styles.heartBtnInner}>
+                <Ionicons name="heart" size={17} color={COLORS.red} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+
+        {/* ── Infos ── */}
+        <View style={styles.productInfo}>
+          {/* Marque */}
+          {item.marque && (
+            <Text style={styles.brandLabel} numberOfLines={1}>
+              {item.marque}
+            </Text>
+          )}
+
+          {/* Nom */}
+          <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+            <Text style={styles.productName} numberOfLines={2}>
+              {item.name}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Étoiles statiques */}
+          <View style={styles.ratingRow}>
+            {[1, 2, 3, 4, 5].map((s) => (
+              <Ionicons key={s} name="star" size={10} color={s <= 4 ? '#FFBB00' : '#D1D5DB'} />
+            ))}
+            <Text style={styles.ratingCount}>(128)</Text>
+          </View>
+
+          {/* Prix */}
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>{formatPrice(finalPrice)} CFA</Text>
+            {hasPromo && (
+              <Text style={styles.oldPrice}>{formatPrice(item.prix)} CFA</Text>
+            )}
+          </View>
+
+          {/* Actions bas de carte */}
+          <View style={styles.cardActions}>
+            {/* Bouton Voir */}
+            <TouchableOpacity
+              style={styles.viewBtn}
+              onPress={onPress}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.tertiary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.viewBtnGradient}
+              >
+                <Text style={styles.viewBtnText}>Voir</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Bouton corbeille */}
+            <TouchableOpacity
+              style={styles.trashBtn}
+              onPress={() => onUnlike(item)}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Ionicons name="trash-outline" size={16} color={COLORS.red} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Stock */}
+          {item.quantite > 0 ? (
+            <View style={styles.stockRow}>
+              <View style={styles.stockDot} />
+              <Text style={styles.stockText}>En stock</Text>
+            </View>
+          ) : (
+            <View style={styles.stockRow}>
+              <View style={[styles.stockDot, { backgroundColor: COLORS.red }]} />
+              <Text style={[styles.stockText, { color: COLORS.red }]}>Rupture de stock</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </Animated.View>
+  );
+});
+
+// ─────────────────────────────────────────────────────────
+//  Empty state
+// ─────────────────────────────────────────────────────────
+const EmptyState = ({ onExplore }) => (
+  <View style={styles.emptyContainer}>
+    <LinearGradient
+      colors={['rgba(48,160,139,0.08)', 'rgba(48,160,139,0.02)']}
+      style={styles.emptyGradient}
+    >
+      <View style={styles.emptyIconWrap}>
+        <LinearGradient colors={['#FF6B6B', '#EE5A6F']} style={styles.emptyIconCircle}>
+          <MaterialCommunityIcons name="heart-broken" size={44} color={COLORS.white} />
+        </LinearGradient>
+      </View>
+      <Text style={styles.emptyTitle}>Aucun favori pour l'instant</Text>
+      <Text style={styles.emptySubtitle}>
+        Ajoutez des produits à vos favoris pour les retrouver ici facilement.
+      </Text>
+      <TouchableOpacity onPress={onExplore} activeOpacity={0.85} style={styles.ctaBtn}>
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.tertiary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.ctaBtnGradient}
+        >
+          <MaterialCommunityIcons name="compass-outline" size={18} color={COLORS.white} />
+          <Text style={styles.ctaBtnText}>Découvrir des produits</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </LinearGradient>
+  </View>
+);
+
+// ─────────────────────────────────────────────────────────
+//  Modal confirmation suppression
+// ─────────────────────────────────────────────────────────
+const DeleteModal = ({ visible, product, onCancel, onConfirm }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalCard}>
+        <LinearGradient colors={['#FF6B6B', '#EE5A6F']} style={styles.modalTop}>
+          <MaterialCommunityIcons name="heart-broken" size={32} color={COLORS.white} />
+        </LinearGradient>
+        <View style={styles.modalBody}>
+          <Text style={styles.modalTitle}>Retirer des favoris ?</Text>
+          {product && (
+            <View style={styles.modalProductRow}>
+              <Image source={{ uri: product.image1 }} style={styles.modalProductImg} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalProductName} numberOfLines={2}>{product.name}</Text>
+                <Text style={styles.modalProductPrice}>
+                  {formatPrice(product.prixPromo > 0 ? product.prixPromo : product.prix)} CFA
+                </Text>
+              </View>
+            </View>
+          )}
+          <Text style={styles.modalDesc}>
+            Ce produit sera retiré de votre liste.{'\n'}Vous pourrez le rajouter à tout moment.
+          </Text>
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={onCancel}>
+              <Text style={styles.modalCancelText}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalConfirmBtn} onPress={onConfirm}>
+              <LinearGradient colors={['#FF6B6B', '#EE5A6F']} style={styles.modalConfirmGrad}>
+                <Ionicons name="trash-outline" size={15} color={COLORS.white} style={{ marginRight: 4 }} />
+                <Text style={styles.modalConfirmText}>Retirer</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
+// ─────────────────────────────────────────────────────────
+//  Écran principal
+// ─────────────────────────────────────────────────────────
 export default function FavoritesScreen() {
   const navigation = useNavigation();
-  const dispatch = useDispatch();
-  
-  const { likedProducts, loading } = useSelector((state) => state.likes);
-  const allProducts = useSelector((state) => state.products?.data || []);
-  const categories = useSelector((state) => state.products?.categories || []);
-  const { user } = useSelector((state) => state.auth);
-  
-  const [refreshing, setRefreshing] = useState(false);
-  const [sortBy, setSortBy] = useState('dateAdded');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [productToDelete, setProductToDelete] = useState(null);
-  const [fadeAnim] = useState(new Animated.Value(0));
+  const dispatch   = useDispatch();
 
+  // ── Sélecteurs Redux (logique inchangée) ──
+  const { likedProducts, loading } = useSelector((state) => state.likes);
+  const allProducts  = useSelector((state) => state.products?.data || []);
+  const categories   = useSelector((state) => state.products?.categories || []);
+  const { user }     = useSelector((state) => state.auth);
+
+  // ── State ──
+  const [refreshing,       setRefreshing]       = useState(false);
+  const [sortBy,           setSortBy]           = useState('dateAdded');
+  const [filterCategory,   setFilterCategory]   = useState('all');
+  const [showDeleteModal,  setShowDeleteModal]  = useState(false);
+  const [productToDelete,  setProductToDelete]  = useState(null);
+  const [fadeAnim]                               = useState(new Animated.Value(0));
+
+  // ── Chargement initial (logique inchangée) ──
   useEffect(() => {
     console.log('❤️ [FavoritesScreen] Loading favorites for user:', user?.id);
-    if (user?.id) {
-      dispatch(fetchUserLikes(user.id));
-    }
-    
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    if (user?.id) dispatch(fetchUserLikes(user.id));
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   }, [dispatch, user?.id]);
 
-  // Get full product details for liked products
+  // ── Dérivés (logique inchangée) ──
   const likedProductsDetails = useMemo(() => {
     return likedProducts
-      .map(likeId => allProducts.find(p => p._id === likeId))
+      .map((likeId) => allProducts.find((p) => p._id === likeId))
       .filter(Boolean);
   }, [likedProducts, allProducts]);
 
-  // Filter by category
   const filteredProducts = useMemo(() => {
     if (filterCategory === 'all') return likedProductsDetails;
-    return likedProductsDetails.filter(p => p.ClefCategorie === filterCategory);
+    return likedProductsDetails.filter((p) => p.ClefCategorie === filterCategory);
   }, [likedProductsDetails, filterCategory]);
 
-  // Sort products
   const sortedProducts = useMemo(() => {
     const sorted = [...filteredProducts];
     switch (sortBy) {
-      case 'price':
-        return sorted.sort((a, b) => (a.prix || 0) - (b.prix || 0));
-      case 'priceDesc':
-        return sorted.sort((a, b) => (b.prix || 0) - (a.prix || 0));
-      case 'name':
-        return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      case 'nameDesc':
-        return sorted.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
-      default:
-        return sorted;
+      case 'price':     return sorted.sort((a, b) => (a.prix || 0) - (b.prix || 0));
+      case 'priceDesc': return sorted.sort((a, b) => (b.prix || 0) - (a.prix || 0));
+      case 'name':      return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      case 'nameDesc':  return sorted.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+      default:          return sorted;
     }
   }, [filteredProducts, sortBy]);
 
+  // ── Catégories présentes dans les favoris ──
+  const presentCategories = useMemo(() => {
+    const ids = new Set(likedProductsDetails.map((p) => p.ClefCategorie).filter(Boolean));
+    return categories.filter((c) => ids.has(c._id));
+  }, [likedProductsDetails, categories]);
+
+  // ── Callbacks (logique inchangée) ──
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (user?.id) {
-      await dispatch(fetchUserLikes(user.id));
-    }
+    if (user?.id) await dispatch(fetchUserLikes(user.id));
     setRefreshing(false);
   }, [dispatch, user?.id]);
 
@@ -125,355 +386,141 @@ export default function FavoritesScreen() {
 
   const handleAddToCart = useCallback((product) => {
     const cartItem = {
-      product: product,
+      product,
       quantity: 1,
       selectedColor: null,
       selectedSize: null,
       colorImage: product.image1,
     };
-    dispatch(addItemToCart(cartItem));
+    dispatch(addArticleToPanier(cartItem));
     Alert.alert('✓ Ajouté', `${product.name} a été ajouté au panier`);
   }, [dispatch]);
 
-  const handleShare = useCallback((product) => {
-    // TODO: Implement sharing functionality
-    Alert.alert('Partage', `Partager ${product.name}`);
-  }, []);
-
-  const calculateDiscount = (price, promoPrice) => {
-    if (!promoPrice || price <= promoPrice) return null;
-    return Math.round(((price - promoPrice) / price) * 100);
-  };
-
-  const renderProductCard = useCallback(({ item, index }) => {
-    const hasPromo = item.prixPromo > 0 && item.prixPromo < item.prix;
-    const discount = calculateDiscount(item.prix, item.prixPromo);
-    const finalPrice = hasPromo ? item.prixPromo : item.prix;
-
-    return (
-      <Animated.View 
-        style={[
-          styles.cardWrapper,
-          {
-            opacity: fadeAnim,
-            transform: [{
-              translateY: fadeAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [50, 0],
-              }),
-            }],
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => navigation.navigate('ProductDetail', { product: item })}
-          activeOpacity={0.9}
-        >
-          {/* Image Container */}
-          <View style={styles.imageContainer}>
-            <Image 
-              source={{ uri: item.image1 }} 
-              style={styles.productImage}
-              resizeMode="cover"
-            />
-            
-            {/* Gradient Overlay */}
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.1)']}
-              style={styles.imageGradient}
-            />
-            
-            {/* Discount Badge */}
-            {hasPromo && discount && (
-              <LinearGradient
-                colors={['#FF6B6B', '#EE5A6F']}
-                style={styles.discountBadge}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <MaterialCommunityIcons name="tag" size={10} color={COLORS.white} />
-                <Text style={styles.discountText}>-{discount}%</Text>
-              </LinearGradient>
-            )}
-            
-            {/* Heart Button */}
-            <TouchableOpacity
-              style={styles.heartButton}
-              onPress={() => handleUnlike(item)}
-            >
-              <LinearGradient
-                colors={['#FF6B6B', '#EE5A6F']}
-                style={styles.heartGradient}
-              >
-                <Ionicons name="heart" size={16} color={COLORS.white} />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Product Info */}
-          <View style={styles.productInfo}>
-            {/* Brand Badge */}
-            {item.marque && (
-              <View style={styles.brandBadge}>
-                <MaterialCommunityIcons name="shield-check" size={10} color={COLORS.green} />
-                <Text style={styles.brandText} numberOfLines={1}>{item.marque}</Text>
-              </View>
-            )}
-            
-            {/* Product Name */}
-            <Text style={styles.productName} numberOfLines={2}>
-              {item.name}
-            </Text>
-            
-            {/* Rating */}
-            <View style={styles.ratingRow}>
-              <Ionicons name="star" size={12} color="#FFB800" />
-              <Text style={styles.ratingText}>4.5</Text>
-              <Text style={styles.reviewCount}>(128)</Text>
-            </View>
-            
-            {/* Price Row */}
-            <View style={styles.priceRow}>
-              <View style={styles.priceColumn}>
-                <Text style={styles.price}>{formatPrice(finalPrice)} CFA</Text>
-                {hasPromo && (
-                  <Text style={styles.oldPrice}>{formatPrice(item.prix)} CFA</Text>
-                )}
-              </View>
-              
-              {/* Quick Add Button */}
-              {(item.quantite > 0) && (
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => handleAddToCart(item)}
-                >
-                  <LinearGradient
-                    colors={[COLORS.primary, COLORS.tertiary]}
-                    style={styles.addButtonGradient}
-                  >
-                    <Ionicons name="cart" size={16} color={COLORS.white} />
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            {/* Stock Indicator */}
-            {(item.quantite > 0) ? (
-              <View style={styles.stockBadge}>
-                <View style={styles.stockDot} />
-                <Text style={styles.stockText}>En stock</Text>
-              </View>
-            ) : (
-              <View style={styles.outOfStockBadge}>
-                <MaterialCommunityIcons name="close-circle" size={12} color={COLORS.red} />
-                <Text style={styles.outOfStockText}>Rupture</Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }, [fadeAnim, navigation, handleUnlike, handleAddToCart]);
-
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
+  // ─── Rendu : tête de liste (header + filtres + tri) ───
+  const renderHeader = useCallback(() => (
+    <View>
+      {/* ── Header gradient ── */}
       <LinearGradient
-        colors={[COLORS.primary, COLORS.tertiary]}
-        style={styles.headerGradient}
+        colors={[COLORS.primary, '#27937F', COLORS.tertiary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
       >
-        <View style={styles.headerContent}>
-          <View style={styles.headerTop}>
-            <View style={styles.headerIconBadge}>
-              <MaterialCommunityIcons name="heart-multiple" size={28} color={COLORS.white} />
+        <View style={styles.headerInner}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerIconBox}>
+              <MaterialCommunityIcons name="heart-multiple" size={26} color={COLORS.white} />
             </View>
-            <Text style={styles.headerTitle}>Mes Favoris</Text>
+            <View>
+              <Text style={styles.headerTitle}>Mes Favoris</Text>
+              <Text style={styles.headerSub}>
+                {likedProductsDetails.length} produit{likedProductsDetails.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
           </View>
-          
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{likedProductsDetails.length}</Text>
-              <Text style={styles.statLabel}>
-                Produit{likedProductsDetails.length !== 1 ? 's' : ''}
-              </Text>
-            </View>
-            
-            <View style={styles.statDivider} />
-            
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {sortedProducts.filter(p => p.prixPromo > 0).length}
-              </Text>
-              <Text style={styles.statLabel}>En promo</Text>
-            </View>
-            
-            <View style={styles.statDivider} />
-            
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {sortedProducts.filter(p => p.quantite > 0).length}
-              </Text>
-              <Text style={styles.statLabel}>Disponibles</Text>
-            </View>
+          <View style={styles.headerCountBadge}>
+            <Text style={styles.headerCountText}>{likedProductsDetails.length}</Text>
+          </View>
+        </View>
+
+        {/* Mini stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNum}>{sortedProducts.filter((p) => p.prixPromo > 0).length}</Text>
+            <Text style={styles.statLbl}>En promo</Text>
+          </View>
+          <View style={styles.statSep} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNum}>{sortedProducts.filter((p) => p.quantite > 0).length}</Text>
+            <Text style={styles.statLbl}>Disponibles</Text>
+          </View>
+          <View style={styles.statSep} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNum}>{presentCategories.length}</Text>
+            <Text style={styles.statLbl}>Catégories</Text>
           </View>
         </View>
       </LinearGradient>
-      
-      {/* Filters Button */}
-      <TouchableOpacity
-        style={styles.filtersButton}
-        onPress={() => setShowFilters(!showFilters)}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={showFilters ? [COLORS.secondary, '#FFB366'] : [COLORS.white, COLORS.white]}
-          style={styles.filtersButtonGradient}
+
+      {/* ── Filtre catégories (pills) ── */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Catégorie</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pillsRow}
         >
-          <MaterialCommunityIcons 
-            name="tune-variant" 
-            size={20} 
-            color={showFilters ? COLORS.white : COLORS.primary} 
+          <FilterPill
+            label="Tout"
+            active={filterCategory === 'all'}
+            onPress={() => setFilterCategory('all')}
+            count={likedProductsDetails.length}
           />
-          <Text style={[styles.filtersButtonText, showFilters && styles.filtersButtonTextActive]}>
-            Filtres & Tri
+          {presentCategories.map((cat) => (
+            <FilterPill
+              key={cat._id}
+              label={cat.name}
+              active={filterCategory === cat._id}
+              onPress={() => setFilterCategory(cat._id)}
+              count={likedProductsDetails.filter((p) => p.ClefCategorie === cat._id).length}
+            />
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* ── Tri ── */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Trier par</Text>
+        <SortSelector current={sortBy} onChange={setSortBy} />
+      </View>
+
+      {/* Nb résultats */}
+      {sortedProducts.length > 0 && (
+        <View style={styles.resultsRow}>
+          <Text style={styles.resultsText}>
+            {sortedProducts.length} résultat{sortedProducts.length > 1 ? 's' : ''}
           </Text>
-          <Ionicons 
-            name={showFilters ? "chevron-up" : "chevron-down"} 
-            size={20} 
-            color={showFilters ? COLORS.white : COLORS.primary} 
-          />
-        </LinearGradient>
-      </TouchableOpacity>
-      
-      {/* Filters Panel */}
-      {showFilters && (
-        <View style={styles.filtersPanel}>
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Catégorie</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoriesScroll}
-            >
-              <TouchableOpacity
-                style={[styles.categoryChip, filterCategory === 'all' && styles.categoryChipActive]}
-                onPress={() => setFilterCategory('all')}
-              >
-                <Text style={[styles.categoryChipText, filterCategory === 'all' && styles.categoryChipTextActive]}>
-                  Toutes
-                </Text>
-              </TouchableOpacity>
-              
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat._id}
-                  style={[styles.categoryChip, filterCategory === cat._id && styles.categoryChipActive]}
-                  onPress={() => setFilterCategory(cat._id)}
-                >
-                  <Text style={[styles.categoryChipText, filterCategory === cat._id && styles.categoryChipTextActive]}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-          
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Trier par</Text>
-            <View style={styles.sortButtons}>
-              {[
-                { value: 'dateAdded', label: 'Date d\'ajout', icon: 'calendar' },
-                { value: 'price', label: 'Prix ↑', icon: 'arrow-up' },
-                { value: 'priceDesc', label: 'Prix ↓', icon: 'arrow-down' },
-                { value: 'name', label: 'Nom A-Z', icon: 'sort-alphabetical-ascending' },
-              ].map((sort) => (
-                <TouchableOpacity
-                  key={sort.value}
-                  style={[styles.sortButton, sortBy === sort.value && styles.sortButtonActive]}
-                  onPress={() => setSortBy(sort.value)}
-                >
-                  <MaterialCommunityIcons 
-                    name={sort.icon} 
-                    size={16} 
-                    color={sortBy === sort.value ? COLORS.white : COLORS.primary} 
-                  />
-                  <Text style={[styles.sortButtonText, sortBy === sort.value && styles.sortButtonTextActive]}>
-                    {sort.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
         </View>
       )}
     </View>
-  );
+  ), [
+    likedProductsDetails, sortedProducts, presentCategories,
+    filterCategory, sortBy,
+  ]);
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <LinearGradient
-        colors={['rgba(48, 160, 139, 0.05)', 'rgba(48, 160, 139, 0.02)']}
-        style={styles.emptyGradient}
-      >
-        <View style={styles.emptyIconContainer}>
-          <LinearGradient
-            colors={['#FF6B6B', '#EE5A6F']}
-            style={styles.emptyIconGradient}
-          >
-            <MaterialCommunityIcons name="heart-broken" size={48} color={COLORS.white} />
-          </LinearGradient>
-        </View>
-        
-        <Text style={styles.emptyTitle}>Aucun favori</Text>
-        <Text style={styles.emptySubtitle}>
-          Vous n'avez pas encore ajouté de produits à vos favoris.{'\n'}
-          Explorez notre catalogue et ajoutez vos coups de cœur ! 💚
-        </Text>
-        
-        <TouchableOpacity
-          style={styles.exploreButton}
-          onPress={() => navigation.navigate('MainTabs')}
-        >
-          <LinearGradient
-            colors={[COLORS.primary, COLORS.tertiary]}
-            style={styles.exploreButtonGradient}
-          >
-            <MaterialCommunityIcons name="compass" size={20} color={COLORS.white} />
-            <Text style={styles.exploreButtonText}>Découvrir des produits</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </LinearGradient>
-    </View>
-  );
+  // ─── Rendu : carte produit ───
+  const renderItem = useCallback(({ item }) => (
+    <ProductCard
+      item={item}
+      fadeAnim={fadeAnim}
+      onUnlike={handleUnlike}
+      onAddToCart={handleAddToCart}
+      onPress={() => navigation.navigate('ProductDetail', { product: item })}
+    />
+  ), [fadeAnim, handleUnlike, handleAddToCart, navigation]);
 
-  return (
-    <>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-      {!user && <View style={styles.statusBarBackground} />}
-      <View style={styles.container}>
-        {!user ? (
-          // Utilisateur non connecté
-          <ScrollView style={styles.notLoggedInContainer} showsVerticalScrollIndicator={false}>
-            <LinearGradient
-              colors={['#30A08B', '#2D9175', '#26805F']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.notLoggedInHeader}
-            >
-            <View style={styles.notLoggedInAvatarContainer}>
-              <View style={styles.notLoggedInAvatar}>
-                <MaterialCommunityIcons name="heart-multiple" size={60} color={COLORS.white} />
-              </View>
+  // ─── Rendu : écran non connecté ───
+  if (!user) {
+    return (
+      <>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <ScrollView style={{ flex: 1, backgroundColor: COLORS.white }} showsVerticalScrollIndicator={false}>
+          <LinearGradient
+            colors={['#30A08B', '#2D9175', '#26805F']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.guestHeader}
+          >
+            <View style={styles.guestAvatarWrap}>
+              <MaterialCommunityIcons name="heart-multiple" size={60} color={COLORS.white} />
             </View>
-            <Text style={styles.notLoggedInTitle}>Vos favoris vous attendent</Text>
-            <Text style={styles.notLoggedInSubtitle}>
-              Connectez-vous pour accéder à vos produits favoris
-            </Text>
+            <Text style={styles.guestTitle}>Vos favoris vous attendent</Text>
+            <Text style={styles.guestSub}>Connectez-vous pour accéder à vos produits favoris</Text>
           </LinearGradient>
 
-          <View style={styles.notLoggedInContent}>
+          <View style={styles.guestContent}>
             <TouchableOpacity
-              style={styles.loginButton}
+              style={styles.loginBtn}
               onPress={() => navigation.navigate('QuickAuth', {
                 pendingAction: 'open-favorites',
                 returnScreen: 'MainTabs',
@@ -485,15 +532,15 @@ export default function FavoritesScreen() {
                 colors={['#30A08B', '#26805F']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.loginButtonGradient}
+                style={styles.loginBtnGrad}
               >
-                <Ionicons name="log-in-outline" size={24} color={COLORS.white} />
-                <Text style={styles.loginButtonText}>Se connecter</Text>
+                <Ionicons name="log-in-outline" size={22} color={COLORS.white} />
+                <Text style={styles.loginBtnText}>Se connecter</Text>
               </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.registerButton}
+              style={styles.registerBtn}
               onPress={() => navigation.navigate('QuickAuth', {
                 pendingAction: 'open-favorites',
                 returnScreen: 'MainTabs',
@@ -501,38 +548,45 @@ export default function FavoritesScreen() {
               })}
               activeOpacity={0.8}
             >
-              <Text style={styles.registerButtonText}>Créer un compte</Text>
+              <Text style={styles.registerBtnText}>Créer un compte</Text>
             </TouchableOpacity>
 
-            <View style={styles.featuresContainer}>
+            <View style={styles.featuresBox}>
               <Text style={styles.featuresTitle}>Avec un compte, vous pouvez :</Text>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                <Text style={styles.featureText}>Sauvegarder vos produits préférés</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                <Text style={styles.featureText}>Accéder à vos favoris depuis tous vos appareils</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                <Text style={styles.featureText}>Recevoir des alertes sur les promotions</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                <Text style={styles.featureText}>Ajouter rapidement au panier</Text>
-              </View>
+              {[
+                'Sauvegarder vos produits préférés',
+                'Accéder à vos favoris depuis tous vos appareils',
+                'Recevoir des alertes sur les promotions',
+                'Ajouter rapidement au panier',
+              ].map((f, i) => (
+                <View key={i} style={styles.featureRow}>
+                  <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
+                  <Text style={styles.featureText}>{f}</Text>
+                </View>
+              ))}
             </View>
           </View>
         </ScrollView>
-      ) : (
+      </>
+    );
+  }
+
+  // ─── Rendu principal ───
+  return (
+    <>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <View style={styles.container}>
         <FlatList
           data={sortedProducts}
-          renderItem={renderProductCard}
+          renderItem={renderItem}
           keyExtractor={(item) => item._id}
           numColumns={2}
           ListHeaderComponent={renderHeader}
-          ListEmptyComponent={!loading && renderEmptyState}
+          ListEmptyComponent={
+            !loading
+              ? () => <EmptyState onExplore={() => navigation.navigate('MainTabs')} />
+              : null
+          }
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={sortedProducts.length > 0 ? styles.columnWrapper : null}
           refreshControl={
@@ -545,265 +599,219 @@ export default function FavoritesScreen() {
           }
           showsVerticalScrollIndicator={false}
         />
-      )}
-      
-      {/* Delete Confirmation Modal */}
-      <Modal
-        visible={showDeleteModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <LinearGradient
-              colors={['#FF6B6B', '#EE5A6F']}
-              style={styles.modalHeader}
-            >
-              <MaterialCommunityIcons name="heart-broken" size={32} color={COLORS.white} />
-            </LinearGradient>
-            
-            <View style={styles.modalBody}>
-              <Text style={styles.modalTitle}>Retirer des favoris ?</Text>
-              
-              {productToDelete && (
-                <View style={styles.modalProductInfo}>
-                  <Image 
-                    source={{ uri: productToDelete.image1 }}
-                    style={styles.modalProductImage}
-                  />
-                  <View style={styles.modalProductDetails}>
-                    <Text style={styles.modalProductName} numberOfLines={2}>
-                      {productToDelete.name}
-                    </Text>
-                    <Text style={styles.modalProductPrice}>
-                      {formatPrice(productToDelete.prixPromo > 0 ? productToDelete.prixPromo : productToDelete.prix)} CFA
-                    </Text>
-                  </View>
-                </View>
-              )}
-              
-              <Text style={styles.modalDescription}>
-                Êtes-vous sûr de vouloir retirer ce produit de vos favoris ?{'\n'}
-                Vous pourrez toujours l'ajouter à nouveau plus tard. 💫
-              </Text>
-              
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={() => setShowDeleteModal(false)}
-                >
-                  <Text style={styles.modalCancelText}>Annuler</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.modalConfirmButton}
-                  onPress={confirmDelete}
-                >
-                  <LinearGradient
-                    colors={['#FF6B6B', '#EE5A6F']}
-                    style={styles.modalConfirmGradient}
-                  >
-                    <Text style={styles.modalConfirmText}>Retirer</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
+
+        <DeleteModal
+          visible={showDeleteModal}
+          product={productToDelete}
+          onCancel={() => { setShowDeleteModal(false); setProductToDelete(null); }}
+          onConfirm={confirmDelete}
+        />
       </View>
     </>
   );
 }
 
+// ─────────────────────────────────────────────────────────
+//  Styles
+// ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.paleGreen,
+    backgroundColor: COLORS.bg,
   },
+
+  // ── Liste ──
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: 32,
   },
   columnWrapper: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: 12,
+    marginBottom: 14,
     justifyContent: 'space-between',
   },
-  
-  // Header Styles
-  headerContainer: {
-    marginBottom: 16,
-  },
-  headerGradient: {
-    paddingTop: 20,
-    paddingBottom: 24,
+
+  // ── Header gradient ──
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 56 : 20,
+    paddingBottom: 22,
     paddingHorizontal: 20,
   },
-  headerContent: {
-    gap: 20,
-  },
-  headerTop: {
+  headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    justifyContent: 'space-between',
+    marginBottom: 18,
   },
-  headerIconBadge: {
-    width: 56,
-    height: 56,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  headerIconBox: {
+    width: 52,
+    height: 52,
     borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '800',
     color: COLORS.white,
-    flex: 1,
+    letterSpacing: -0.3,
   },
+  headerSub: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  headerCountBadge: {
+    minWidth: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  headerCountText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+
+  // Mini stats dans le header
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  statNum: {
+    fontSize: 20,
+    fontWeight: '800',
     color: COLORS.white,
   },
-  statLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
+  statLbl: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
   },
-  statDivider: {
+  statSep: {
     width: 1,
-    height: 32,
+    height: 28,
     backgroundColor: 'rgba(255,255,255,0.3)',
+    alignSelf: 'center',
   },
-  
-  // Filters Styles
-  filtersButton: {
-    marginHorizontal: 16,
-    marginVertical: 12,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  filtersButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-    borderRadius: 12,
-  },
-  filtersButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  filtersButtonTextActive: {
-    color: COLORS.white,
-  },
-  filtersPanel: {
+
+  // ── Sections filtres / tri ──
+  section: {
     backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 16,
-    padding: 16,
-    elevation: 3,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  filterSection: {
-    marginBottom: 16,
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.darkGray,
-    marginBottom: 12,
-  },
-  categoriesScroll: {
-    gap: 8,
-  },
-  categoryChip: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.lightGray,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
+    paddingTop: 14,
+    paddingBottom: 10,
+    marginBottom: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  categoryChipActive: {
-    backgroundColor: COLORS.primary,
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.gray,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 10,
+  },
+
+  // Pills catégories
+  pillsRow: {
+    gap: 8,
+    paddingRight: 8,
+  },
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  pillActive: {
+    backgroundColor: '#E6F7F4',
     borderColor: COLORS.primary,
   },
-  categoryChipText: {
+  pillText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.gray,
+    color: COLORS.darkGray,
   },
-  categoryChipTextActive: {
-    color: COLORS.white,
+  pillTextActive: {
+    color: COLORS.primary,
   },
-  sortButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+
+  // Tri chips
+  sortScroll: {
     gap: 8,
+    paddingRight: 8,
   },
-  sortButton: {
+  sortChip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 10,
-    backgroundColor: COLORS.lightGray,
-    gap: 4,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
-  sortButtonActive: {
+  sortChipActive: {
     backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
-  sortButtonText: {
+  sortChipText: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
   },
-  sortButtonTextActive: {
+  sortChipTextActive: {
     color: COLORS.white,
   },
-  
-  // Card Styles
+
+  // Nb résultats
+  resultsRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: COLORS.bg,
+  },
+  resultsText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    fontWeight: '500',
+  },
+
+  // ── Carte produit ──
   cardWrapper: {
     width: CARD_WIDTH,
   },
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: 'hidden',
-    elevation: 4,
-    shadowColor: COLORS.black,
+    elevation: 3,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.09,
     shadowRadius: 8,
   },
   imageContainer: {
     width: '100%',
-    height: CARD_WIDTH,
+    height: CARD_WIDTH * 1.05,
     position: 'relative',
   },
   productImage: {
@@ -815,68 +823,52 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 60,
+    height: 56,
   },
   discountBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 10,
-    elevation: 3,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    top: 8,
+    left: 8,
+    backgroundColor: COLORS.red,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   discountText: {
+    fontSize: 11,
+    fontWeight: '800',
     color: COLORS.white,
-    fontSize: 10,
-    fontWeight: 'bold',
   },
-  heartButton: {
+  heartBtn: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    elevation: 4,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    top: 8,
+    right: 8,
   },
-  heartGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  heartBtnInner: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: COLORS.white,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  
-  // Product Info Styles
+
+  // Info produit
   productInfo: {
-    padding: 12,
-    gap: 6,
+    padding: 10,
+    gap: 5,
   },
-  brandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    gap: 4,
-  },
-  brandText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: COLORS.green,
+  brandLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.primary,
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   productName: {
     fontSize: 13,
@@ -888,62 +880,70 @@ const styles = StyleSheet.create({
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
-  ratingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.darkGray,
-  },
-  reviewCount: {
+  ratingCount: {
     fontSize: 10,
     color: COLORS.gray,
+    marginLeft: 3,
   },
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  priceColumn: {
-    flex: 1,
+    alignItems: 'baseline',
+    gap: 6,
+    flexWrap: 'wrap',
   },
   price: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    letterSpacing: 0.2,
-    flexShrink: 0,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111',
   },
   oldPrice: {
     fontSize: 11,
-    color: '#999',
+    color: '#AAA',
     textDecorationLine: 'line-through',
-    marginTop: 2,
     fontWeight: '400',
   },
-  addButton: {
-    elevation: 3,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  addButtonGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stockBadge: {
+
+  // Actions bas de carte
+  cardActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    gap: 4,
+    gap: 8,
+    marginTop: 4,
+  },
+  viewBtn: {
+    flex: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  viewBtnGradient: {
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  viewBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.white,
+    letterSpacing: 0.2,
+  },
+  trashBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+
+  // Stock
+  stockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   stockDot: {
     width: 6,
@@ -956,228 +956,207 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.green,
   },
-  outOfStockBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    gap: 4,
-  },
-  outOfStockText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.red,
-  },
-  
-  // Empty State Styles
+
+  // ── Empty state ──
   emptyContainer: {
-    flex: 1,
-    minHeight: 400,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   emptyGradient: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-    margin: 16,
-    borderRadius: 24,
+    padding: 32,
   },
-  emptyIconContainer: {
+  emptyIconWrap: {
     marginBottom: 20,
   },
-  emptyIconGradient: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  emptyIconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     justifyContent: 'center',
     alignItems: 'center',
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '800',
     color: COLORS.black,
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
     color: COLORS.gray,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
     marginBottom: 24,
+    maxWidth: 260,
   },
-  exploreButton: {
-    borderRadius: 12,
+  ctaBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
     elevation: 3,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  exploreButtonGradient: {
+  ctaBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
     paddingVertical: 14,
     gap: 8,
-    borderRadius: 12,
+    borderRadius: 14,
   },
-  exploreButtonText: {
+  ctaBtnText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.white,
   },
-  
-  // Modal Styles
+
+  // ── Modal suppression ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.52)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  modalContent: {
+  modalCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 20,
+    borderRadius: 22,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 380,
     overflow: 'hidden',
   },
-  modalHeader: {
-    padding: 20,
+  modalTop: {
+    paddingVertical: 22,
     alignItems: 'center',
   },
   modalBody: {
     padding: 20,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '800',
     color: COLORS.black,
     textAlign: 'center',
     marginBottom: 16,
   },
-  modalProductInfo: {
+  modalProductRow: {
     flexDirection: 'row',
-    backgroundColor: COLORS.lightGray,
-    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
     padding: 12,
-    marginBottom: 16,
+    marginBottom: 14,
+    gap: 12,
+    alignItems: 'center',
   },
-  modalProductImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  modalProductDetails: {
-    flex: 1,
-    justifyContent: 'center',
+  modalProductImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
   },
   modalProductName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.black,
     marginBottom: 4,
   },
   modalProductPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '800',
     color: COLORS.primary,
   },
-  modalDescription: {
-    fontSize: 14,
+  modalDesc: {
+    fontSize: 13,
     color: COLORS.gray,
-    lineHeight: 20,
     textAlign: 'center',
+    lineHeight: 20,
     marginBottom: 20,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
-  modalCancelButton: {
+  modalCancelBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: COLORS.lightGray,
     alignItems: 'center',
   },
   modalCancelText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: COLORS.gray,
   },
-  modalConfirmButton: {
+  modalConfirmBtn: {
     flex: 1,
     borderRadius: 12,
     overflow: 'hidden',
   },
-  modalConfirmGradient: {
-    paddingVertical: 12,
+  modalConfirmGrad: {
+    flexDirection: 'row',
+    paddingVertical: 13,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
   },
   modalConfirmText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: COLORS.white,
   },
-  
-  // Not Logged In Styles
-  notLoggedInContainer: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-  },
-  notLoggedInHeader: {
+
+  // ── Écran non connecté ──
+  guestHeader: {
     paddingTop: Platform.OS === 'ios' ? 70 : 60,
     paddingBottom: 40,
     paddingHorizontal: 20,
     alignItems: 'center',
   },
-  notLoggedInAvatarContainer: {
-    marginBottom: 20,
-  },
-  notLoggedInAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  guestAvatarWrap: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: COLORS.white,
+    marginBottom: 18,
   },
-  notLoggedInTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
+  guestTitle: {
+    fontSize: 24,
+    fontWeight: '800',
     color: COLORS.white,
+    textAlign: 'center',
     marginBottom: 8,
-    textAlign: 'center',
   },
-  notLoggedInSubtitle: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.9)',
+  guestSub: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.88)',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 21,
   },
-  notLoggedInContent: {
-    flex: 1,
+  guestContent: {
     padding: 20,
   },
-  loginButton: {
-    marginBottom: 16,
-    borderRadius: 12,
+  loginBtn: {
+    marginBottom: 14,
+    borderRadius: 14,
     overflow: 'hidden',
     elevation: 3,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
   },
-  loginButtonGradient: {
+  loginBtnGrad: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1185,45 +1164,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 10,
   },
-  loginButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+  loginBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
     color: COLORS.white,
   },
-  registerButton: {
-    marginBottom: 32,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+  registerBtn: {
+    marginBottom: 28,
+    paddingVertical: 15,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: COLORS.primary,
     alignItems: 'center',
   },
-  registerButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+  registerBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
     color: COLORS.primary,
   },
-  featuresContainer: {
-    backgroundColor: '#F8FFFE',
+  featuresBox: {
+    backgroundColor: '#F0FAF8',
     borderRadius: 16,
-    padding: 20,
+    padding: 18,
   },
   featuresTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: COLORS.black,
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  featureItem: {
+  featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
     gap: 12,
+    marginBottom: 14,
   },
   featureText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.darkGray,
     lineHeight: 20,
   },

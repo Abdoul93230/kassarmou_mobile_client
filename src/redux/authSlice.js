@@ -297,11 +297,6 @@ export const checkPhoneAvailability = createAsyncThunk(
   }
 );
 
-const extractDevOtp = (responseData = {}) => {
-  const data = responseData?.data || {};
-  return data?.devOTP || responseData?.devOTP || data?.otp || responseData?.otp || null;
-};
-
 // QuickAuth/OTP - enregistrement progressif utilise par RegisterScreen
 export const sendOtp = createAsyncThunk(
   'auth/sendOtp',
@@ -315,11 +310,7 @@ export const sendOtp = createAsyncThunk(
         phone,
         name: payload?.name || null,
       });
-      const baseData = response.data?.data || response.data || {};
-      return {
-        ...baseData,
-        devOTP: extractDevOtp(response.data),
-      };
+      return response.data?.data || response.data || {};
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Erreur lors de l\'envoi OTP');
     }
@@ -366,6 +357,8 @@ export const registerWithOtp = createAsyncThunk(
         phone,
         name: payload?.name,
         password: payload?.password,
+        code: payload?.code || payload?.otp || null,
+        ...(payload?.refCode ? { refCode: payload.refCode } : {}),
       });
 
       return response.data;
@@ -384,11 +377,7 @@ export const requestPasswordResetOtp = createAsyncThunk(
       }
 
       const response = await apiClient.post('/auth/request-password-reset-otp', { phone });
-      const baseData = response.data?.data || response.data || {};
-      return {
-        ...baseData,
-        devOTP: extractDevOtp(response.data),
-      };
+      return response.data?.data || response.data || {};
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Erreur lors de la demande OTP');
     }

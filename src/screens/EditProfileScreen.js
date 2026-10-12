@@ -19,6 +19,15 @@ import { useSelector } from 'react-redux';
 import apiClient from '../config/api';
 import ImageEditorModal from '../components/ImageEditorModal';
 import Toast from 'react-native-toast-message';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  PHONE_COUNTRIES,
+  applyPhoneInputChange,
+  getPhonePlaceholder,
+  parseStoredPhone,
+  toBackendPhone,
+  validatePhone,
+} from '../utils/phoneRules';
 
 const COLORS = {
   primary: '#30A08B',
@@ -34,19 +43,6 @@ const COLORS = {
   border: '#E2E8F0',
 };
 
-const countryCodes = [
-  { name: 'Niger', code: '+227', flag: '🇳🇪' },
-  { name: 'France', code: '+33', flag: '🇫🇷' },
-  { name: 'Mali', code: '+223', flag: '🇲🇱' },
-  { name: 'Burkina Faso', code: '+226', flag: '🇧🇫' },
-  { name: 'Sénégal', code: '+221', flag: '🇸🇳' },
-  { name: 'Côte d\'Ivoire', code: '+225', flag: '🇨🇮' },
-  { name: 'Bénin', code: '+229', flag: '🇧🇯' },
-  { name: 'Togo', code: '+228', flag: '🇹🇬' },
-  { name: 'Nigeria', code: '+234', flag: '🇳🇬' },
-  { name: 'Ghana', code: '+233', flag: '🇬🇭' },
-];
-
 const EditProfileScreen = ({ navigation }) => {
   const user = useSelector((state) => state.auth.user);
   const [loading, setLoading] = useState(true);
@@ -61,38 +57,12 @@ const EditProfileScreen = ({ navigation }) => {
     telephone: '',
     photo: null,
   });
-  const [selectedCountryCode, setSelectedCountryCode] = useState(countryCodes[0]);
+  const [selectedCountryCode, setSelectedCountryCode] = useState(DEFAULT_PHONE_COUNTRY);
   const [phoneNumberOnly, setPhoneNumberOnly] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [whatsapp, setWhatsapp] = useState(true);
 
-  // Fonction pour séparer le numéro de téléphone complet
-  const parsePhoneNumber = (fullPhoneNumber) => {
-    if (!fullPhoneNumber) {
-      return { countryCode: countryCodes[0], phoneOnly: '' };
-    }
-
-    const phoneStr = String(fullPhoneNumber).trim();
-
-    // Rechercher l'indicatif correspondant
-    const foundCountry = countryCodes.find(country => 
-      phoneStr.startsWith(country.code)
-    );
-
-    if (foundCountry) {
-      const phoneOnly = phoneStr.substring(foundCountry.code.length);
-      return { countryCode: foundCountry, phoneOnly };
-    }
-
-    // Si aucun indicatif trouvé, utiliser le premier par défaut
-    return { countryCode: countryCodes[0], phoneOnly: phoneStr };
-  };
-
-  // Fonction pour construire le numéro complet
-  const buildFullPhoneNumber = () => {
-    return phoneNumberOnly.trim() 
-      ? `${selectedCountryCode.code}${phoneNumberOnly.trim()}`
-      : '';
-  };
+  const buildFullPhoneNumber = () => toBackendPhone(selectedCountryCode, phoneNumberOnly);
 
   // Fetch user data
   useEffect(() => {
@@ -147,14 +117,14 @@ const EditProfileScreen = ({ navigation }) => {
 
       if (profileData) {
         const fullPhoneNumber = profileData?.numero || userResponse.data.user.phoneNumber || '';
-        const { countryCode, phoneOnly } = parsePhoneNumber(fullPhoneNumber);
+        const { country, display } = parseStoredPhone(fullPhoneNumber);
 
-        setSelectedCountryCode(countryCode);
-        setPhoneNumberOnly(phoneOnly);
+        setSelectedCountryCode(country);
+        setPhoneNumberOnly(display);
 
         setUserData(prev => ({
           ...prev,
-          telephone: phoneOnly,
+          telephone: display,
           photo: profileData?.image && 
                  profileData.image !== "https://chagona.onrender.com/images/image-1688253105925-0.jpeg"
             ? profileData.image
@@ -213,11 +183,13 @@ const EditProfileScreen = ({ navigation }) => {
       return false;
     }
 
-    if (!phoneNumberOnly || phoneNumberOnly.length < 8) {
+    const phoneValidation = validatePhone(selectedCountryCode, phoneNumberOnly, true);
+    setPhoneError(phoneValidation.message);
+    if (!phoneValidation.isValid) {
       Toast.show({
         type: 'error',
         text1: 'Erreur',
-        text2: 'Le numéro de téléphone doit contenir au moins 8 chiffres',
+        text2: phoneValidation.message,
       });
       return false;
     }
@@ -518,7 +490,7 @@ const EditProfileScreen = ({ navigation }) => {
                 disabled={isSubmitting}
               >
                 <Text style={styles.countryCodeText}>
-                  {selectedCountryCode.flag} {selectedCountryCode.code}
+                  {selectedCountryCode.flag} {selectedCountryCode.dialCode}
                 </Text>
                 <Ionicons
                   name={showCountryPicker ? 'chevron-up' : 'chevron-down'}
@@ -537,35 +509,45 @@ const EditProfileScreen = ({ navigation }) => {
                 <TextInput
                   style={styles.input}
                   value={phoneNumberOnly}
-                  onChangeText={(text) => setPhoneNumberOnly(text.replace(/[^0-9]/g, ''))}
-                  placeholder="90123456"
+                  onChangeText={(text) => {
+                    const next = applyPhoneInputChange(selectedCountryCode, text);
+                    setPhoneNumberOnly(next.display);
+                    const validation = validatePhone(selectedCountryCode, next.digits, true);
+                    setPhoneError(next.display ? validation.message : '');
+                  }}
+                  placeholder={getPhonePlaceholder(selectedCountryCode)}
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="phone-pad"
-                  maxLength={11}
+                  maxLength={selectedCountryCode.nationalLength + selectedCountryCode.groups.length - 1}
                   editable={!isSubmitting}
                 />
               </View>
             </View>
+            {phoneError ? <Text style={styles.errorTextInline}>{phoneError}</Text> : null}
 
             {/* Country Code Picker */}
             {showCountryPicker && (
               <View style={styles.countryPickerContainer}>
                 <ScrollView style={styles.countryList} nestedScrollEnabled>
-                  {countryCodes.map((country) => (
+                  {PHONE_COUNTRIES.map((country) => (
                     <TouchableOpacity
-                      key={country.code}
+                      key={country.dialCode}
                       style={[
                         styles.countryItem,
-                        selectedCountryCode.code === country.code && styles.countryItemSelected,
+                        selectedCountryCode.dialCode === country.dialCode && styles.countryItemSelected,
                       ]}
                       onPress={() => {
                         setSelectedCountryCode(country);
+                        const next = applyPhoneInputChange(country, phoneNumberOnly);
+                        setPhoneNumberOnly(next.display);
+                        const validation = validatePhone(country, next.digits, true);
+                        setPhoneError(next.display ? validation.message : '');
                         setShowCountryPicker(false);
                       }}
                     >
                       <Text style={styles.countryFlag}>{country.flag}</Text>
                       <Text style={styles.countryName}>{country.name}</Text>
-                      <Text style={styles.countryCodeInList}>{country.code}</Text>
+                      <Text style={styles.countryCodeInList}>{country.dialCode}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -779,6 +761,11 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
+  },
+  errorTextInline: {
+    fontSize: 12,
+    color: COLORS.error,
+    marginTop: 6,
   },
   countryPickerContainer: {
     marginTop: 8,

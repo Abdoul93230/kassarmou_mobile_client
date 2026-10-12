@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Alert,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
@@ -39,28 +40,70 @@ const getResponsiveValues = () => {
 
 const { columns: NUM_COLUMNS, cardMargin: CARD_MARGIN } = getResponsiveValues();
 const CARD_WIDTH = (width - (NUM_COLUMNS + 1) * CARD_MARGIN) / NUM_COLUMNS;
+const HERO_HEIGHT = 260;
 
 // Function to strip HTML tags from description
 const stripHtmlTags = (html) => {
   if (!html) return '';
   return html
-    .replace(/<[^>]*>/g, '') // Remove HTML tags
-    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
-    .replace(/&amp;/g, '&')  // Replace &amp; with &
-    .replace(/&lt;/g, '<')   // Replace &lt; with <
-    .replace(/&gt;/g, '>')   // Replace &gt; with >
-    .replace(/&quot;/g, '"') // Replace &quot; with "
-    .replace(/&#39;/g, "'")  // Replace &#39; with '
-    .replace(/\s+/g, ' ')    // Replace multiple spaces with single space
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
     .trim();
 };
 
 // Images de couverture par défaut pour les catégories sans image
 const DEFAULT_CATEGORY_IMAGES = {
-  'Promotions': 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80', // Sale/Promo
-  'Nouveautés': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80', // New arrivals
-  'default': 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&q=80', // Shopping bags
+  'Promotions': 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80',
+  'Nouveautés': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80',
+  'default': 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&q=80',
 };
+
+// ─── Skeleton Card ────────────────────────────────────────────────────────────
+const SkeletonCard = ({ pulse }) => {
+  const opacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.9],
+  });
+  return (
+    <View style={skeletonStyles.card}>
+      <Animated.View style={[skeletonStyles.image, { opacity }]} />
+      <View style={skeletonStyles.body}>
+        <Animated.View style={[skeletonStyles.line, { opacity, width: '80%' }]} />
+        <Animated.View style={[skeletonStyles.line, { opacity, width: '50%', marginTop: 6 }]} />
+        <Animated.View style={[skeletonStyles.line, { opacity, width: '35%', marginTop: 10, backgroundColor: '#c8e6e2' }]} />
+      </View>
+    </View>
+  );
+};
+
+const skeletonStyles = StyleSheet.create({
+  card: {
+    width: CARD_WIDTH,
+    margin: CARD_MARGIN / 2,
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  image: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#E0E0E0',
+  },
+  body: {
+    padding: 10,
+  },
+  line: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#E0E0E0',
+  },
+});
 
 export default function ProductListScreen() {
   const navigation = useNavigation();
@@ -69,26 +112,26 @@ export default function ProductListScreen() {
 
   const { categoryId, categoryName, marque, title, filter } = route.params || {};
   const decodedCategoryName = categoryName ? decodeURIComponent(categoryName) : null;
-  
+
   // Determine the display title
   const displayTitle = title || categoryName || 'Produits';
-  
+
   const products = useSelector((state) => state.products?.data || []);
   const categories = useSelector((state) => state.products?.categories || []);
-  const types = useSelector((state) => state.products?.types || []); // 👈 AJOUTER
+  const types = useSelector((state) => state.products?.types || []);
   const loading = useSelector((state) => state.products?.loading || false);
   const { likedProducts } = useSelector((state) => state.likes || { likedProducts: [] });
   const { user } = useSelector((state) => state.auth || {});
-  
+
   const [filteredProducts, setFilteredProducts] = useState([]);
-  const [displayedProducts, setDisplayedProducts] = useState([]); // Produits affichés avec pagination
+  const [displayedProducts, setDisplayedProducts] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const PRODUCTS_PER_PAGE = 10; // Charger 10 produits à la fois
-  
+  const PRODUCTS_PER_PAGE = 10;
+
   const [refreshing, setRefreshing] = useState(false);
   const [sortBy, setSortBy] = useState('default');
-  const [viewMode, setViewMode] = useState('grid'); // grid or list
+  const [viewMode, setViewMode] = useState('grid');
   const [scrollY] = useState(new Animated.Value(0));
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -96,6 +139,9 @@ export default function ProductListScreen() {
 
   // Animation pour le spinner de chargement
   const spinnerRotation = useState(new Animated.Value(0))[0];
+
+  // Skeleton pulse animation
+  const skeletonPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const spinAnimation = Animated.loop(
@@ -109,52 +155,56 @@ export default function ProductListScreen() {
     return () => spinAnimation.stop();
   }, []);
 
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(skeletonPulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(skeletonPulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [skeletonPulse]);
+
   const spin = spinnerRotation.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
   const typeToCategory = useMemo(() => {
-  const mapping = {};
-  types.forEach(type => {
-    mapping[type._id] = type.clefCategories;
-  });
-  return mapping;
-}, [types]);
+    const mapping = {};
+    types.forEach(type => {
+      mapping[type._id] = type.clefCategories;
+    });
+    return mapping;
+  }, [types]);
 
   // Get category details
   const currentCategory = useMemo(() => {
     if (categoryId) {
       return categories.find(cat => cat._id === categoryId);
     }
-
     if (decodedCategoryName) {
       return categories.find(
         (cat) => String(cat.name || '').toLowerCase() === decodedCategoryName.toLowerCase()
       );
     }
-
     return null;
   }, [categories, categoryId, decodedCategoryName]);
 
   const resolvedCategoryId = currentCategory?._id || categoryId;
 
-  // Obtenir l'image de couverture (catégorie, filter, ou défaut)
+  // Obtenir l'image de couverture
   const getCoverImage = useMemo(() => {
-    // Si la catégorie a une image, l'utiliser
     if (currentCategory?.image) {
       return currentCategory.image;
     }
-    
-    // Si c'est un filtre spécial (promo/nouveautés), utiliser l'image dédiée
     if (filter === 'promo' && categoryName === 'Promotions') {
       return DEFAULT_CATEGORY_IMAGES['Promotions'];
     }
     if (filter === 'new' && categoryName === 'Nouveautés') {
       return DEFAULT_CATEGORY_IMAGES['Nouveautés'];
     }
-    
-    // Sinon, utiliser l'image par défaut
     return DEFAULT_CATEGORY_IMAGES['default'];
   }, [currentCategory, filter, categoryName]);
 
@@ -168,7 +218,7 @@ export default function ProductListScreen() {
       filter,
     });
     dispatch(getProducts());
-    dispatch(getTypes()); 
+    dispatch(getTypes());
     if (user?.id) {
       dispatch(fetchUserLikes(user.id));
     }
@@ -177,62 +227,52 @@ export default function ProductListScreen() {
   useEffect(() => {
     if (products.length > 0) {
       let filtered = products;
-      
-      // Filter by special filters (promo, new)
+
       if (filter === 'promo') {
-        // Filter products with prixPromo > 0 (same logic as HomeScreen)
         filtered = filtered.filter((product) => product.prixPromo > 0);
         console.log('🎁 [ProductListScreen] Filtered by promo:', filtered.length);
       } else if (filter === 'new') {
-        // Take first 20 products (same logic as HomeScreen - latest products)
         filtered = products.slice(0, 20);
         console.log('✨ [ProductListScreen] Filtered by new:', filtered.length);
       }
-      
-      // Filter by category if categoryId is provided
+
       if (resolvedCategoryId) {
-      filtered = filtered.filter((product) => {
-        const productCategoryId = typeToCategory[product.ClefType];
-        return productCategoryId === resolvedCategoryId;
-      });
-      console.log('📦 [ProductListScreen] Filtered by category:', filtered.length);
-    }
-      
-      // Filter by marque if marque is provided
+        filtered = filtered.filter((product) => {
+          const productCategoryId = typeToCategory[product.ClefType];
+          return productCategoryId === resolvedCategoryId;
+        });
+        console.log('📦 [ProductListScreen] Filtered by category:', filtered.length);
+      }
+
       if (marque) {
         filtered = filtered.filter((product) => product.marque === marque);
         console.log('🏷️ [ProductListScreen] Filtered by marque:', marque, 'Count:', filtered.length);
       }
-      
+
       applyFiltersAndSort(filtered);
     }
   }, [products, resolvedCategoryId, marque, filter, sortBy, searchQuery, typeToCategory]);
 
   const applyFiltersAndSort = (productsToProcess) => {
     let filtered = [...productsToProcess];
-    
-    // Apply search filter
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter((product) => {
-        // Search in product name
         const nameMatch = product.name?.toLowerCase().includes(query);
-        
-        // Search in product description (strip HTML tags first)
         const cleanDescription = stripHtmlTags(product.description || '');
         const descriptionMatch = cleanDescription.toLowerCase().includes(query);
-        
         return nameMatch || descriptionMatch;
       });
       console.log('🔍 [Search] Query:', searchQuery, 'Results:', filtered.length);
     }
-    
+
     setSortedProducts(filtered);
   };
 
   const setSortedProducts = (productsToSort) => {
     let sorted = [...productsToSort];
-    
+
     switch (sortBy) {
       case 'price-asc':
         sorted.sort((a, b) => {
@@ -257,42 +297,36 @@ export default function ProductListScreen() {
       default:
         break;
     }
-    
+
     setFilteredProducts(sorted);
-    // Réinitialiser la pagination quand les filtres changent
     setCurrentPage(1);
     setDisplayedProducts(sorted.slice(0, PRODUCTS_PER_PAGE));
   };
 
-  // Effet pour mettre à jour les produits affichés quand filteredProducts change
   useEffect(() => {
     if (filteredProducts.length > 0) {
       setDisplayedProducts(filteredProducts.slice(0, currentPage * PRODUCTS_PER_PAGE));
     }
   }, [filteredProducts, currentPage]);
 
-  // Fonction pour charger plus de produits
   const loadMoreProducts = () => {
     if (isLoadingMore) return;
-    
+
     const totalProducts = filteredProducts.length;
     const currentlyDisplayed = displayedProducts.length;
-    
+
     if (currentlyDisplayed >= totalProducts) {
-      // Tous les produits sont déjà affichés
       return;
     }
-    
+
     setIsLoadingMore(true);
-    
-    // Simuler un délai de chargement pour l'expérience utilisateur
+
     setTimeout(() => {
       setCurrentPage(prev => prev + 1);
       setIsLoadingMore(false);
     }, 500);
   };
 
-  // Déterminer si on peut charger plus
   const hasMoreProducts = displayedProducts.length < filteredProducts.length;
 
   const onRefresh = useCallback(async () => {
@@ -308,14 +342,14 @@ export default function ProductListScreen() {
   const handleToggleLike = async (product, e) => {
     if (e) e.stopPropagation();
     const userId = user?.id || user?._id;
-    
+
     if (!userId) {
       Alert.alert('Connexion requise', 'Veuillez vous connecter pour ajouter des favoris');
       return;
     }
 
     console.log('❤️ Toggle like for product:', product._id, 'User:', userId);
-    
+
     try {
       await dispatch(toggleLike({ userId, product })).unwrap();
       console.log('✅ Like toggled successfully');
@@ -330,7 +364,7 @@ export default function ProductListScreen() {
     navigation.navigate('ProductDetail', { product });
   };
 
-  // Animated header values - Simplifié pour auto-height
+  // Animated header values
   const headerImageOpacity = scrollY.interpolate({
     inputRange: [0, 150],
     outputRange: [1, 0.3],
@@ -343,1047 +377,723 @@ export default function ProductListScreen() {
     extrapolate: 'clamp',
   });
 
+  // ─── Sort chips ──────────────────────────────────────────────────────────────
+  const SORT_OPTIONS = [
+    { key: 'default', label: 'Pertinence', icon: 'apps-outline' },
+    { key: 'price-asc', label: 'Prix ↑', icon: 'trending-up-outline' },
+    { key: 'price-desc', label: 'Prix ↓', icon: 'trending-down-outline' },
+    { key: 'name', label: 'Nom', icon: 'text-outline' },
+    { key: 'popularity', label: 'Popularité', icon: 'flame-outline' },
+  ];
+
   const renderSortOption = (option, label, icon) => (
     <TouchableOpacity
+      key={option}
       style={[styles.sortChip, sortBy === option && styles.sortChipActive]}
       onPress={() => setSortBy(option)}
       activeOpacity={0.7}
     >
-      <Ionicons
-        name={icon}
-        size={16}
-        color={sortBy === option ? '#FFF' : '#666'}
-      />
-      <Text style={[styles.sortChipText, sortBy === option && styles.sortChipTextActive]}>
-        {label}
-      </Text>
+      {sortBy === option ? (
+        <LinearGradient
+          colors={['#30A08B', '#26857A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.sortChipGradient}
+        >
+          <Ionicons name={icon} size={14} color="#FFF" />
+          <Text style={styles.sortChipTextActive}>{label}</Text>
+        </LinearGradient>
+      ) : (
+        <View style={styles.sortChipInner}>
+          <Ionicons name={icon} size={14} color="#888" />
+          <Text style={styles.sortChipText}>{label}</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
-  const renderProductCard = ({ item, index }) => {
+  // ─── Grid Card ───────────────────────────────────────────────────────────────
+  const renderGridCard = (item) => {
     const liked = isProductLiked(item._id);
-    
-    // Calculate prices
     const currentPrice = item.prixPromo > 0 ? item.prixPromo : item.prix;
     const hasPromotion = item.prixPromo > 0;
     const promoPercentage = hasPromotion
       ? Math.round(((item.prix - item.prixPromo) / item.prix) * 100)
       : 0;
-    
-    const isLimitedStock = item.stocks > 0 && item.stocks <= 10;
+    const isLimitedStock = item.stocks > 0 && item.stocks < 5;
     const isOutOfStock = item.stocks === 0;
 
     return (
       <TouchableOpacity
-        style={[
-          styles.productCard,
-          viewMode === 'list' && styles.productCardList
-        ]}
+        style={styles.gridCard}
         onPress={() => handleProductPress(item)}
-        activeOpacity={0.9}
+        activeOpacity={0.93}
       >
-        {/* Product Image */}
-        <View style={[
-          styles.imageContainer,
-          viewMode === 'list' && styles.imageContainerList
-        ]}>
+        {/* Image */}
+        <View style={styles.gridImageWrap}>
           <Image
             source={{ uri: item.image1 }}
-            style={styles.productImage}
+            style={styles.gridImage}
             resizeMode="cover"
           />
-          
-          {/* Like Button */}
-          <TouchableOpacity
-            style={styles.likeButton}
-            onPress={(e) => handleToggleLike(item, e)}
-          >
-            <LinearGradient
-              colors={liked ? ['#FF6B6B', '#FF8E8E'] : ['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.95)']}
-              style={styles.likeButtonGradient}
-            >
-              <Ionicons
-                name={liked ? 'heart' : 'heart-outline'}
-                size={20}
-                color={liked ? '#FFF' : '#666'}
-              />
-            </LinearGradient>
-          </TouchableOpacity>
 
-          {/* Promotion Badge */}
+          {/* Gradient bottom fade */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.18)']}
+            style={styles.gridImageFade}
+            pointerEvents="none"
+          />
+
+          {/* Promo badge */}
           {hasPromotion && !isOutOfStock && (
-            <LinearGradient
-              colors={['#FC913A', '#FFB366']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.promoBadge}
-            >
-              <Text style={styles.promoText}>-{promoPercentage}%</Text>
-            </LinearGradient>
+            <View style={styles.promoBadge}>
+              <Text style={styles.promoBadgeText}>-{promoPercentage}%</Text>
+            </View>
           )}
 
-          {/* Stock Badge */}
+          {/* Out of stock overlay */}
           {isOutOfStock && (
-            <View style={styles.outOfStockBadge}>
-              <Text style={styles.outOfStockText}>Épuisé</Text>
+            <View style={styles.outOfStockOverlay}>
+              <Text style={styles.outOfStockOverlayText}>Rupture</Text>
             </View>
           )}
+
+          {/* Limited stock badge */}
           {isLimitedStock && !isOutOfStock && (
-            <View style={styles.limitedStockBadge}>
-              <MaterialCommunityIcons name="alert" size={12} color="#FFF" />
-              <Text style={styles.limitedStockText}>Stock limité</Text>
+            <View style={styles.limitedBadge}>
+              <MaterialCommunityIcons name="fire" size={10} color="#FFF" />
+              <Text style={styles.limitedBadgeText}>Stock limité</Text>
             </View>
           )}
+
+          {/* Heart button */}
+          <TouchableOpacity
+            style={styles.heartBtn}
+            onPress={(e) => handleToggleLike(item, e)}
+            activeOpacity={0.8}
+          >
+            {liked ? (
+              <LinearGradient
+                colors={['#FF4D4D', '#FF7070']}
+                style={styles.heartBtnInner}
+              >
+                <Ionicons name="heart" size={16} color="#FFF" />
+              </LinearGradient>
+            ) : (
+              <View style={styles.heartBtnInnerWhite}>
+                <Ionicons name="heart-outline" size={16} color="#555" />
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Product Info */}
-        <View style={[
-          styles.productInfo,
-          viewMode === 'list' && styles.productInfoList
-        ]}>
-          <View style={{ flex: 1 }}>
-            <Text 
-              style={[
-                styles.productName,
-                viewMode === 'list' && { fontSize: 14, marginBottom: 4 }
-              ]} 
-              numberOfLines={2}
-            >
-              {item.name}
+        {/* Info */}
+        <View style={styles.gridInfo}>
+          {/* Brand */}
+          {item.marque ? (
+            <Text style={styles.gridBrand} numberOfLines={1}>{item.marque}</Text>
+          ) : null}
+
+          {/* Name */}
+          <Text style={styles.gridName} numberOfLines={2}>{item.name}</Text>
+
+          {/* Price row */}
+          <View style={styles.gridPriceRow}>
+            <Text style={[styles.gridPrice, isOutOfStock && { color: '#aaa' }]}>
+              {formatPrice(currentPrice)} CFA
             </Text>
-            
-            {/* Prix */}
-            <View style={styles.priceWrapper}>
-              <Text style={[styles.price, viewMode === 'list' && { fontSize: 17 }]}>
-                {formatPrice(currentPrice)} CFA
-              </Text>
-              {hasPromotion && (
-                <Text style={[styles.originalPrice, viewMode === 'list' && { fontSize: 13 }]}>
-                  {formatPrice(item.prix)} CFA
-                </Text>
-              )}
-            </View>
+            {hasPromotion && (
+              <Text style={styles.gridOldPrice}>{formatPrice(item.prix)}</Text>
+            )}
           </View>
 
-          {/* Actions pour le mode liste */}
-          {viewMode === 'list' && (
-            <View style={{ gap: 8 }}>
-              {item.stocks > 0 && (
-                <View style={styles.stockIndicator}>
-                  <MaterialCommunityIcons name="package-variant" size={13} color="#30A08B" />
-                  <Text style={styles.stockText}>{item.stocks}</Text>
-                </View>
-              )}
-              
-              {item.stocks > 0 && (
-                <TouchableOpacity style={styles.addToCartButton}>
-                  <LinearGradient
-                    colors={['#30A08B', '#62aca2']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.addToCartGradient}
-                  >
-                    <Ionicons name="cart" size={16} color="#FFF" />
-                    <Text style={styles.addToCartText}>Ajouter</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
-            </View>
+          {/* Cart button */}
+          {!isOutOfStock && (
+            <TouchableOpacity
+              style={styles.gridCartBtn}
+              onPress={() => handleProductPress(item)}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['#30A08B', '#26857A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gridCartGradient}
+              >
+                <Ionicons name="cart-outline" size={15} color="#FFF" />
+              </LinearGradient>
+            </TouchableOpacity>
           )}
         </View>
       </TouchableOpacity>
     );
   };
 
+  // ─── List Card ───────────────────────────────────────────────────────────────
+  const renderListCard = (item) => {
+    const liked = isProductLiked(item._id);
+    const currentPrice = item.prixPromo > 0 ? item.prixPromo : item.prix;
+    const hasPromotion = item.prixPromo > 0;
+    const promoPercentage = hasPromotion
+      ? Math.round(((item.prix - item.prixPromo) / item.prix) * 100)
+      : 0;
+    const isLimitedStock = item.stocks > 0 && item.stocks < 5;
+    const isOutOfStock = item.stocks === 0;
+
+    return (
+      <TouchableOpacity
+        style={styles.listCard}
+        onPress={() => handleProductPress(item)}
+        activeOpacity={0.93}
+      >
+        {/* Thumbnail */}
+        <View style={styles.listThumbWrap}>
+          <Image
+            source={{ uri: item.image1 }}
+            style={[styles.listThumb, isOutOfStock && { opacity: 0.5 }]}
+            resizeMode="cover"
+          />
+          {hasPromotion && !isOutOfStock && (
+            <View style={styles.listPromoBadge}>
+              <Text style={styles.promoBadgeText}>-{promoPercentage}%</Text>
+            </View>
+          )}
+          {isOutOfStock && (
+            <View style={styles.listOutOfStockOverlay}>
+              <Text style={styles.outOfStockOverlayText}>Rupture</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Details */}
+        <View style={styles.listDetails}>
+          {item.marque ? (
+            <Text style={styles.listBrand} numberOfLines={1}>{item.marque}</Text>
+          ) : null}
+          <Text style={styles.listName} numberOfLines={2}>{item.name}</Text>
+
+          <View style={styles.listPriceRow}>
+            <Text style={[styles.listPrice, isOutOfStock && { color: '#aaa' }]}>
+              {formatPrice(currentPrice)} CFA
+            </Text>
+            {hasPromotion && (
+              <Text style={styles.listOldPrice}>{formatPrice(item.prix)} CFA</Text>
+            )}
+          </View>
+
+          {/* Stock badges */}
+          <View style={styles.listBadgeRow}>
+            {isLimitedStock && !isOutOfStock && (
+              <View style={styles.limitedBadgeList}>
+                <MaterialCommunityIcons name="fire" size={10} color="#FFF" />
+                <Text style={styles.limitedBadgeText}>Stock limité</Text>
+              </View>
+            )}
+            {isOutOfStock && (
+              <View style={styles.outOfStockBadgeList}>
+                <Text style={styles.outOfStockBadgeText}>Rupture de stock</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Right actions */}
+        <View style={styles.listActions}>
+          <TouchableOpacity
+            style={styles.listHeartBtn}
+            onPress={(e) => handleToggleLike(item, e)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={liked ? 'heart' : 'heart-outline'}
+              size={18}
+              color={liked ? '#EF4444' : '#aaa'}
+            />
+          </TouchableOpacity>
+
+          {!isOutOfStock && (
+            <TouchableOpacity
+              style={styles.listCartBtn}
+              onPress={() => handleProductPress(item)}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['#30A08B', '#26857A']}
+                style={styles.listCartGradient}
+              >
+                <Ionicons name="cart-outline" size={16} color="#FFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // ─── Unified renderItem ──────────────────────────────────────────────────────
+  const renderProductCard = ({ item }) => {
+    if (viewMode === 'grid') return renderGridCard(item);
+    return renderListCard(item);
+  };
+
+  // ─── Empty state ─────────────────────────────────────────────────────────────
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <LinearGradient
-        colors={['#F8F9FA', '#FFFFFF']}
-        style={styles.emptyGradient}
+      <View style={styles.emptyIconWrap}>
+        <MaterialCommunityIcons name="package-variant-closed" size={72} color="#C8E6E2" />
+      </View>
+      <Text style={styles.emptyTitle}>Aucun produit trouvé</Text>
+      <Text style={styles.emptySubtitle}>
+        {searchQuery.trim()
+          ? `Aucun résultat pour "${searchQuery}"`
+          : marque
+            ? `Aucun produit de la marque "${marque}" disponible`
+            : filter
+              ? 'Aucun produit dans ce filtre pour le moment'
+              : 'Aucun produit disponible dans cette catégorie'}
+      </Text>
+      <TouchableOpacity
+        style={styles.emptyButton}
+        onPress={() => navigation.goBack()}
+        activeOpacity={0.85}
       >
-        <MaterialCommunityIcons name="package-variant-closed" size={100} color="#E0E0E0" />
-        <Text style={styles.emptyTitle}>Aucun produit</Text>
-        <Text style={styles.emptySubtitle}>
-          {marque 
-            ? `Aucun produit de la marque "${marque}" disponible pour le moment`
-            : 'Aucun produit disponible dans cette catégorie pour le moment'
-          }
-        </Text>
-        <TouchableOpacity 
-          style={styles.emptyButton}
-          onPress={() => navigation.goBack()}
+        <LinearGradient
+          colors={['#30A08B', '#26857A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.emptyButtonGradient}
         >
-          <LinearGradient
-            colors={['#30A08B', '#62aca2']}
-            style={styles.emptyButtonGradient}
-          >
-            <Text style={styles.emptyButtonText}>Retour aux catégories</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </LinearGradient>
+          <Ionicons name="arrow-back" size={16} color="#FFF" />
+          <Text style={styles.emptyButtonText}>Retour aux catégories</Text>
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 
-  return (
+  // ─── Skeleton loading grid ───────────────────────────────────────────────────
+  const renderSkeletonGrid = () => (
+    <View style={styles.skeletonGrid}>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <SkeletonCard key={i} pulse={skeletonPulse} />
+      ))}
+    </View>
+  );
+
+  // ─── Header component ────────────────────────────────────────────────────────
+  const renderListHeader = () => (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
-      <View style={styles.statusBarBackground} />
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        {/* Search Bar or Sticky Bar - Mode recherche remplace la sticky bar */}
-      {showStickyBar && (
-        <>
-          {!showSearchBar ? (
-            // Sticky Bar normale
-            <View style={styles.stickyBar}>
+      {/* ── Hero ── */}
+      <View style={styles.heroHeader}>
+        <Animated.Image
+          source={{ uri: getCoverImage }}
+          style={[styles.heroImage, { opacity: headerImageOpacity }]}
+          resizeMode="cover"
+        />
+
+        {/* Dark gradient overlay */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.55)']}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+
+        <View style={styles.heroContent}>
+          {/* Top bar */}
+          <View style={styles.heroTopBar}>
+            <TouchableOpacity
+              style={styles.heroBackBtn}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="arrow-back" size={22} color="#FFF" />
+            </TouchableOpacity>
+
+            <View style={styles.heroTopActions}>
               <TouchableOpacity
-                style={styles.stickyBackButton}
-                onPress={() => navigation.goBack()}
+                style={styles.heroActionBtn}
+                onPress={() => setShowSearchBar(!showSearchBar)}
+                activeOpacity={0.8}
               >
-                <Ionicons name="arrow-back" size={22} color="#FFF" />
+                <Ionicons name={showSearchBar ? 'close' : 'search'} size={20} color="#FFF" />
               </TouchableOpacity>
-              
-              <Text style={styles.stickyTitle} numberOfLines={1}>
-                {displayTitle}
+              <TouchableOpacity
+                style={styles.heroActionBtn}
+                onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={viewMode === 'grid' ? 'list-outline' : 'grid-outline'} size={20} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Title block */}
+          {!showSearchBar ? (
+            <Animated.View style={[styles.heroTitleBlock, { transform: [{ scale: headerTitleScale }] }]}>
+              <Text style={styles.heroTitle} numberOfLines={2}>{displayTitle}</Text>
+              <Text style={styles.heroSubtitle}>
+                {filteredProducts.length} produit{filteredProducts.length !== 1 ? 's' : ''}
+                {filteredProducts.length > 0
+                  ? `  •  Dès ${formatPrice(Math.min(...filteredProducts.map(p => p.prixPromo > 0 ? p.prixPromo : p.prix)))} CFA`
+                  : ''}
               </Text>
-              
+
+              {/* Integrated search bar */}
+              <View style={styles.heroSearchBar}>
+                <Ionicons name="search" size={16} color="#888" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.heroSearchInput}
+                  placeholder={`Rechercher dans ${displayTitle}...`}
+                  placeholderTextColor="#999"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  returnKeyType="search"
+                  onFocus={() => setShowSearchBar(true)}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                    <Ionicons name="close-circle" size={18} color="#bbb" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Animated.View>
+          ) : (
+            // Expanded search mode
+            <View style={styles.heroSearchExpanded}>
+              <View style={styles.heroSearchExpandedBar}>
+                <Ionicons name="search" size={18} color="#30A08B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.heroSearchExpandedInput}
+                  placeholder={`Rechercher dans ${displayTitle}...`}
+                  placeholderTextColor="#999"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoFocus
+                  returnKeyType="search"
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                    <Ionicons name="close-circle" size={18} color="#bbb" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              {searchQuery.trim() ? (
+                <Text style={styles.heroSearchCount}>
+                  {filteredProducts.length} résultat{filteredProducts.length !== 1 ? 's' : ''} trouvé{filteredProducts.length !== 1 ? 's' : ''}
+                </Text>
+              ) : null}
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* ── Sticky filter bar ── */}
+      <View style={styles.filterBar}>
+        {/* Sort chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {SORT_OPTIONS.map(({ key, label, icon }) => renderSortOption(key, label, icon))}
+        </ScrollView>
+
+        {/* Right side: count + view toggle */}
+        <View style={styles.filterRight}>
+          <Text style={styles.filterCount}>{filteredProducts.length}</Text>
+          <View style={styles.viewToggle}>
+            <TouchableOpacity
+              style={[styles.viewToggleBtn, viewMode === 'grid' && styles.viewToggleBtnActive]}
+              onPress={() => setViewMode('grid')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="grid" size={15} color={viewMode === 'grid' ? '#30A08B' : '#bbb'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewToggleBtn, viewMode === 'list' && styles.viewToggleBtnActive]}
+              onPress={() => setViewMode('list')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="list" size={17} color={viewMode === 'list' ? '#30A08B' : '#bbb'} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </>
+  );
+
+  // ─── Footer component ────────────────────────────────────────────────────────
+  const renderListFooter = () => {
+    if (loading && displayedProducts.length === 0) return null;
+
+    if (hasMoreProducts) {
+      return (
+        <View style={styles.footerWrap}>
+          {isLoadingMore ? (
+            <View style={styles.footerLoading}>
+              <ActivityIndicator size="small" color="#30A08B" />
+              <Text style={styles.footerLoadingText}>Chargement...</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.loadMoreBtn}
+              onPress={loadMoreProducts}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['#30A08B', '#26857A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.loadMoreGradient}
+              >
+                <Ionicons name="reload-outline" size={16} color="#FFF" style={{ marginRight: 8 }} />
+                <Text style={styles.loadMoreText}>
+                  Charger plus ({filteredProducts.length - displayedProducts.length} restants)
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.footerPageCount}>
+            {displayedProducts.length} / {filteredProducts.length} produits
+          </Text>
+        </View>
+      );
+    }
+
+    if (filteredProducts.length > 0) {
+      return (
+        <View style={styles.endOfListWrap}>
+          <View style={styles.endOfListLine} />
+          <View style={styles.endOfListBadge}>
+            <Ionicons name="checkmark-circle" size={16} color="#30A08B" />
+            <Text style={styles.endOfListText}>
+              Tous les {filteredProducts.length} produits affichés
+            </Text>
+          </View>
+          <View style={styles.endOfListLine} />
+        </View>
+      );
+    }
+
+    return null;
+  };
+
+  // ─── Sticky top bar (when scrolled) ─────────────────────────────────────────
+  const renderStickyBar = () => {
+    if (!showStickyBar) return null;
+    return (
+      <View style={styles.stickyBar}>
+        <LinearGradient
+          colors={['#30A08B', '#26857A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.stickyBarGradient}
+        >
+          <TouchableOpacity
+            style={styles.stickyBackButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={20} color="#FFF" />
+          </TouchableOpacity>
+
+          {!showSearchBar ? (
+            <>
+              <Text style={styles.stickyTitle} numberOfLines={1}>{displayTitle}</Text>
               <View style={styles.stickyActions}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.stickyActionButton}
                   onPress={() => setShowSearchBar(true)}
                 >
-                  <Ionicons name="search" size={20} color="#FFF" />
+                  <Ionicons name="search" size={19} color="#FFF" />
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.stickyActionButton}
                   onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
                 >
-                  <Ionicons 
-                    name={viewMode === 'grid' ? 'list' : 'grid'} 
-                    size={20} 
-                    color="#FFF" 
+                  <Ionicons
+                    name={viewMode === 'grid' ? 'list-outline' : 'grid-outline'}
+                    size={19}
+                    color="#FFF"
                   />
                 </TouchableOpacity>
               </View>
-            </View>
+            </>
           ) : (
-            // Mode recherche - Remplace la sticky bar
-            <View style={styles.searchStickyBar}>
-              <View style={styles.searchStickyContent}>
-                <TouchableOpacity
-                  style={styles.searchBackButton}
-                  onPress={() => {
-                    setShowSearchBar(false);
-                    setSearchQuery('');
-                  }}
-                >
-                  <Ionicons name="arrow-back" size={22} color="#FFF" />
-                </TouchableOpacity>
-                
-                <View style={styles.searchStickyInputWrapper}>
-                  <Ionicons name="search" size={18} color="rgba(255,255,255,0.7)" />
-                  <TextInput
-                    style={styles.searchStickyInput}
-                    placeholder="Rechercher..."
-                    placeholderTextColor="rgba(255,255,255,0.6)"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    returnKeyType="search"
-                  />
-                  {searchQuery.length > 0 && (
-                    <TouchableOpacity 
-                      onPress={() => setSearchQuery('')}
-                      style={styles.searchClearButton}
-                    >
-                      <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.7)" />
-                    </TouchableOpacity>
-                  )}
-                </View>
+            <View style={styles.searchStickyContent}>
+              <TouchableOpacity
+                style={styles.searchBackButton}
+                onPress={() => {
+                  setShowSearchBar(false);
+                  setSearchQuery('');
+                }}
+              >
+                <Ionicons name="arrow-back" size={20} color="#FFF" />
+              </TouchableOpacity>
+              <View style={styles.searchStickyInputWrapper}>
+                <Ionicons name="search" size={16} color="rgba(255,255,255,0.7)" />
+                <TextInput
+                  style={styles.searchStickyInput}
+                  placeholder="Rechercher..."
+                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  returnKeyType="search"
+                  autoFocus
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClearButton}>
+                    <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.7)" />
+                  </TouchableOpacity>
+                )}
               </View>
-              
-              {searchQuery.trim() && (
+              {searchQuery.trim() ? (
                 <View style={styles.searchResultBadge}>
                   <Text style={styles.searchResultBadgeText}>
-                    {filteredProducts.length} résultat{filteredProducts.length > 1 ? 's' : ''}
+                    {filteredProducts.length}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </View>
           )}
-        </>
-      )}
-      
-      {/* Product List avec Header intégré et Pagination Infinie */}
-      <Animated.FlatList
-        data={displayedProducts}
-        renderItem={renderProductCard}
-        keyExtractor={(item) => item._id}
-        numColumns={viewMode === 'grid' ? NUM_COLUMNS : 1}
-        key={viewMode}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={!loading ? renderEmptyState : null}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#30A08B']}
-            tintColor="#30A08B"
-          />
-        }
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { 
-            useNativeDriver: false,
-            listener: (event) => {
-              const offsetY = event.nativeEvent.contentOffset.y;
-              setShowStickyBar(offsetY > 180);
-            }
-          }
-        )}
-        scrollEventThrottle={16}
-        onEndReached={loadMoreProducts}
-        onEndReachedThreshold={0.3}
-        ListFooterComponent={
-          hasMoreProducts ? (
-            <View style={styles.loadingMoreContainer}>
-              <View style={styles.loadingMoreContent}>
-                <View style={styles.loadingSpinner}>
-                  <Animated.View style={[styles.spinner, { transform: [{ rotate: spin }] }]} />
-                </View>
-                <Text style={styles.loadingMoreText}>
-                  Chargement de plus de produits...
-                </Text>
-                <Text style={styles.loadingMoreSubtext}>
-                  {displayedProducts.length} / {filteredProducts.length} produits
-                </Text>
-              </View>
-            </View>
-          ) : filteredProducts.length > 0 ? (
-            <View style={styles.endOfListContainer}>
-              <View style={styles.endOfListContent}>
-                <MaterialCommunityIcons name="check-circle" size={24} color="#30A08B" />
-                <Text style={styles.endOfListText}>
-                  Tous les produits affichés
-                </Text>
-                <Text style={styles.endOfListSubtext}>
-                  {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''} au total
-                </Text>
-              </View>
-            </View>
-          ) : null
-        }
-        ListHeaderComponent={
-          <>
-            {/* Animated Hero Header - Auto Height */}
-            <View style={styles.heroHeader}>
-              {/* Image de couverture (catégorie ou par défaut) */}
-              <Animated.Image
-                source={{ uri: getCoverImage }}
-                style={[styles.heroImage, { opacity: headerImageOpacity }]}
-                resizeMode="cover"
-                blurRadius={0}
-              />
-              {/* Dark overlay for better text visibility */}
-              <View style={styles.darkOverlay} />
-              
-              {/* Mode normal ou mode recherche */}
-              {!showSearchBar ? (
-                // Contenu normal du header
-                <View style={styles.heroGradient}>
-                  {/* Top Bar */}
-                  <View style={styles.heroTopBar}>
-                    <TouchableOpacity
-                      style={styles.backButton}
-                      onPress={() => navigation.goBack()}
-                    >
-                      <View style={styles.backButtonGradient}>
-                        <Ionicons name="arrow-back" size={24} color="#FFF" />
-                      </View>
-                    </TouchableOpacity>
-                    
-                    <View style={styles.heroActions}>
-                      <TouchableOpacity 
-                        style={styles.actionButton}
-                        onPress={() => setShowSearchBar(true)}
-                      >
-                        <View style={styles.actionButtonGradient}>
-                          <Ionicons name="search" size={20} color="#FFF" />
-                        </View>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={styles.actionButton}
-                        onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                      >
-                        <View style={styles.actionButtonGradient}>
-                          <Ionicons 
-                            name={viewMode === 'grid' ? 'list' : 'grid'} 
-                            size={20} 
-                            color="#FFF" 
-                          />
-                        </View>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  
-                  {/* Category Title */}
-                  <Animated.View style={[styles.heroTitleContainer, { transform: [{ scale: headerTitleScale }] }]}>
-                    <View style={styles.categoryBadge}>
-                      <MaterialCommunityIcons 
-                        name={marque ? "shield-check" : "tag"} 
-                        size={16} 
-                        color="#FFFFFF" 
-                      />
-                      <Text style={styles.categoryBadgeText}>
-                        {marque ? 'Marque' : 'Catégorie'}
-                      </Text>
-                    </View>
-                    
-                    <Text style={styles.heroTitle} numberOfLines={2}>
-                      {displayTitle}
-                    </Text>
-                  </Animated.View>
-                  
-                  {/* Stats */}
-                  <View style={styles.heroStatsWrapper}>
-                    <View style={styles.heroStats}>
-                      <View style={styles.statItem}>
-                        <View style={styles.statIconBadge}>
-                          <Ionicons name="cube" size={13} color="#30A08B" />
-                        </View>
-                        <Text style={styles.statText}>
-                          {filteredProducts.length} {filteredProducts.length === 1 ? 'produit' : 'produits'}
-                        </Text>
-                      </View>
-                      
-                      {filteredProducts.length > 0 && (
-                        <>
-                          <View style={styles.statDivider} />
-                          
-                          <View style={styles.statItem}>
-                            <View style={styles.statIconBadge}>
-                              <Ionicons name="pricetag" size={13} color="#FC913A" />
-                            </View>
-                            <Text style={styles.statText}>
-                              Dès {formatPrice(Math.min(...filteredProducts.map(p => p.prixPromo > 0 ? p.prixPromo : p.prix)))} CFA
-                            </Text>
-                          </View>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              ) : (
-                // Mode recherche dans le header
-                <View style={styles.heroSearchMode}>
-                  <View style={styles.heroSearchTopBar}>
-                    <TouchableOpacity
-                      style={styles.backButton}
-                      onPress={() => {
-                        setShowSearchBar(false);
-                        setSearchQuery('');
-                      }}
-                    >
-                      <View style={styles.backButtonGradient}>
-                        <Ionicons name="arrow-back" size={24} color="#FFF" />
-                      </View>
-                    </TouchableOpacity>
-                    
-                    <View style={styles.heroSearchInputContainer}>
-                      <Ionicons name="search" size={20} color="rgba(255,255,255,0.8)" style={styles.heroSearchIcon} />
-                      <TextInput
-                        style={styles.heroSearchInput}
-                        placeholder="Rechercher dans cette catégorie..."
-                        placeholderTextColor="rgba(255,255,255,0.6)"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        autoFocus={true}
-                        returnKeyType="search"
-                      />
-                      {searchQuery.length > 0 && (
-                        <TouchableOpacity 
-                          onPress={() => setSearchQuery('')}
-                          style={styles.heroSearchClear}
-                        >
-                          <Ionicons name="close-circle" size={20} color="rgba(255,255,255,0.8)" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                  
-                  {searchQuery.trim() && (
-                    <View style={styles.heroSearchResults}>
-                      <View style={styles.heroSearchResultBadge}>
-                        <Ionicons name="checkmark-circle" size={16} color="#FFF" />
-                        <Text style={styles.heroSearchResultText}>
-                          {filteredProducts.length} résultat{filteredProducts.length > 1 ? 's' : ''} trouvé{filteredProducts.length > 1 ? 's' : ''}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
+        </LinearGradient>
+      </View>
+    );
+  };
 
-            {/* Sort & Filter Bar */}
-            <View style={styles.filterBar}>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterContent}
-              >
-                {renderSortOption('default', 'Défaut', 'apps')}
-                {renderSortOption('price-asc', 'Prix ↑', 'arrow-up')}
-                {renderSortOption('price-desc', 'Prix ↓', 'arrow-down')}
-                {renderSortOption('name', 'Nom', 'text')}
-                {renderSortOption('popularity', 'Populaire', 'flame')}
-              </ScrollView>
-            </View>
+  // ─── Render ──────────────────────────────────────────────────────────────────
+  return (
+    <>
+      <StatusBar barStyle="light-content" backgroundColor="#30A08B" translucent />
+      <View style={styles.statusBarBackground} />
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        {renderStickyBar()}
+
+        {loading && displayedProducts.length === 0 ? (
+          <>
+            {renderListHeader()}
+            {renderSkeletonGrid()}
           </>
-        }
-      />
+        ) : (
+          <Animated.FlatList
+            data={displayedProducts}
+            renderItem={renderProductCard}
+            keyExtractor={(item) => item._id}
+            numColumns={viewMode === 'grid' ? NUM_COLUMNS : 1}
+            key={viewMode}
+            contentContainerStyle={[
+              styles.listContent,
+              viewMode === 'list' && styles.listContentList,
+            ]}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={!loading ? renderEmptyState : null}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#30A08B']}
+                tintColor="#30A08B"
+              />
+            }
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              {
+                useNativeDriver: false,
+                listener: (event) => {
+                  const offsetY = event.nativeEvent.contentOffset.y;
+                  setShowStickyBar(offsetY > HERO_HEIGHT - 60);
+                },
+              }
+            )}
+            scrollEventThrottle={16}
+            onEndReached={loadMoreProducts}
+            onEndReachedThreshold={0.3}
+            ListHeaderComponent={renderListHeader}
+            ListFooterComponent={renderListFooter}
+          />
+        )}
       </SafeAreaView>
     </>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  // ── Layout ──
   statusBarBackground: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: Platform.OS === 'ios' ? 50 : 0,
+    height: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight || 0,
     backgroundColor: '#30A08B',
     zIndex: 1000,
   },
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F2F4F6',
   },
-  // Sticky Bar Styles
+
+  // ── Sticky bar ──
   stickyBar: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 60,
-    backgroundColor: '#30A08B',
+    zIndex: 900,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+  },
+  stickyBarGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
-    zIndex: 1000,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 0) + 11,
+    gap: 10,
   },
   stickyBackButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  stickyTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFF',
-    textAlign: 'center',
-  },
-  stickyActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  stickyActionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Hero Header Styles
-  heroHeader: {
-    width: '100%',
-    minHeight: 200,
-    overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  heroImage: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-  },
-  darkOverlay: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.15)',
-  },
-  heroGradient: {
-    width: '100%',
-    paddingTop: Platform.OS === 'ios' ? 70 : (StatusBar.currentHeight || 0) + 10,
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  heroTopBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    overflow: 'hidden',
-  },
-  backButtonGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.7)',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 22,
-  },
-  heroTitleContainer: {
-    marginVertical: 20,
-    minHeight: 80,
-  },
-  categoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginBottom: 18,
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  categoryBadgeText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 0,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 10,
-    lineHeight: 40,
-  },
-  heroStatsWrapper: {
-    paddingTop: 20,
-    borderTopWidth: 1.5,
-    borderTopColor: 'rgba(255,255,255,0.35)',
-    marginTop: 10,
-  },
-  heroStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    flexWrap: 'wrap',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: 'rgba(255,255,255,0.30)',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.45)',
-  },
-  statIconBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  statDivider: {
-    width: 1.5,
-    height: 22,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  heroActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  actionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    overflow: 'hidden',
-  },
-  actionButtonGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.7)',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 22,
-  },
-  // Filter Bar Styles
-  filterBar: {
-    backgroundColor: '#FFF',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  filterContent: {
-    paddingHorizontal: 15,
-    gap: 10,
-  },
-  sortChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 25,
-    backgroundColor: '#F5F5F5',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  sortChipActive: {
-    backgroundColor: '#30A08B',
-    borderColor: '#30A08B',
-  },
-  sortChipText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '600',
-  },
-  sortChipTextActive: {
-    color: '#FFF',
-  },
-  // Product List Styles
-  listContent: {
-    padding: CARD_MARGIN,
-  },
-  productCard: {
-    width: CARD_WIDTH,
-    margin: CARD_MARGIN / 2,
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#30A08B',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(48, 160, 139, 0.06)',
-  },
-  productCardList: {
-    width: width - (CARD_MARGIN * 2),
-    flexDirection: 'row',
-    height: 150,
-    marginVertical: CARD_MARGIN / 2,
-    marginHorizontal: CARD_MARGIN,
-  },
-  imageContainer: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: '#f8f9fa',
-    position: 'relative',
-    borderTopLeftRadius: 13,
-    borderTopRightRadius: 13,
-    overflow: 'hidden',
-  },
-  imageContainerList: {
-    width: 120,
-    height: '100%',
-    aspectRatio: undefined,
-    alignSelf: 'stretch',
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  likeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-  },
-  likeButtonGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  promoBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    elevation: 2,
-  },
-  promoText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  outOfStockBadge: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    backgroundColor: 'rgba(244,67,54,0.95)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  outOfStockText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  limitedStockBadge: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    backgroundColor: 'rgba(255,152,0,0.95)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  limitedStockText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  productInfo: {
-    padding: 12,
-    backgroundColor: '#FFF',
-  },
-  productInfoList: {
-    flex: 1,
-    padding: 12,
-    justifyContent: 'space-between',
-  },
-  productName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
-    lineHeight: 20,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  priceWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  price: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    letterSpacing: 0.2,
-    flexShrink: 0,
-  },
-  originalPrice: {
-    fontSize: 12,
-    color: '#999',
-    textDecorationLine: 'line-through',
-    fontWeight: '400',
-  },
-  stockIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F0F9F7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  stockText: {
-    fontSize: 11,
-    color: '#30A08B',
-    fontWeight: '600',
-  },
-  addToCartButton: {
-    marginTop: 8,
-    borderRadius: 20,
-    overflow: 'hidden',
-    alignSelf: 'stretch',
-  },
-  addToCartGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    gap: 6,
-  },
-  addToCartText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  // Empty State Styles
-  emptyContainer: {
-    flex: 1,
-    minHeight: 400,
-  },
-  emptyGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 20,
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: '#999',
-    marginTop: 10,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  emptyButton: {
-    marginTop: 30,
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  emptyButtonGradient: {
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-  },
-  emptyButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  // Search Bar Styles
-  searchBarContainer: {
-    backgroundColor: '#FFF',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    zIndex: 999,
-  },
-  searchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-    paddingVertical: 0,
-  },
-  clearButton: {
-    padding: 5,
-    marginLeft: 5,
-  },
-  searchResultText: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 8,
-    marginLeft: 5,
-  },
-  // Sticky Search Bar Styles
-  searchStickyBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#30A08B',
-    zIndex: 1000,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  searchStickyContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 12,
-  },
-  searchBackButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stickyTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFF',
+    letterSpacing: 0.2,
+  },
+  stickyActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  stickyActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Sticky search
+  searchStickyContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchBackButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1391,152 +1101,671 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
   },
   searchStickyInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: '#FFF',
-    fontWeight: '500',
     paddingVertical: 0,
   },
   searchClearButton: {
     padding: 2,
   },
   searchResultBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginHorizontal: 12,
-    marginBottom: 8,
-    borderRadius: 15,
-    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 28,
+    alignItems: 'center',
   },
   searchResultBadgeText: {
     color: '#FFF',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  // Hero Search Mode Styles
-  heroSearchMode: {
+
+  // ── Hero ──
+  heroHeader: {
+    width: '100%',
+    height: HERO_HEIGHT,
+    overflow: 'hidden',
+  },
+  heroImage: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+    width: '100%',
+    height: '100%',
   },
-  heroSearchTopBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 15,
-  },
-  heroSearchInputContainer: {
+  heroContent: {
     flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 0) + 14,
+    paddingHorizontal: 18,
+    paddingBottom: 16,
+    justifyContent: 'space-between',
+  },
+  heroTopBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  // Loading More Styles
-  loadingMoreContainer: {
-    paddingVertical: 30,
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  loadingMoreContent: {
-    alignItems: 'center',
-    gap: 10,
-  },
-  loadingSpinner: {
+  heroBackBtn: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  spinner: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 3,
-    borderColor: '#E5E7EB',
-    borderTopColor: '#30A08B',
-  },
-  loadingMoreText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '600',
-  },
-  loadingMoreSubtext: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  
-  // End of List Styles
-  endOfListContainer: {
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  endOfListContent: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 20,
-    paddingHorizontal: 30,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  endOfListText: {
-    fontSize: 14,
-    color: '#166534',
-    fontWeight: '600',
+  heroTopActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  endOfListSubtext: {
-    fontSize: 12,
-    color: '#16A34A',
+  heroActionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  
-  heroSearchIcon: {
-    marginRight: 0,
+  heroTitleBlock: {
+    gap: 6,
+  },
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFF',
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+    letterSpacing: 0.3,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.88)',
+    fontWeight: '500',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+    marginBottom: 10,
+  },
+  heroSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 11 : 9,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 5,
   },
   heroSearchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFF',
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#333',
     paddingVertical: 0,
   },
-  heroSearchClear: {
-    padding: 4,
+  // Expanded search in hero
+  heroSearchExpanded: {
+    gap: 10,
   },
-  heroSearchResults: {
+  heroSearchExpandedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  heroSearchExpandedInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+    paddingVertical: 0,
+  },
+  heroSearchCount: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+    textAlign: 'center',
+  },
+
+  // ── Filter bar ──
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  filterScroll: {
+    paddingHorizontal: 12,
+    gap: 8,
     alignItems: 'center',
   },
-  heroSearchResultBadge: {
+  sortChip: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#F4F4F4',
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+  },
+  sortChipActive: {
+    borderColor: '#30A08B',
+  },
+  sortChipGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 5,
+  },
+  sortChipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 5,
+  },
+  sortChipText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '600',
+  },
+  sortChipTextActive: {
+    fontSize: 13,
+    color: '#FFF',
+    fontWeight: '700',
+  },
+  filterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 12,
+    paddingLeft: 6,
+    gap: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: '#EBEBEB',
+    marginLeft: 4,
+  },
+  filterCount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#30A08B',
+    minWidth: 22,
+    textAlign: 'center',
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F4F4F4',
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+  },
+  viewToggleBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  viewToggleBtnActive: {
+    backgroundColor: '#E6F4F2',
+  },
+
+  // ── List content ──
+  listContent: {
+    paddingTop: 10,
+    paddingHorizontal: CARD_MARGIN / 2,
+    paddingBottom: 30,
+  },
+  listContentList: {
+    paddingHorizontal: 12,
+  },
+
+  // ── Grid card ──
+  gridCard: {
+    width: CARD_WIDTH,
+    margin: CARD_MARGIN / 2,
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 7,
+  },
+  gridImageWrap: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#F5F5F5',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gridImageFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 50,
+  },
+  promoBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#EF4444',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    elevation: 2,
+  },
+  promoBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  outOfStockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.48)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outOfStockOverlayText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  limitedBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F97316',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  limitedBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  heartBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+  },
+  heartBtnInner: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heartBtnInnerWhite: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  gridInfo: {
+    padding: 10,
+    backgroundColor: '#FFF',
+    position: 'relative',
+  },
+  gridBrand: {
+    fontSize: 10,
+    color: '#B2905F',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  gridName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#222',
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  gridPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  gridPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#30A08B',
+    letterSpacing: 0.2,
+  },
+  gridOldPrice: {
+    fontSize: 11,
+    color: '#BBB',
+    textDecorationLine: 'line-through',
+    fontWeight: '400',
+  },
+  gridCartBtn: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#30A08B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  gridCartGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // ── List card ──
+  listCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    marginBottom: 10,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 5,
+  },
+  listThumbWrap: {
+    width: 100,
+    height: 110,
+    position: 'relative',
+    backgroundColor: '#F5F5F5',
+  },
+  listThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  listPromoBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: '#EF4444',
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  listOutOfStockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listDetails: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  listBrand: {
+    fontSize: 10,
+    color: '#B2905F',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  listName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#222',
+    lineHeight: 18,
+  },
+  listPriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    marginTop: 4,
   },
-  heroSearchResultText: {
+  listPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#30A08B',
+  },
+  listOldPrice: {
+    fontSize: 11,
+    color: '#BBB',
+    textDecorationLine: 'line-through',
+  },
+  listBadgeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+  },
+  limitedBadgeList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F97316',
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  outOfStockBadgeList: {
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  outOfStockBadgeText: {
+    fontSize: 10,
+    color: '#EF4444',
+    fontWeight: '700',
+  },
+  listActions: {
+    width: 44,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 10,
+  },
+  listHeartBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+  },
+  listCartBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#30A08B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  listCartGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // ── Skeleton grid ──
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: CARD_MARGIN / 2,
+    paddingTop: 10,
+  },
+
+  // ── Empty state ──
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyIconWrap: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: '#F0F9F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 10,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 28,
+  },
+  emptyButton: {
+    borderRadius: 25,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#30A08B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  emptyButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 13,
+    gap: 8,
+  },
+  emptyButtonText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  // ── Footer / load more ──
+  footerWrap: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    gap: 10,
+  },
+  footerLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  footerLoadingText: {
+    fontSize: 14,
+    color: '#30A08B',
+    fontWeight: '600',
+  },
+  loadMoreBtn: {
+    borderRadius: 25,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#30A08B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+  },
+  loadMoreGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 13,
+  },
+  loadMoreText: {
     color: '#FFF',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  footerPageCount: {
+    fontSize: 12,
+    color: '#AAA',
+    fontWeight: '500',
+  },
+  endOfListWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  endOfListLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E8E8E8',
+  },
+  endOfListBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E6F4F2',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  endOfListText: {
+    fontSize: 12,
+    color: '#30A08B',
     fontWeight: '600',
   },
 });

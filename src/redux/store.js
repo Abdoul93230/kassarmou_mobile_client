@@ -4,6 +4,7 @@ import likesReducer from "./likesSlice";
 import authReducer from "./authSlice";
 import cartReducer from "./cartSlice";
 import categoriesReducer from "./categoriesSlice";
+import gamificationReducer from "./gamificationSlice";
 
 const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ const store = configureStore({
     auth: authReducer,
     panier: cartReducer,
     categories: categoriesReducer,
+    gamification: gamificationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

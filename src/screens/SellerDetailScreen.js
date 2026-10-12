@@ -12,6 +12,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
+  Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,23 +23,74 @@ import { useSelector } from 'react-redux';
 import socialService from '../services/socialService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const COVER_HEIGHT = 210;
+const AVATAR_SIZE = 96;
 
 const COLORS = {
   primary: '#30A08B',
-  secondary: '#FC913A',
+  primaryDark: '#217A6A',
+  primaryLight: '#E8F7F4',
+  secondary: '#B2905F',
+  secondaryLight: '#FDF5EC',
   white: '#FFFFFF',
-  black: '#000000',
+  black: '#1A1A2E',
   gray: '#718096',
-  lightGray: '#E2E8F0',
+  lightGray: '#EDF2F7',
+  midGray: '#CBD5E0',
   darkGray: '#4A5568',
-  backgroundAlt: '#F7FAFC',
-  border: '#E2E8F0',
-  yellow: '#FCD34D',
+  backgroundAlt: '#F4F7F9',
+  border: '#E8EEF3',
+  yellow: '#F6C90E',
   red: '#EF4444',
+  redLight: 'rgba(239,68,68,0.08)',
   green: '#10B981',
+  greenLight: 'rgba(16,185,129,0.1)',
 };
 
+// ─────────────────────────────────────────────
+// Mini composants réutilisables
+// ─────────────────────────────────────────────
+
+const StatBlock = ({ icon, value, label, iconColor }) => (
+  <View style={styles.statBlock}>
+    <View style={[styles.statIconBg, { backgroundColor: `${iconColor}18` }]}>
+      {icon}
+    </View>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
+
+const TabButton = ({ label, active, onPress, badge }) => (
+  <TouchableOpacity
+    style={[styles.tabBtn, active && styles.tabBtnActive]}
+    onPress={onPress}
+    activeOpacity={0.75}
+  >
+    <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive]}>{label}</Text>
+    {badge != null && (
+      <View style={[styles.tabBadge, active && styles.tabBadgeActive]}>
+        <Text style={[styles.tabBadgeText, active && styles.tabBadgeTextActive]}>{badge}</Text>
+      </View>
+    )}
+    {active && <View style={styles.tabUnderline} />}
+  </TouchableOpacity>
+);
+
+const InfoRow = ({ icon, label, value }) => (
+  <View style={styles.infoRow}>
+    <View style={styles.infoRowIcon}>{icon}</View>
+    <View style={styles.infoRowContent}>
+      <Text style={styles.infoRowLabel}>{label}</Text>
+      <Text style={styles.infoRowValue}>{value}</Text>
+    </View>
+  </View>
+);
+
+// ─────────────────────────────────────────────
+// Écran principal
+// ─────────────────────────────────────────────
 export default function SellerDetailScreen({ route, navigation }) {
   const { sellerId } = route.params;
   const user = useSelector((state) => state.auth.user);
@@ -97,10 +150,10 @@ export default function SellerDetailScreen({ route, navigation }) {
   const fetchSellerDetails = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/getSeller/${sellerId}`);
+      const response = await axios.get(`${API_URL}/getSellerClients/${sellerId}`);
       const seller = response.data.data;
       setSellerData(seller);
-      
+
       // Récupérer les statistiques sociales
       try {
         const statsResponse = await socialService.getSellerSocialStats(sellerId);
@@ -132,7 +185,7 @@ export default function SellerDetailScreen({ route, navigation }) {
 
     try {
       const userId = user?.id || user?._id;
-      
+
       // Vérifier le follow
       const followersResponse = await socialService.getSellerFollowers(sellerId);
       const followersData = followersResponse?.data?.followers || followersResponse?.data?.data || [];
@@ -145,7 +198,7 @@ export default function SellerDetailScreen({ route, navigation }) {
       const likeResponse = await socialService.checkStoreLike(sellerId);
       const likeData = likeResponse?.data || likeResponse;
       setHasLikedStore(likeData.hasLiked || likeData.liked || false);
-      
+
       console.log('État initial - Following:', isUserFollowing, 'Liked:', likeData.hasLiked || likeData.liked);
     } catch (error) {
       console.log('Erreur lors de la vérification des relations sociales:', error);
@@ -387,7 +440,7 @@ export default function SellerDetailScreen({ route, navigation }) {
             try {
               await socialService.deleteReview(reviewId);
               await fetchReviews();
-              
+
               const statsResponse = await socialService.getSellerSocialStats(sellerId);
               setSocialStats(statsResponse.data.stats);
 
@@ -429,8 +482,8 @@ export default function SellerDetailScreen({ route, navigation }) {
           >
             <Ionicons
               name={star <= rating ? 'star' : 'star-outline'}
-              size={interactive ? 32 : 20}
-              color={star <= rating ? COLORS.yellow : COLORS.lightGray}
+              size={interactive ? 32 : 16}
+              color={star <= rating ? COLORS.yellow : COLORS.midGray}
             />
           </TouchableOpacity>
         ))}
@@ -438,28 +491,31 @@ export default function SellerDetailScreen({ route, navigation }) {
     );
   };
 
+  // ── Loading ──
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Chargement du profil...</Text>
       </View>
     );
   }
 
+  // ── Erreur / non trouvé ──
   if (!sellerData) {
     return (
       <View style={styles.errorContainer}>
-        <MaterialCommunityIcons name="store-off" size={80} color={COLORS.gray} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.backgroundAlt} />
+        <LinearGradient colors={[COLORS.primaryLight, '#DCEEFA']} style={styles.errorIconBg}>
+          <MaterialCommunityIcons name="store-off" size={56} color={COLORS.primary} />
+        </LinearGradient>
         <Text style={styles.errorTitle}>Profil non trouvé</Text>
-        <Text style={styles.errorText}>
-          Ce vendeur n'existe pas ou a été supprimé
-        </Text>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>Retour</Text>
+        <Text style={styles.errorText}>Ce vendeur n'existe pas ou a été supprimé</Text>
+        <TouchableOpacity style={styles.errorBackBtn} onPress={() => navigation.goBack()}>
+          <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} style={styles.errorBackBtnGrad}>
+            <Text style={styles.errorBackBtnText}>Retour</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     );
@@ -468,125 +524,173 @@ export default function SellerDetailScreen({ route, navigation }) {
   const storeName = sellerData.storeName || `${sellerData.userName2} ${sellerData.name}`;
   const isActive = sellerData.isvalid === true;
   const subscriptionStatus = sellerData.subscriptionStatus || 'free';
+  const followersFormatted =
+    socialStats.followersCount >= 1000
+      ? `${(socialStats.followersCount / 1000).toFixed(1)}k`
+      : socialStats.followersCount || 0;
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      {/* Header */}
-      <LinearGradient colors={[COLORS.primary, '#62aca2']} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackButton}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profil du vendeur</Text>
-          <View style={{ width: 40 }} />
-        </View>
-      </LinearGradient>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <ScrollView 
+      <ScrollView
         ref={scrollViewRef}
-        style={styles.scrollView} 
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Profile Header */}
-        <LinearGradient
-          colors={['#F8F9FA', '#FFFFFF']}
-          style={styles.profileHeader}
-        >
-          <View style={styles.profileImageContainer}>
-            <Image
-              source={{ uri: sellerData.logo || 'https://via.placeholder.com/150' }}
-              style={styles.profileImage}
-            />
+
+        {/* ══════════════════════════════════════
+            HERO : cover + avatar centré
+        ══════════════════════════════════════ */}
+        <View style={styles.heroSection}>
+          {/* Cover image (bannière) */}
+          <LinearGradient
+            colors={[COLORS.primary, COLORS.primaryDark, '#0E4D42']}
+            style={styles.heroCover}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            {/* Motif décoratif */}
+            <View style={styles.heroPattern1} />
+            <View style={styles.heroPattern2} />
+            <View style={styles.heroPattern3} />
+
+            {/* Bouton retour flottant */}
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.heroBackBtn}
+            >
+              <Ionicons name="arrow-back" size={22} color={COLORS.white} />
+            </TouchableOpacity>
+          </LinearGradient>
+
+          {/* Avatar centré chevauchant la cover */}
+          <View style={styles.heroAvatarWrapper}>
+            <View style={styles.heroAvatarRing}>
+              <Image
+                source={{
+                  uri: sellerData.logo || 'https://ui-avatars.com/api/?name=Shop&background=30A08B&color=fff&size=300',
+                }}
+                style={styles.heroAvatar}
+              />
+            </View>
             {isActive && (
-              <LinearGradient
-                colors={[COLORS.primary, COLORS.secondary]}
-                style={styles.verifiedBadgeLarge}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <MaterialCommunityIcons name="check-decagram" size={24} color={COLORS.white} />
-              </LinearGradient>
+              <View style={styles.heroVerifiedBadge}>
+                <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* ══════════════════════════════════════
+            INFOS VENDEUR
+        ══════════════════════════════════════ */}
+        <View style={styles.sellerInfoSection}>
+          {/* Nom + badge */}
+          <View style={styles.sellerNameRow}>
+            <Text style={styles.sellerName}>{storeName}</Text>
+            {isActive && (
+              <View style={styles.officialBadge}>
+                <MaterialCommunityIcons name="shield-check" size={12} color={COLORS.secondary} />
+                <Text style={styles.officialBadgeText}>Boutique officielle</Text>
+              </View>
             )}
           </View>
 
-          <Text style={styles.storeName}>{storeName}</Text>
-          
-          {sellerData.storeDescription && (
-            <Text style={styles.storeDescription}>{sellerData.storeDescription}</Text>
-          )}
+          {/* Catégorie */}
+          {sellerData.category ? (
+            <View style={styles.categoryPill}>
+              <MaterialCommunityIcons name="tag" size={12} color={COLORS.primary} />
+              <Text style={styles.categoryPillText}>{sellerData.category}</Text>
+            </View>
+          ) : null}
 
-          {/* Stats Row */}
+          {/* Description */}
+          {sellerData.storeDescription ? (
+            <Text style={styles.sellerDesc}>{sellerData.storeDescription}</Text>
+          ) : null}
+
+          {/* Stats */}
           <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <View style={styles.statIconBg}>
-                <Ionicons name="star" size={20} color={COLORS.yellow} />
-              </View>
-              <Text style={styles.statValue}>{sellerData.rating?.toFixed(1) || '0.0'}</Text>
-              <Text style={styles.statLabel}>Note</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <View style={styles.statIconBg}>
-                <MaterialCommunityIcons name="account-group" size={20} color={COLORS.primary} />
-              </View>
-              <Text style={styles.statValue}>
-                {sellerData.followersCount >= 1000 
-                  ? `${(sellerData.followersCount / 1000).toFixed(1)}k` 
-                  : sellerData.followersCount || 0}
-              </Text>
-              <Text style={styles.statLabel}>Abonnés</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <View style={styles.statIconBg}>
-                <MaterialCommunityIcons name="package-variant" size={20} color={COLORS.secondary} />
-              </View>
-              <Text style={styles.statValue}>{sellerData.productsCount || 0}</Text>
-              <Text style={styles.statLabel}>Produits</Text>
-            </View>
+            <StatBlock
+              icon={<Ionicons name="star" size={18} color={COLORS.yellow} />}
+              value={sellerData.rating?.toFixed(1) || '0.0'}
+              label="Note"
+              iconColor={COLORS.yellow}
+            />
+            <View style={styles.statsDivider} />
+            <StatBlock
+              icon={<MaterialCommunityIcons name="account-group" size={18} color={COLORS.primary} />}
+              value={followersFormatted}
+              label="Abonnés"
+              iconColor={COLORS.primary}
+            />
+            <View style={styles.statsDivider} />
+            <StatBlock
+              icon={<MaterialCommunityIcons name="package-variant" size={18} color={COLORS.secondary} />}
+              value={sellerData.productsCount || 0}
+              label="Produits"
+              iconColor={COLORS.secondary}
+            />
+            <View style={styles.statsDivider} />
+            <StatBlock
+              icon={<Ionicons name="heart" size={18} color={COLORS.red} />}
+              value={socialStats.likesCount >= 1000
+                ? `${(socialStats.likesCount / 1000).toFixed(1)}k`
+                : socialStats.likesCount || 0}
+              label="Likes"
+              iconColor={COLORS.red}
+            />
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
+          {/* Boutons d'action */}
+          <View style={styles.actionRow}>
+            {/* Suivre */}
             <TouchableOpacity
-              style={styles.followButton}
+              style={styles.followBtnWrapper}
               onPress={handleFollowToggle}
+              activeOpacity={0.85}
             >
               <LinearGradient
-                colors={isFollowing ? [COLORS.gray, COLORS.darkGray] : [COLORS.primary, COLORS.secondary]}
-                style={styles.followButtonGradient}
+                colors={isFollowing
+                  ? [COLORS.midGray, COLORS.gray]
+                  : [COLORS.primary, COLORS.primaryDark]}
+                style={styles.followBtnGrad}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <MaterialCommunityIcons 
-                  name={isFollowing ? 'account-check' : 'account-plus'} 
-                  size={20} 
-                  color={COLORS.white} 
+                <MaterialCommunityIcons
+                  name={isFollowing ? 'account-check' : 'account-plus'}
+                  size={18}
+                  color={COLORS.white}
                 />
-                <Text style={styles.followButtonText}>
+                <Text style={styles.followBtnText}>
                   {isFollowing ? 'Abonné' : 'Suivre'}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
 
+            {/* Like boutique */}
             <TouchableOpacity
-              style={styles.likeButton}
+              style={[styles.iconActionBtn, hasLikedStore && styles.iconActionBtnActive]}
               onPress={handleStoreLikeToggle}
+              activeOpacity={0.8}
             >
-              <Ionicons 
-                name={hasLikedStore ? 'heart' : 'heart-outline'} 
-                size={24} 
-                color={hasLikedStore ? COLORS.red : COLORS.primary} 
+              <Ionicons
+                name={hasLikedStore ? 'heart' : 'heart-outline'}
+                size={22}
+                color={hasLikedStore ? COLORS.red : COLORS.primary}
               />
             </TouchableOpacity>
 
+            {/* Visiter la boutique */}
             <TouchableOpacity
-              style={styles.visitStoreButton}
+              style={[styles.visitStoreBtnWrapper, !isActive && styles.visitStoreBtnDisabled]}
               onPress={() => {
                 if (isActive) {
                   navigation.navigate('Boutique', {
@@ -596,310 +700,336 @@ export default function SellerDetailScreen({ route, navigation }) {
                 }
               }}
               disabled={!isActive}
+              activeOpacity={0.85}
             >
-              <MaterialCommunityIcons 
-                name="store" 
-                size={18} 
-                color={isActive ? COLORS.primary : COLORS.gray} 
+              <MaterialCommunityIcons
+                name="store"
+                size={16}
+                color={isActive ? COLORS.primary : COLORS.midGray}
               />
-              <Text 
-                style={[
-                  styles.visitStoreButtonText,
-                  !isActive && styles.disabledText
-                ]}
-                numberOfLines={1}
-              >
+              <Text style={[styles.visitStoreBtnText, !isActive && { color: COLORS.midGray }]}>
                 Boutique
               </Text>
             </TouchableOpacity>
           </View>
-        </LinearGradient>
-
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'about' && styles.activeTab]}
-            onPress={() => setActiveTab('about')}
-          >
-            <Text style={[styles.tabText, activeTab === 'about' && styles.activeTabText]}>
-              À propos
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'info' && styles.activeTab]}
-            onPress={() => setActiveTab('info')}
-          >
-            <Text style={[styles.tabText, activeTab === 'info' && styles.activeTabText]}>
-              Informations
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
-            onPress={() => setActiveTab('reviews')}
-          >
-            <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>
-              Avis
-            </Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Tab Content */}
+        {/* Alerte suspension */}
+        {!isActive && (
+          <View style={styles.suspendedBanner}>
+            <LinearGradient
+              colors={['rgba(239,68,68,0.1)', 'rgba(239,68,68,0.05)']}
+              style={styles.suspendedBannerGrad}
+            >
+              <Ionicons name="warning" size={20} color={COLORS.red} />
+              <Text style={styles.suspendedBannerText}>
+                Ce compte vendeur est actuellement suspendu et ne peut pas vendre de produits.
+              </Text>
+            </LinearGradient>
+          </View>
+        )}
+
+        {/* ══════════════════════════════════════
+            ONGLETS
+        ══════════════════════════════════════ */}
+        <View style={styles.tabsBar}>
+          <TabButton
+            label="À propos"
+            active={activeTab === 'about'}
+            onPress={() => setActiveTab('about')}
+          />
+          <TabButton
+            label="Informations"
+            active={activeTab === 'info'}
+            onPress={() => setActiveTab('info')}
+          />
+          <TabButton
+            label="Avis"
+            active={activeTab === 'reviews'}
+            onPress={() => setActiveTab('reviews')}
+            badge={socialStats.reviewsCount || null}
+          />
+        </View>
+
+        {/* ══════════════════════════════════════
+            CONTENU DES ONGLETS
+        ══════════════════════════════════════ */}
         <View style={styles.tabContent}>
-          {activeTab === 'about' ? (
+
+          {/* ─── Onglet À propos ─── */}
+          {activeTab === 'about' && (
             <View style={styles.aboutSection}>
-              {/* Status Card */}
+
+              {/* Statut compte */}
               <View style={styles.infoCard}>
                 <View style={styles.infoCardHeader}>
-                  <MaterialCommunityIcons name="information" size={22} color={COLORS.primary} />
+                  <LinearGradient colors={[COLORS.primaryLight, '#DCEEFA']} style={styles.infoCardIconBg}>
+                    <MaterialCommunityIcons name="information" size={18} color={COLORS.primary} />
+                  </LinearGradient>
                   <Text style={styles.infoCardTitle}>Statut du compte</Text>
                 </View>
-                <View style={styles.infoCardContent}>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>État</Text>
-                    <View style={[
-                      styles.statusBadge,
-                      isActive ? styles.activeBadge : styles.suspendedBadge
-                    ]}>
-                      <Text style={[
-                        styles.statusText,
-                        isActive ? styles.activeText : styles.suspendedText
-                      ]}>
-                        {isActive ? 'Actif' : 'Suspendu'}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Abonnement</Text>
-                    <Text style={styles.infoValue}>
-                      {subscriptionStatus === 'premium' ? 'Premium' : 'Gratuit'}
-                    </Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Membre depuis</Text>
-                    <Text style={styles.infoValue}>
-                      {sellerData.createdAt 
-                        ? new Date(sellerData.createdAt).toLocaleDateString('fr-FR', {
-                            year: 'numeric',
-                            month: 'long'
-                          })
-                        : 'N/A'}
-                    </Text>
-                  </View>
+                <View style={styles.infoCardBody}>
+                  <InfoRow
+                    icon={<Ionicons name="ellipse" size={12} color={isActive ? COLORS.green : COLORS.red} />}
+                    label="État"
+                    value={isActive ? 'Actif' : 'Suspendu'}
+                  />
+                  <View style={styles.infoRowSep} />
+                  <InfoRow
+                    icon={<MaterialCommunityIcons name="crown" size={14} color={subscriptionStatus === 'premium' ? COLORS.yellow : COLORS.midGray} />}
+                    label="Abonnement"
+                    value={subscriptionStatus === 'premium' ? 'Premium' : 'Gratuit'}
+                  />
+                  <View style={styles.infoRowSep} />
+                  <InfoRow
+                    icon={<Ionicons name="calendar" size={14} color={COLORS.primary} />}
+                    label="Membre depuis"
+                    value={sellerData.createdAt
+                      ? new Date(sellerData.createdAt).toLocaleDateString('fr-FR', {
+                          year: 'numeric',
+                          month: 'long',
+                        })
+                      : 'N/A'}
+                  />
                 </View>
               </View>
 
               {/* Description */}
-              {sellerData.storeDescription && (
+              {sellerData.storeDescription ? (
                 <View style={styles.infoCard}>
                   <View style={styles.infoCardHeader}>
-                    <MaterialCommunityIcons name="text" size={22} color={COLORS.primary} />
+                    <LinearGradient colors={[COLORS.primaryLight, '#DCEEFA']} style={styles.infoCardIconBg}>
+                      <MaterialCommunityIcons name="text" size={18} color={COLORS.primary} />
+                    </LinearGradient>
                     <Text style={styles.infoCardTitle}>Description</Text>
                   </View>
-                  <Text style={styles.descriptionText}>{sellerData.storeDescription}</Text>
+                  <Text style={styles.descText}>{sellerData.storeDescription}</Text>
                 </View>
-              )}
+              ) : null}
 
-              {/* Category */}
-              {sellerData.category && (
+              {/* Catégorie */}
+              {sellerData.category ? (
                 <View style={styles.infoCard}>
                   <View style={styles.infoCardHeader}>
-                    <MaterialCommunityIcons name="tag" size={22} color={COLORS.primary} />
+                    <LinearGradient colors={[COLORS.primaryLight, '#DCEEFA']} style={styles.infoCardIconBg}>
+                      <MaterialCommunityIcons name="tag" size={18} color={COLORS.primary} />
+                    </LinearGradient>
                     <Text style={styles.infoCardTitle}>Catégorie</Text>
                   </View>
-                  <Text style={styles.descriptionText}>{sellerData.category}</Text>
+                  <View style={styles.categoryChip}>
+                    <Text style={styles.categoryChipText}>{sellerData.category}</Text>
+                  </View>
                 </View>
-              )}
+              ) : null}
             </View>
-          ) : activeTab === 'info' ? (
+          )}
+
+          {/* ─── Onglet Informations ─── */}
+          {activeTab === 'info' && (
             <View style={styles.infoSection}>
-              {/* Contact Information */}
+
+              {/* Contact */}
               <View style={styles.infoCard}>
                 <View style={styles.infoCardHeader}>
-                  <MaterialCommunityIcons name="card-account-details" size={22} color={COLORS.primary} />
+                  <LinearGradient colors={[COLORS.primaryLight, '#DCEEFA']} style={styles.infoCardIconBg}>
+                    <MaterialCommunityIcons name="card-account-details" size={18} color={COLORS.primary} />
+                  </LinearGradient>
                   <Text style={styles.infoCardTitle}>Informations de contact</Text>
                 </View>
-                <View style={styles.infoCardContent}>
-                  {sellerData.email && (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="mail" size={18} color={COLORS.gray} />
-                      <Text style={styles.contactInfo}>{sellerData.email}</Text>
-                    </View>
-                  )}
-                  {sellerData.phoneNumber && (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="call" size={18} color={COLORS.gray} />
-                      <Text style={styles.contactInfo}>{sellerData.phoneNumber}</Text>
-                    </View>
-                  )}
-                  {sellerData.address && (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="location" size={18} color={COLORS.gray} />
-                      <Text style={styles.contactInfo}>{sellerData.address}</Text>
-                    </View>
-                  )}
-                  {sellerData.city && (
-                    <View style={styles.infoRow}>
-                      <MaterialCommunityIcons name="city" size={18} color={COLORS.gray} />
-                      <Text style={styles.contactInfo}>{sellerData.city}</Text>
-                    </View>
-                  )}
+                <View style={styles.infoCardBody}>
+                  {sellerData.email ? (
+                    <>
+                      <InfoRow
+                        icon={<Ionicons name="mail" size={14} color={COLORS.primary} />}
+                        label="Email"
+                        value={sellerData.email}
+                      />
+                      <View style={styles.infoRowSep} />
+                    </>
+                  ) : null}
+                  {sellerData.phoneNumber ? (
+                    <>
+                      <InfoRow
+                        icon={<Ionicons name="call" size={14} color={COLORS.primary} />}
+                        label="Téléphone"
+                        value={sellerData.phoneNumber}
+                      />
+                      <View style={styles.infoRowSep} />
+                    </>
+                  ) : null}
+                  {sellerData.address ? (
+                    <>
+                      <InfoRow
+                        icon={<Ionicons name="location" size={14} color={COLORS.secondary} />}
+                        label="Adresse"
+                        value={sellerData.address}
+                      />
+                      <View style={styles.infoRowSep} />
+                    </>
+                  ) : null}
+                  {sellerData.city ? (
+                    <InfoRow
+                      icon={<MaterialCommunityIcons name="city" size={14} color={COLORS.secondary} />}
+                      label="Ville"
+                      value={sellerData.city}
+                    />
+                  ) : null}
                 </View>
               </View>
 
-              {/* Business Information */}
-              {sellerData.category && (
+              {/* Pro */}
+              {sellerData.category ? (
                 <View style={styles.infoCard}>
                   <View style={styles.infoCardHeader}>
-                    <MaterialCommunityIcons name="briefcase" size={22} color={COLORS.primary} />
+                    <LinearGradient colors={[COLORS.primaryLight, '#DCEEFA']} style={styles.infoCardIconBg}>
+                      <MaterialCommunityIcons name="briefcase" size={18} color={COLORS.primary} />
+                    </LinearGradient>
                     <Text style={styles.infoCardTitle}>Informations professionnelles</Text>
                   </View>
-                  <View style={styles.infoCardContent}>
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>Catégorie</Text>
-                      <Text style={styles.infoValue}>{sellerData.category}</Text>
-                    </View>
+                  <View style={styles.infoCardBody}>
+                    <InfoRow
+                      icon={<MaterialCommunityIcons name="tag" size={14} color={COLORS.primary} />}
+                      label="Catégorie"
+                      value={sellerData.category}
+                    />
                   </View>
                 </View>
-              )}
+              ) : null}
             </View>
-          ) : (
+          )}
+
+          {/* ─── Onglet Avis ─── */}
+          {activeTab === 'reviews' && (
             <View style={styles.reviewsSection}>
-              {/* Reviews Header */}
-              <View style={styles.reviewsHeader}>
-                <View style={styles.reviewsSummary}>
-                  <View style={styles.ratingBig}>
-                    <Text style={styles.ratingBigNumber}>{socialStats.rating.toFixed(1)}</Text>
-                    <View style={styles.starsRow}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Ionicons
-                          key={star}
-                          name={star <= Math.round(socialStats.rating) ? 'star' : 'star-outline'}
-                          size={20}
-                          color={COLORS.yellow}
-                        />
-                      ))}
-                    </View>
-                    <Text style={styles.reviewsCount}>
-                      {socialStats.reviewsCount || 0}
-                      {' '}
-                      {socialStats.reviewsCount > 1 ? 'avis' : 'avis'}
-                    </Text>
+
+              {/* Résumé de la note */}
+              <View style={styles.ratingCard}>
+                <LinearGradient
+                  colors={[COLORS.primaryLight, '#DCEEFA']}
+                  style={styles.ratingCardGrad}
+                >
+                  <Text style={styles.ratingBigNum}>{socialStats.rating.toFixed(1)}</Text>
+                  <View style={styles.ratingStarsRow}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Ionicons
+                        key={star}
+                        name={star <= Math.round(socialStats.rating) ? 'star' : 'star-outline'}
+                        size={22}
+                        color={COLORS.yellow}
+                      />
+                    ))}
                   </View>
-                </View>
+                  <Text style={styles.ratingCountText}>
+                    {socialStats.reviewsCount || 0} avis clients
+                  </Text>
+                </LinearGradient>
               </View>
 
               {/* Filtres */}
-              <View style={styles.reviewsFilters}>
+              <View style={styles.filterRow}>
                 <TouchableOpacity
-                  style={[
-                    styles.filterButton,
-                    selectedReviewFilter === 'recent' && styles.filterButtonActive
-                  ]}
+                  style={[styles.filterChip, selectedReviewFilter === 'recent' && styles.filterChipActive]}
                   onPress={() => setSelectedReviewFilter('recent')}
                 >
-                  <Text style={[
-                    styles.filterButtonText,
-                    selectedReviewFilter === 'recent' && styles.filterButtonTextActive
-                  ]}>
+                  <Ionicons
+                    name="time"
+                    size={13}
+                    color={selectedReviewFilter === 'recent' ? COLORS.white : COLORS.gray}
+                  />
+                  <Text style={[styles.filterChipText, selectedReviewFilter === 'recent' && styles.filterChipTextActive]}>
                     Plus récents
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[
-                    styles.filterButton,
-                    selectedReviewFilter === 'top' && styles.filterButtonActive
-                  ]}
+                  style={[styles.filterChip, selectedReviewFilter === 'top' && styles.filterChipActive]}
                   onPress={() => setSelectedReviewFilter('top')}
                 >
-                  <Text style={[
-                    styles.filterButtonText,
-                    selectedReviewFilter === 'top' && styles.filterButtonTextActive
-                  ]}>
+                  <Ionicons
+                    name="thumbs-up"
+                    size={13}
+                    color={selectedReviewFilter === 'top' ? COLORS.white : COLORS.gray}
+                  />
+                  <Text style={[styles.filterChipText, selectedReviewFilter === 'top' && styles.filterChipTextActive]}>
                     Les plus likés
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Reviews List or Empty State */}
+              {/* Liste des avis ou empty */}
               {!reviews || reviews.length === 0 ? (
                 <View style={styles.emptyReviews}>
-                  <MaterialCommunityIcons name="comment-text-outline" size={64} color={COLORS.lightGray} />
+                  <LinearGradient colors={[COLORS.primaryLight, '#DCEEFA']} style={styles.emptyReviewsIconBg}>
+                    <MaterialCommunityIcons name="comment-text-outline" size={40} color={COLORS.primary} />
+                  </LinearGradient>
                   <Text style={styles.emptyReviewsTitle}>Aucun avis pour le moment</Text>
                   <Text style={styles.emptyReviewsText}>
                     Soyez le premier à laisser un avis sur cette boutique
                   </Text>
                 </View>
               ) : (
-                <View style={styles.reviewsList}>
+                <View>
                   {filterAndSortReviews().map((review) => {
                     const userId = user?.id || user?._id;
                     const userHasLiked = review.likes?.includes(userId);
-                    const isOwnReview = isAuthenticated && userId && 
-                                       (review.user?._id === userId || review.user?.id === userId);
+                    const isOwnReview = isAuthenticated && userId &&
+                      (review.user?._id === userId || review.user?.id === userId);
 
                     return (
                       <View key={review._id} style={styles.reviewCard}>
-                        <View style={styles.reviewHeader}>
+                        {/* En-tête avis */}
+                        <View style={styles.reviewCardHeader}>
+                          <LinearGradient
+                            colors={[COLORS.primary, COLORS.primaryDark]}
+                            style={styles.reviewAvatar}
+                          >
+                            <Text style={styles.reviewAvatarLetter}>
+                              {(review.user?.name || review.user?.userName2 || 'U')[0].toUpperCase()}
+                            </Text>
+                          </LinearGradient>
                           <View style={styles.reviewUserInfo}>
-                            <LinearGradient
-                              colors={[COLORS.primary, COLORS.secondary]}
-                              style={styles.reviewAvatar}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                            >
-                              <Text style={styles.reviewAvatarText}>
-                                {(review.user?.name || review.user?.userName2 || 'U')[0].toUpperCase()}
+                            <Text style={styles.reviewUserName}>
+                              {review.user?.name || review.user?.userName2 || 'Utilisateur'}
+                            </Text>
+                            <View style={styles.reviewMetaRow}>
+                              {renderStars(review.rating)}
+                              <Text style={styles.reviewDotSep}>•</Text>
+                              <Text style={styles.reviewDate}>
+                                {new Date(review.createdAt).toLocaleDateString('fr-FR', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
                               </Text>
-                            </LinearGradient>
-                            <View style={styles.reviewUserDetails}>
-                              <Text style={styles.reviewUserName}>
-                                {review.user?.name || review.user?.userName2 || 'Utilisateur'}
-                              </Text>
-                              <View style={styles.reviewMetaRow}>
-                                {renderStars(review.rating)}
-                                <Text style={styles.reviewDateSeparator}>•</Text>
-                                <Text style={styles.reviewDate}>
-                                  {new Date(review.createdAt).toLocaleDateString('fr-FR', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric',
-                                  })}
-                                </Text>
-                              </View>
                             </View>
                           </View>
                         </View>
 
+                        {/* Commentaire */}
                         <Text style={styles.reviewComment}>{review.comment}</Text>
 
-                        <View style={styles.reviewFooter}>
+                        {/* Footer avis */}
+                        <View style={styles.reviewCardFooter}>
                           <TouchableOpacity
-                            style={[
-                              styles.reviewLikeButton,
-                              userHasLiked && styles.reviewLikeButtonActive
-                            ]}
+                            style={[styles.reviewLikeBtn, userHasLiked && styles.reviewLikeBtnActive]}
                             onPress={() => handleReviewLike(review._id, userHasLiked)}
                           >
                             <Ionicons
                               name={userHasLiked ? 'thumbs-up' : 'thumbs-up-outline'}
-                              size={18}
+                              size={15}
                               color={userHasLiked ? COLORS.white : COLORS.gray}
                             />
-                            <Text style={[
-                              styles.reviewLikeText,
-                              userHasLiked && styles.reviewLikeTextActive
-                            ]}>
+                            <Text style={[styles.reviewLikeBtnText, userHasLiked && styles.reviewLikeBtnTextActive]}>
                               {review.likesCount || 0}
                             </Text>
                           </TouchableOpacity>
 
                           {isOwnReview && (
                             <TouchableOpacity
-                              style={styles.reviewDeleteButton}
+                              style={styles.reviewDeleteBtn}
                               onPress={() => handleDeleteReview(review._id)}
                             >
-                              <MaterialCommunityIcons name="delete-outline" size={18} color={COLORS.red} />
-                              <Text style={styles.reviewDeleteText}>Supprimer</Text>
+                              <MaterialCommunityIcons name="delete-outline" size={16} color={COLORS.red} />
+                              <Text style={styles.reviewDeleteBtnText}>Supprimer</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -913,16 +1043,10 @@ export default function SellerDetailScreen({ route, navigation }) {
                       {[...Array(totalPages)].map((_, index) => (
                         <TouchableOpacity
                           key={index}
-                          style={[
-                            styles.pageButton,
-                            currentPage === index + 1 && styles.pageButtonActive
-                          ]}
+                          style={[styles.pageBtn, currentPage === index + 1 && styles.pageBtnActive]}
                           onPress={() => setCurrentPage(index + 1)}
                         >
-                          <Text style={[
-                            styles.pageButtonText,
-                            currentPage === index + 1 && styles.pageButtonTextActive
-                          ]}>
+                          <Text style={[styles.pageBtnText, currentPage === index + 1 && styles.pageBtnTextActive]}>
                             {index + 1}
                           </Text>
                         </TouchableOpacity>
@@ -934,20 +1058,23 @@ export default function SellerDetailScreen({ route, navigation }) {
 
               {/* Formulaire d'ajout d'avis */}
               {isAuthenticated ? (
-                <View style={styles.addReviewForm}>
-                  <Text style={styles.addReviewTitle}>Laissez votre avis</Text>
-                  
-                  <View style={styles.ratingInput}>
-                    <Text style={styles.ratingInputLabel}>Votre note :</Text>
-                    {renderStars(newReview.rating, true, (rating) => 
-                      setNewReview({ ...newReview, rating })
-                    )}
+                <View style={styles.addReviewCard}>
+                  <View style={styles.addReviewHeader}>
+                    <LinearGradient colors={[COLORS.primaryLight, '#DCEEFA']} style={styles.infoCardIconBg}>
+                      <MaterialCommunityIcons name="pencil" size={18} color={COLORS.primary} />
+                    </LinearGradient>
+                    <Text style={styles.addReviewTitle}>Laissez votre avis</Text>
                   </View>
+
+                  <Text style={styles.ratingInputLabel}>Votre note</Text>
+                  {renderStars(newReview.rating, true, (rating) =>
+                    setNewReview({ ...newReview, rating })
+                  )}
 
                   <TextInput
                     style={styles.commentInput}
-                    placeholder="Votre commentaire"
-                    placeholderTextColor={COLORS.gray}
+                    placeholder="Partagez votre expérience avec cette boutique..."
+                    placeholderTextColor={COLORS.midGray}
                     value={newReview.comment}
                     onChangeText={(text) => setNewReview({ ...newReview, comment: text })}
                     onFocus={() => {
@@ -960,68 +1087,63 @@ export default function SellerDetailScreen({ route, navigation }) {
                     textAlignVertical="top"
                   />
 
-                  <TouchableOpacity
-                    style={styles.submitReviewButton}
-                    onPress={handleAddReview}
-                  >
+                  <TouchableOpacity onPress={handleAddReview} activeOpacity={0.85}>
                     <LinearGradient
-                      colors={[COLORS.primary, COLORS.secondary]}
-                      style={styles.submitReviewButtonGradient}
+                      colors={[COLORS.primary, COLORS.primaryDark]}
+                      style={styles.submitReviewBtn}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                     >
-                      <Text style={styles.submitReviewButtonText}>Publier mon avis</Text>
+                      <Ionicons name="send" size={16} color={COLORS.white} />
+                      <Text style={styles.submitReviewBtnText}>Publier mon avis</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
               ) : (
-                <View style={styles.loginPrompt}>
+                <View style={styles.loginPromptCard}>
                   <LinearGradient
-                    colors={['#F0F9FF', '#E0F2FE']}
-                    style={styles.loginPromptGradient}
+                    colors={[COLORS.primaryLight, '#E0F2FE']}
+                    style={styles.loginPromptGrad}
                   >
-                    <View style={styles.loginPromptIconContainer}>
-                      <MaterialCommunityIcons name="account-lock" size={56} color={COLORS.primary} />
+                    <View style={styles.loginPromptIconBg}>
+                      <MaterialCommunityIcons name="account-lock" size={44} color={COLORS.primary} />
                     </View>
-                    <Text style={styles.loginPromptTitle}>
-                      Connectez-vous pour interagir
-                    </Text>
+                    <Text style={styles.loginPromptTitle}>Connectez-vous pour interagir</Text>
                     <Text style={styles.loginPromptText}>
                       Créez un compte ou connectez-vous pour laisser des avis et interagir avec les boutiques
                     </Text>
-                    
-                    <View style={styles.loginPromptButtons}>
-                      <TouchableOpacity
-                        style={styles.loginButton}
-                        onPress={() => navigation.navigate('QuickAuth', {
-                          pendingAction: 'seller-review',
-                          returnScreen: 'SellerDetail',
-                          returnParams: { sellerId },
-                        })}
-                      >
-                        <LinearGradient
-                          colors={[COLORS.primary, COLORS.secondary]}
-                          style={styles.loginButtonGradient}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                        >
-                          <MaterialCommunityIcons name="login" size={20} color={COLORS.white} />
-                          <Text style={styles.loginButtonText}>Se connecter</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.signupButton}
-                        onPress={() => navigation.navigate('QuickAuth', {
-                          pendingAction: 'seller-review',
-                          returnScreen: 'SellerDetail',
-                          returnParams: { sellerId },
-                        })}
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate('QuickAuth', {
+                        pendingAction: 'seller-review',
+                        returnScreen: 'SellerDetail',
+                        returnParams: { sellerId },
+                      })}
+                      activeOpacity={0.85}
+                      style={{ width: '100%', marginBottom: 12 }}
+                    >
+                      <LinearGradient
+                        colors={[COLORS.primary, COLORS.primaryDark]}
+                        style={styles.loginPromptPrimaryBtn}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
                       >
-                        <MaterialCommunityIcons name="account-plus" size={20} color={COLORS.primary} />
-                        <Text style={styles.signupButtonText}>Créer un compte</Text>
-                      </TouchableOpacity>
-                    </View>
+                        <MaterialCommunityIcons name="login" size={18} color={COLORS.white} />
+                        <Text style={styles.loginPromptPrimaryBtnText}>Se connecter</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.loginPromptSecondaryBtn}
+                      onPress={() => navigation.navigate('QuickAuth', {
+                        pendingAction: 'seller-review',
+                        returnScreen: 'SellerDetail',
+                        returnParams: { sellerId },
+                      })}
+                    >
+                      <MaterialCommunityIcons name="account-plus" size={18} color={COLORS.primary} />
+                      <Text style={styles.loginPromptSecondaryBtnText}>Créer un compte</Text>
+                    </TouchableOpacity>
                   </LinearGradient>
                 </View>
               )}
@@ -1029,26 +1151,25 @@ export default function SellerDetailScreen({ route, navigation }) {
           )}
         </View>
 
-        {!isActive && (
-          <View style={styles.suspendedNotice}>
-            <MaterialCommunityIcons name="alert-circle" size={24} color={COLORS.red} />
-            <Text style={styles.suspendedNoticeText}>
-              Ce compte vendeur est actuellement suspendu et ne peut pas vendre de produits.
-            </Text>
-          </View>
-        )}
-
         <View style={styles.bottomSpacing} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+// ─────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.backgroundAlt,
   },
+  scrollView: {
+    flex: 1,
+  },
+
+  // ── Loading / Error ──
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1057,165 +1178,280 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 16,
+    fontSize: 15,
     color: COLORS.gray,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 32,
     backgroundColor: COLORS.backgroundAlt,
+  },
+  errorIconBg: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   errorTitle: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.black,
-    marginTop: 16,
     marginBottom: 8,
   },
   errorText: {
     fontSize: 14,
     color: COLORS.gray,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
+    lineHeight: 21,
   },
-  backButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+  errorBackBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  backButtonText: {
+  errorBackBtnGrad: {
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+  },
+  errorBackBtnText: {
     color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
-  header: {
-    paddingTop: 44,
-    paddingBottom: 16,
+
+  // ── Hero ──
+  heroSection: {
+    marginBottom: AVATAR_SIZE / 2,
   },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
+  heroCover: {
+    height: COVER_HEIGHT,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  headerBackButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  heroPattern1: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    top: -60,
+    right: -60,
+  },
+  heroPattern2: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    bottom: -40,
+    left: -30,
+  },
+  heroPattern3: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    top: 40,
+    left: SCREEN_WIDTH / 2 - 40,
+  },
+  heroBackBtn: {
+    position: 'absolute',
+    top: 52,
+    left: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.white,
+  heroAvatarWrapper: {
+    position: 'absolute',
+    bottom: -(AVATAR_SIZE / 2),
+    alignSelf: 'center',
+    left: SCREEN_WIDTH / 2 - AVATAR_SIZE / 2 - 4,
   },
-  scrollView: {
-    flex: 1,
-  },
-  profileHeader: {
-    paddingTop: 32,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  profileImageContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: COLORS.lightGray,
+  heroAvatarRing: {
+    width: AVATAR_SIZE + 8,
+    height: AVATAR_SIZE + 8,
+    borderRadius: (AVATAR_SIZE + 8) / 2,
     borderWidth: 4,
     borderColor: COLORS.white,
+    backgroundColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+    overflow: 'hidden',
   },
-  verifiedBadgeLarge: {
+  heroAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: AVATAR_SIZE / 2,
+  },
+  heroVerifiedBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
+    bottom: 2,
+    right: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: COLORS.white,
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: COLORS.white,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  storeName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.black,
-    textAlign: 'center',
+
+  // ── Infos vendeur ──
+  sellerInfoSection: {
+    alignItems: 'center',
+    paddingTop: AVATAR_SIZE / 2 + 12,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: COLORS.white,
+  },
+  sellerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
     marginBottom: 8,
   },
-  storeDescription: {
-    fontSize: 14,
+  sellerName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.black,
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  officialBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(178,144,95,0.12)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+    gap: 4,
+  },
+  officialBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 5,
+    marginBottom: 10,
+  },
+  categoryPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textTransform: 'capitalize',
+  },
+  sellerDesc: {
+    fontSize: 13,
     color: COLORS.gray,
     textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 20,
     lineHeight: 20,
+    marginBottom: 20,
+    paddingHorizontal: 12,
   },
+
+  // Stats row
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    paddingVertical: 20,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.backgroundAlt,
+    borderRadius: 16,
+    paddingVertical: 16,
     marginBottom: 20,
   },
-  statItem: {
+  statBlock: {
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 20,
+    gap: 4,
   },
   statIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    justifyContent: 'center',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.black,
+    justifyContent: 'center',
     marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.gray,
-    fontWeight: '500',
+  statValue: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.black,
   },
-  statDivider: {
+  statLabel: {
+    fontSize: 11,
+    color: COLORS.gray,
+    fontWeight: '600',
+  },
+  statsDivider: {
     width: 1,
-    height: 50,
+    height: 36,
     backgroundColor: COLORS.border,
   },
-  actionButtons: {
+
+  // Boutons action
+  actionRow: {
     flexDirection: 'row',
     width: '100%',
-    gap: 8,
+    gap: 10,
     alignItems: 'center',
-    paddingHorizontal: 4,
   },
-  followButton: {
+  followBtnWrapper: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  likeButton: {
+  followBtnGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    gap: 7,
+  },
+  followBtnText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  iconActionBtn: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -1224,385 +1460,419 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  followButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    gap: 6,
+  iconActionBtnActive: {
+    borderColor: COLORS.red,
   },
-  followButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  visitStoreButton: {
+  visitStoreBtnWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.white,
     borderWidth: 2,
     borderColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    gap: 3,
-    minWidth: 0,
+    borderRadius: 14,
+    paddingVertical: 13,
+    backgroundColor: COLORS.white,
+    gap: 5,
   },
-  visitStoreButtonText: {
-    color: COLORS.primary,
-    fontSize: 12,
+  visitStoreBtnDisabled: {
+    borderColor: COLORS.midGray,
+    backgroundColor: COLORS.lightGray,
+  },
+  visitStoreBtnText: {
+    fontSize: 13,
     fontWeight: '700',
-    flexShrink: 1,
+    color: COLORS.primary,
   },
-  disabledText: {
-    color: COLORS.gray,
+
+  // Alerte suspension
+  suspendedBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.red,
   },
-  tabs: {
+  suspendedBannerGrad: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 14,
+    gap: 10,
+  },
+  suspendedBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.red,
+    fontWeight: '600',
+    lineHeight: 19,
+  },
+
+  // ── Onglets ──
+  tabsBar: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    marginTop: 12,
   },
-  tab: {
+  tabBtn: {
     flex: 1,
-    paddingVertical: 16,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: 14,
+    position: 'relative',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
   },
-  activeTab: {
-    borderBottomColor: COLORS.primary,
-  },
-  tabText: {
-    fontSize: 15,
+  tabBtnActive: {},
+  tabBtnText: {
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.gray,
   },
-  activeTabText: {
+  tabBtnTextActive: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+  tabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 12,
+    right: 12,
+    height: 3,
+    backgroundColor: COLORS.primary,
+    borderRadius: 3,
+  },
+  tabBadge: {
+    minWidth: 20,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: COLORS.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  tabBadgeActive: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.gray,
+  },
+  tabBadgeTextActive: {
     color: COLORS.primary,
   },
+
+  // ── Contenu onglets ──
   tabContent: {
     padding: 16,
   },
   aboutSection: {
-    gap: 16,
+    gap: 14,
   },
   infoSection: {
-    gap: 16,
+    gap: 14,
   },
+
+  // Info cards
   infoCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  infoCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 10,
-  },
-  infoCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.black,
-  },
-  infoCardContent: {
-    gap: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: COLORS.gray,
-    fontWeight: '500',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: COLORS.black,
-    fontWeight: '600',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  activeBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-  },
-  suspendedBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  activeText: {
-    color: COLORS.green,
-  },
-  suspendedText: {
-    color: COLORS.red,
-  },
-  descriptionText: {
-    fontSize: 14,
-    color: COLORS.darkGray,
-    lineHeight: 22,
-  },
-  contactInfo: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.darkGray,
-    marginLeft: 12,
-  },
-  suspendedNotice: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    padding: 16,
-    margin: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.red,
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  suspendedNoticeText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.red,
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-  bottomSpacing: {
-    height: 32,
-  },
-  reviewsSection: {
-    gap: 16,
-  },
-  reviewsHeader: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  reviewsSummary: {
-    alignItems: 'center',
-  },
-  ratingBig: {
-    alignItems: 'center',
-  },
-  ratingBigNumber: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: COLORS.black,
-    marginBottom: 8,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 4,
-    marginBottom: 8,
-  },
-  reviewsCount: {
-    fontSize: 14,
-    color: COLORS.gray,
-    fontWeight: '500',
-  },
-  emptyReviews: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  emptyReviewsTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.black,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyReviewsText: {
-    fontSize: 14,
-    color: COLORS.gray,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  reviewsList: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  reviewsListTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.black,
-    marginBottom: 12,
-  },
-  reviewsPlaceholder: {
-    fontSize: 14,
-    color: COLORS.gray,
-    fontStyle: 'italic',
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  reviewsFilters: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.lightGray,
-  },
-  filterButtonActive: {
-    backgroundColor: COLORS.primary,
-  },
-  filterButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.darkGray,
-  },
-  filterButtonTextActive: {
-    color: COLORS.white,
-  },
-  reviewCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
     shadowRadius: 8,
     elevation: 3,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.03)',
   },
-  reviewHeader: {
+  infoCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     marginBottom: 14,
   },
-  reviewUserInfo: {
+  infoCardIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.black,
+  },
+  infoCardBody: {
+    gap: 0,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  infoRowIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.backgroundAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoRowContent: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoRowLabel: {
+    fontSize: 13,
+    color: COLORS.gray,
+    fontWeight: '500',
+  },
+  infoRowValue: {
+    fontSize: 13,
+    color: COLORS.black,
+    fontWeight: '700',
+    maxWidth: '55%',
+    textAlign: 'right',
+  },
+  infoRowSep: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginLeft: 38,
+  },
+  descText: {
+    fontSize: 14,
+    color: COLORS.darkGray,
+    lineHeight: 22,
+  },
+  categoryChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textTransform: 'capitalize',
+  },
+
+  // ── Avis ──
+  reviewsSection: {
+    gap: 16,
+  },
+  ratingCard: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  ratingCardGrad: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  ratingBigNum: {
+    fontSize: 52,
+    fontWeight: '800',
+    color: COLORS.black,
+    lineHeight: 58,
+  },
+  ratingStarsRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  ratingCountText: {
+    fontSize: 13,
+    color: COLORS.gray,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: COLORS.lightGray,
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.darkGray,
+  },
+  filterChipTextActive: {
+    color: COLORS.white,
+  },
+  emptyReviews: {
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 40,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  emptyReviewsIconBg: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyReviewsTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.black,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptyReviewsText: {
+    fontSize: 13,
+    color: COLORS.gray,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  reviewCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
+  },
+  reviewCardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
+    marginBottom: 12,
   },
   reviewAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  reviewAvatarText: {
+  reviewAvatarLetter: {
     color: COLORS.white,
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
   },
-  reviewUserDetails: {
+  reviewUserInfo: {
     flex: 1,
   },
   reviewUserName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: COLORS.black,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   reviewMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  reviewDateSeparator: {
-    fontSize: 12,
-    color: COLORS.gray,
+  starsContainer: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  reviewDotSep: {
+    fontSize: 11,
+    color: COLORS.midGray,
     fontWeight: '700',
   },
   reviewDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.gray,
     fontWeight: '500',
   },
   reviewComment: {
     fontSize: 14,
     color: COLORS.darkGray,
-    lineHeight: 22,
-    marginBottom: 14,
-    paddingLeft: 2,
+    lineHeight: 21,
+    marginBottom: 12,
   },
-  reviewFooter: {
+  reviewCardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingTop: 12,
+    paddingTop: 10,
   },
-  reviewLikeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.backgroundAlt,
-  },
-  reviewLikeButtonActive: {
-    backgroundColor: COLORS.primary,
-  },
-  reviewLikeText: {
-    fontSize: 14,
-    color: COLORS.gray,
-    fontWeight: '700',
-  },
-  reviewLikeTextActive: {
-    color: COLORS.white,
-  },
-  reviewDeleteButton: {
+  reviewLikeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: COLORS.lightRed,
+    backgroundColor: COLORS.backgroundAlt,
   },
-  reviewDeleteText: {
+  reviewLikeBtnActive: {
+    backgroundColor: COLORS.primary,
+  },
+  reviewLikeBtnText: {
     fontSize: 13,
+    color: COLORS.gray,
+    fontWeight: '700',
+  },
+  reviewLikeBtnTextActive: {
+    color: COLORS.white,
+  },
+  reviewDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: COLORS.redLight,
+  },
+  reviewDeleteBtnText: {
+    fontSize: 12,
     color: COLORS.red,
     fontWeight: '700',
   },
@@ -1611,8 +1881,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginTop: 16,
+    marginBottom: 4,
   },
-  pageButton: {
+  pageBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -1620,149 +1891,168 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pageButtonActive: {
+  pageBtnActive: {
     backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  pageButtonText: {
+  pageBtnText: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.darkGray,
   },
-  pageButtonTextActive: {
+  pageBtnTextActive: {
     color: COLORS.white,
+    fontWeight: '800',
   },
-  addReviewForm: {
+
+  // Formulaire avis
+  addReviewCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 20,
-    marginTop: 16,
+    marginTop: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
+  },
+  addReviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 18,
   },
   addReviewTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginBottom: 16,
-  },
-  ratingInput: {
-    marginBottom: 16,
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.black,
   },
   ratingInputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: COLORS.darkGray,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   commentInput: {
     backgroundColor: COLORS.backgroundAlt,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     fontSize: 14,
     color: COLORS.black,
     minHeight: 100,
+    marginTop: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
+    lineHeight: 21,
   },
-  submitReviewButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  submitReviewButtonGradient: {
-    paddingVertical: 14,
+  submitReviewBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  submitReviewButtonText: {
+  submitReviewBtnText: {
     color: COLORS.white,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  loginPrompt: {
-    marginTop: 16,
+
+  // Login prompt
+  loginPromptCard: {
     borderRadius: 20,
     overflow: 'hidden',
+    marginTop: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 5,
   },
-  loginPromptGradient: {
+  loginPromptGrad: {
     padding: 32,
     alignItems: 'center',
   },
-  loginPromptIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  loginPromptIconBg: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
   },
   loginPromptTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: COLORS.black,
     marginBottom: 8,
     textAlign: 'center',
   },
   loginPromptText: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.darkGray,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
     marginBottom: 24,
     paddingHorizontal: 8,
   },
-  loginPromptButtons: {
-    width: '100%',
-    gap: 12,
-  },
-  loginButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  loginButtonGradient: {
+  loginPromptPrimaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  loginButtonText: {
+  loginPromptPrimaryBtnText: {
     color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  signupButton: {
+  loginPromptSecondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.white,
     borderWidth: 2,
     borderColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    gap: 10,
+    borderRadius: 14,
+    paddingVertical: 13,
+    width: '100%',
+    gap: 8,
   },
-  signupButtonText: {
+  loginPromptSecondaryBtnText: {
     color: COLORS.primary,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  bottomSpacing: {
+    height: 40,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
   StatusBar,
   Animated,
   TextInput,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -64,6 +66,14 @@ export default function ProductDetailScreen({ route, navigation }) {
   const [quantityInput, setQuantityInput] = useState('1');
   const [activeTab, setActiveTab] = useState('description');
   const [showFullDescription, setShowFullDescription] = useState(false);
+
+  // Reviews state
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewRating, setReviewRating] = useState(5);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   const flatListRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -331,6 +341,60 @@ export default function ProductDetailScreen({ route, navigation }) {
     }
   };
 
+  // Fetch product comments
+  const fetchComments = useCallback(async () => {
+    if (!product?._id) return;
+    setCommentsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/comments/${product._id}`);
+      const data = await response.json();
+      setComments(data?.data || data?.comments || []);
+    } catch (e) {
+      // silently fail — reviews are not critical
+    } finally {
+      setCommentsLoading(false);
+    }
+  }, [product?._id]);
+
+  useEffect(() => {
+    if (activeTab === 'avis') fetchComments();
+  }, [activeTab, fetchComments]);
+
+  const handleSubmitReview = async () => {
+    if (!user) {
+      Alert.alert('Connexion requise', 'Veuillez vous connecter pour publier un avis');
+      return;
+    }
+    if (!reviewText.trim()) {
+      Alert.alert('Avis requis', 'Veuillez écrire votre avis avant de soumettre');
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      await fetch(`${API_URL}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          produit: product._id,
+          userId: user.id || user._id,
+          userName: user.name || user.userName,
+          etoil: reviewRating,
+          description: reviewText.trim(),
+          review: reviewText.trim(),
+          date: new Date().toISOString(),
+        }),
+      });
+      setReviewText('');
+      setReviewRating(5);
+      await fetchComments();
+      Alert.alert('Merci !', 'Votre avis a été publié.');
+    } catch (e) {
+      Alert.alert('Erreur', 'Impossible de publier votre avis pour le moment.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   // Handle share with deep linking
   const handleShare = async () => {
     try {
@@ -373,14 +437,14 @@ export default function ProductDetailScreen({ route, navigation }) {
           end={{ x: 1, y: 1 }}
         >
           <MaterialCommunityIcons name="tag" size={16} color={COLORS.white} />
-          <Text style={styles.discountText}><Text>-</Text>{discountPercent}<Text>%</Text></Text>
+          <Text style={styles.discountText}>{`-${discountPercent}%`}</Text>
         </LinearGradient>
       )}
 
       {/* Image counter badge */}
       <View style={styles.imageCounterBadge}>
         <MaterialCommunityIcons name="image-multiple" size={14} color={COLORS.white} />
-        <Text style={styles.imageCounterText}>{index + 1}<Text>/</Text>{images.length}</Text>
+        <Text style={styles.imageCounterText}>{`${index + 1}/${images.length}`}</Text>
       </View>
     </Animated.View>
   );
@@ -670,7 +734,7 @@ export default function ProductDetailScreen({ route, navigation }) {
                         <View style={styles.storeStat}>
                           <MaterialCommunityIcons name="account-group" size={14} color={COLORS.gray} />
                           <Text style={styles.storeStatText}>
-                            {product.Clefournisseur.followersCount}<Text> abonnés</Text>
+                            {`${product.Clefournisseur.followersCount} abonnés`}
                           </Text>
                         </View>
                       )}
@@ -802,34 +866,45 @@ export default function ProductDetailScreen({ route, navigation }) {
 
           {/* Tabs */}
           <View style={styles.tabsContainer}>
-            <View style={styles.tabsHeader}>
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'description' && styles.tabActive]}
-                onPress={() => setActiveTab('description')}
-              >
-                <Text style={[styles.tabText, activeTab === 'description' && styles.tabTextActive]}>
-                  Description
-                </Text>
-              </TouchableOpacity>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.tabsHeader}>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'description' && styles.tabActive]}
+                  onPress={() => setActiveTab('description')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'description' && styles.tabTextActive]}>
+                    Description
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'specs' && styles.tabActive]}
-                onPress={() => setActiveTab('specs')}
-              >
-                <Text style={[styles.tabText, activeTab === 'specs' && styles.tabTextActive]}>
-                  Spécifications
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'specs' && styles.tabActive]}
+                  onPress={() => setActiveTab('specs')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'specs' && styles.tabTextActive]}>
+                    Spécifications
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'delivery' && styles.tabActive]}
-                onPress={() => setActiveTab('delivery')}
-              >
-                <Text style={[styles.tabText, activeTab === 'delivery' && styles.tabTextActive]}>
-                  Livraison
-                </Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'delivery' && styles.tabActive]}
+                  onPress={() => setActiveTab('delivery')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'delivery' && styles.tabTextActive]}>
+                    Livraison
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'avis' && styles.tabActive]}
+                  onPress={() => setActiveTab('avis')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'avis' && styles.tabTextActive]}>
+                    Avis{comments.length > 0 ? ` (${comments.length})` : ''}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
 
             {/* Tab Content */}
             <View style={styles.tabContent}>
@@ -901,7 +976,7 @@ export default function ProductDetailScreen({ route, navigation }) {
                         </Text>
                         {zone.weightFee > 0 && (
                           <Text style={styles.deliveryInfo}>
-                            <Text>+ CFA</Text>{zone.weightFee}<Text>/kg</Text>
+                            {`+ ${formatPrice(zone.weightFee)} CFA/kg`}
                           </Text>
                         )}
                       </View>
@@ -918,6 +993,128 @@ export default function ProductDetailScreen({ route, navigation }) {
                         Votre satisfaction est au cœur de nos priorités.
                       </Text>
                     </View>
+                  </View>
+                </View>
+              )}
+
+              {activeTab === 'avis' && (
+                <View>
+                  {commentsLoading ? (
+                    <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 24 }} />
+                  ) : (
+                    <>
+                      {/* Rating summary */}
+                      {comments.length > 0 && (() => {
+                        const avg = comments.reduce((s, c) => s + (c.etoil || 0), 0) / comments.length;
+                        const dist = [5, 4, 3, 2, 1].map(star => ({
+                          star,
+                          count: comments.filter(c => Math.round(c.etoil) === star).length,
+                        }));
+                        return (
+                          <View style={styles.reviewSummary}>
+                            <View style={styles.reviewAvgBlock}>
+                              <Text style={styles.reviewAvgNumber}>{avg.toFixed(1)}</Text>
+                              <View style={styles.starsRow}>
+                                {[1,2,3,4,5].map(s => (
+                                  <Ionicons key={s} name={s <= Math.round(avg) ? 'star' : 'star-outline'} size={14} color="#FFB800" />
+                                ))}
+                              </View>
+                              <Text style={styles.reviewCountSmall}>{comments.length} avis</Text>
+                            </View>
+                            <View style={styles.reviewDistBlock}>
+                              {dist.map(({ star, count }) => (
+                                <View key={star} style={styles.reviewDistRow}>
+                                  <Text style={styles.reviewDistLabel}>{star}</Text>
+                                  <Ionicons name="star" size={10} color="#FFB800" />
+                                  <View style={styles.reviewDistBar}>
+                                    <View style={[styles.reviewDistFill, { width: `${comments.length ? (count / comments.length) * 100 : 0}%` }]} />
+                                  </View>
+                                  <Text style={styles.reviewDistCount}>{count}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          </View>
+                        );
+                      })()}
+
+                      {/* Comments list */}
+                      {comments.slice(0, showAllReviews ? undefined : 3).map((comment) => (
+                        <View key={comment._id} style={styles.commentCard}>
+                          <View style={styles.commentHeader}>
+                            <View style={styles.commentAvatar}>
+                              <Text style={styles.commentAvatarText}>
+                                {comment.userName ? comment.userName.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase() : '?'}
+                              </Text>
+                            </View>
+                            <View style={styles.commentMeta}>
+                              <Text style={styles.commentName}>{comment.userName || 'Anonyme'}</Text>
+                              <View style={styles.starsRow}>
+                                {[1,2,3,4,5].map(s => (
+                                  <Ionicons key={s} name={s <= (comment.etoil || 0) ? 'star' : 'star-outline'} size={12} color="#FFB800" />
+                                ))}
+                              </View>
+                            </View>
+                            <Text style={styles.commentDate}>
+                              {new Date(comment.date).toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </Text>
+                          </View>
+                          {comment.description && (
+                            <Text style={styles.commentText}>{comment.description}</Text>
+                          )}
+                          {comment.review && comment.review !== comment.description && (
+                            <Text style={styles.commentText}>{comment.review}</Text>
+                          )}
+                        </View>
+                      ))}
+
+                      {comments.length > 3 && !showAllReviews && (
+                        <TouchableOpacity style={styles.showAllBtn} onPress={() => setShowAllReviews(true)}>
+                          <Text style={styles.showAllBtnText}>Voir tous les avis ({comments.length})</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {comments.length === 0 && (
+                        <Text style={styles.noDataText}>Aucun avis pour ce produit</Text>
+                      )}
+                    </>
+                  )}
+
+                  {/* Write review */}
+                  <View style={styles.writeReviewSection}>
+                    <Text style={styles.writeReviewTitle}>Donner votre avis</Text>
+                    <View style={styles.starPickerRow}>
+                      {[1,2,3,4,5].map(s => (
+                        <TouchableOpacity key={s} onPress={() => setReviewRating(s)}>
+                          <Ionicons name={s <= reviewRating ? 'star' : 'star-outline'} size={28} color="#FFB800" />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TextInput
+                      style={styles.reviewInput}
+                      placeholder="Partagez votre expérience avec ce produit..."
+                      placeholderTextColor={COLORS.gray}
+                      multiline
+                      numberOfLines={3}
+                      value={reviewText}
+                      onChangeText={setReviewText}
+                    />
+                    <TouchableOpacity
+                      style={[styles.submitReviewBtn, submittingReview && { opacity: 0.6 }]}
+                      onPress={handleSubmitReview}
+                      disabled={submittingReview}
+                    >
+                      <LinearGradient
+                        colors={[COLORS.primary, '#62aca2']}
+                        style={styles.submitReviewGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        {submittingReview
+                          ? <ActivityIndicator size="small" color={COLORS.white} />
+                          : <Text style={styles.submitReviewText}>Publier mon avis</Text>
+                        }
+                      </LinearGradient>
+                    </TouchableOpacity>
                   </View>
                 </View>
               )}
@@ -981,12 +1178,6 @@ export default function ProductDetailScreen({ route, navigation }) {
                   const itemHasPromo = item.prixPromo > 0 && item.prixPromo < item.prix;
                   const itemDiscount = itemHasPromo ? Math.round(((item.prix - item.prixPromo) / item.prix) * 100) : 0;
 
-                  // Generate random rating between 3.0 and 5.0
-                  const rating = (3 + Math.random() * 2).toFixed(1);
-                  const ratingNum = parseFloat(rating);
-                  const fullStars = Math.floor(ratingNum);
-                  const hasHalfStar = ratingNum % 1 >= 0.5;
-
                   return (
                     <Animated.View
                       style={[
@@ -1027,7 +1218,7 @@ export default function ProductDetailScreen({ route, navigation }) {
                               end={{ x: 1, y: 1 }}
                             >
                               <MaterialCommunityIcons name="tag" size={12} color={COLORS.white} />
-                              <Text style={styles.similarPromoText}><Text>-</Text>{itemDiscount}<Text>%</Text></Text>
+                              <Text style={styles.similarPromoText}>{`-${itemDiscount}%`}</Text>
                             </LinearGradient>
                           )}
 
@@ -1086,22 +1277,6 @@ export default function ProductDetailScreen({ route, navigation }) {
                           <Text style={styles.similarName} numberOfLines={2}>
                             {item.name}
                           </Text>
-
-                          {/* Rating */}
-                          <View style={styles.similarRatingRow}>
-                            <View style={styles.ratingStars}>
-                              {[...Array(5)].map((_, i) => {
-                                if (i < fullStars) {
-                                  return <Ionicons key={i} name="star" size={12} color="#FFB800" />;
-                                } else if (i === fullStars && hasHalfStar) {
-                                  return <Ionicons key={i} name="star-half" size={12} color="#FFB800" />;
-                                } else {
-                                  return <Ionicons key={i} name="star-outline" size={12} color="#FFB800" />;
-                                }
-                              })}
-                            </View>
-                            <Text style={styles.ratingCount}><Text>(</Text>{rating}<Text>)</Text></Text>
-                          </View>
 
                           {/* Price Row */}
                           <View style={styles.similarPriceRow}>
@@ -1693,15 +1868,16 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     marginTop: 8,
-  },
-  tabsHeader: {
-    flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.lightGray,
   },
+  tabsHeader: {
+    flexDirection: 'row',
+  },
   tab: {
-    flex: 1,
+    minWidth: 100,
     paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
   },
   tabActive: {
@@ -2108,5 +2284,175 @@ const styles = StyleSheet.create({
     color: COLORS.darkGray,
     marginTop: 8,
     textAlign: 'center',
+  },
+  // Review styles
+  reviewSummary: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    gap: 16,
+  },
+  reviewAvgBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 72,
+  },
+  reviewAvgNumber: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: '#1a1a1a',
+    lineHeight: 40,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 1,
+    marginTop: 4,
+  },
+  reviewCountSmall: {
+    fontSize: 11,
+    color: COLORS.gray,
+    marginTop: 4,
+  },
+  reviewDistBlock: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  reviewDistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  reviewDistLabel: {
+    fontSize: 11,
+    color: COLORS.gray,
+    width: 10,
+    textAlign: 'right',
+  },
+  reviewDistBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  reviewDistFill: {
+    height: '100%',
+    backgroundColor: '#FFB800',
+    borderRadius: 3,
+  },
+  reviewDistCount: {
+    fontSize: 11,
+    color: COLORS.gray,
+    width: 16,
+    textAlign: 'right',
+  },
+  commentCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  commentAvatarText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  commentMeta: {
+    flex: 1,
+  },
+  commentName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 2,
+  },
+  commentDate: {
+    fontSize: 11,
+    color: COLORS.gray,
+  },
+  commentText: {
+    fontSize: 13,
+    color: '#4A5568',
+    lineHeight: 20,
+  },
+  showAllBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  showAllBtnText: {
+    color: COLORS.primary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  writeReviewSection: {
+    marginTop: 8,
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+  },
+  writeReviewTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 10,
+  },
+  starPickerRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  reviewInput: {
+    backgroundColor: COLORS.white,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    fontSize: 14,
+    color: '#1a1a1a',
+    textAlignVertical: 'top',
+    minHeight: 80,
+    marginBottom: 12,
+  },
+  submitReviewBtn: {
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  submitReviewGradient: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitReviewText: {
+    color: COLORS.white,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

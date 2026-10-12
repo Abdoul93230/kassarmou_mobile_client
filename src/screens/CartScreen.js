@@ -56,7 +56,7 @@ export default function CartScreen({ navigation }) {
       duration: 500,
       useNativeDriver: true,
     }).start();
-    
+
     dispatch(loadCart());
     fetchShippingZones();
     detectCustomerZone();
@@ -69,11 +69,11 @@ export default function CartScreen({ navigation }) {
         const appliedCode = await AsyncStorage.getItem('appliedPromoCode');
         const user = await AsyncStorage.getItem('user'); // Vérification utilisateur directe si besoin
         const userData = user ? JSON.parse(user) : null;
-        
+
         if (appliedCode && articles?.length > 0 && !appliedPromo && userData) {
           console.log('🔄 Auto-application du code promo (Relance):', appliedCode);
           setCodePromo(appliedCode);
-          
+
           // Petit délai comme sur le web pour laisser le sous-total se stabiliser
           setTimeout(async () => {
             try {
@@ -104,7 +104,7 @@ export default function CartScreen({ navigation }) {
               }
               // On ne nettoie pas forcément tout de suite si on veut que ça persiste durant la session panier
             } catch (err) {
-              console.warn('Erreur lors de l’auto-validation du code promo:', err);
+              console.warn("Erreur lors de l'auto-validation du code promo:", err);
             }
           }, 600);
         }
@@ -125,10 +125,10 @@ export default function CartScreen({ navigation }) {
           "Client-IP": ipResponse.data,
         },
       });
-      
+
       const region = response.data.regionName || "Niamey";
       const country = response.data.country || "Niger";
-      
+
       try {
         const zoneResponse = await axios.get(`${API_URL}/api/shipping2/zones/search`, {
           params: { q: region, limit: 1 },
@@ -138,12 +138,12 @@ export default function CartScreen({ navigation }) {
           setSelectedZone(zoneResponse.data.data[0]);
           return;
         }
-        
+
         // Fallback: chercher par pays
         const countryResponse = await axios.get(`${API_URL}/api/shipping2/zones/search`, {
           params: { q: country, limit: 1 },
         });
-        
+
         if (countryResponse.data.success && countryResponse?.data?.data?.length > 0) {
           setSelectedZone(countryResponse.data.data[0]);
         }
@@ -170,7 +170,7 @@ export default function CartScreen({ navigation }) {
   // Regrouper les articles par boutique (similaire à la version web)
   const groupedByStore = useMemo(() => {
     const storeGroups = {};
-    
+
     articles?.forEach((item) => {
       const storeId = item.Clefournisseur?._id || "unknown";
       const storeName = item.Clefournisseur?.storeName || item.Clefournisseur?.name || "Boutique inconnue";
@@ -208,11 +208,11 @@ export default function CartScreen({ navigation }) {
       // Ajouter la variante au produit
       storeGroups[storeId].products[productId].variants.push(item);
       storeGroups[storeId].products[productId].totalQuantity += quantity;
-      
+
       // Calculer le prix de cette variante
       const variantPrice = (item.prixPromo || item.prix || 0);
       const variantTotalPrice = variantPrice * quantity;
-      
+
       storeGroups[storeId].products[productId].totalValue += variantTotalPrice;
 
       // Calculer le poids (estimation basée sur les dimensions ou poids par défaut)
@@ -251,12 +251,12 @@ export default function CartScreen({ navigation }) {
           appliedPolicy: response.data.data.appliedPolicy || { zone: 'API Response', type: 'calculated' }
         };
       }
-      
+
       throw new Error('Réponse API invalide ou incomplète');
-      
+
     } catch (err) {
       console.warn(`Erreur API boutique ${storeId}, utilisation du fallback:`, err);
-      
+
       // Si l'API échoue, utiliser l'ancien système comme fallback
       return {
         success: false,
@@ -294,7 +294,7 @@ export default function CartScreen({ navigation }) {
         );
 
         calculations[storeId] = shippingResult;
-        
+
         // Si le calcul échoue complètement (coût = 0), marquer les produits comme indisponibles
         if (shippingResult.totalCost === 0) {
           Object.keys(storeGroup.products).forEach(productId => {
@@ -303,7 +303,7 @@ export default function CartScreen({ navigation }) {
         }
       } catch (error) {
         console.error(`Erreur critique pour la boutique ${storeGroup.storeName}:`, error);
-        
+
         // Créer un calcul de fallback même en cas d'erreur critique
         calculations[storeId] = {
           success: false,
@@ -316,7 +316,7 @@ export default function CartScreen({ navigation }) {
             type: 'emergency-fallback'
           }
         };
-        
+
         // Marquer tous les produits de cette boutique comme indisponibles
         Object.keys(storeGroup.products).forEach(productId => {
           unavailable.add(`${storeId}-${productId}`);
@@ -328,7 +328,7 @@ export default function CartScreen({ navigation }) {
     setUnavailableProducts(unavailable);
     setShippingCalculated(true);
     setLoading(false);
-    
+
     // Sauvegarder pour le checkout
     await AsyncStorage.setItem('shippingDetails', JSON.stringify({
       zone: customerZone,
@@ -346,8 +346,8 @@ export default function CartScreen({ navigation }) {
   // Calculer le sous-total
   const subtotal = useMemo(() => {
     return articles?.reduce((sum, item) => {
-      const price = item.prixPromo > 0 
-        ? item.prixPromo 
+      const price = item.prixPromo > 0
+        ? item.prixPromo
         : item.prix;
       return sum + (price * item.quantite);
     }, 0);
@@ -388,16 +388,16 @@ export default function CartScreen({ navigation }) {
     if (item.stockVariante !== undefined) {
       return item.stockVariante;
     }
-    
+
     // Si l'article a des variantes dans ses données originales
     if (item.variants && item.variants?.length > 0) {
       // Trouver la variante correspondant à la couleur sélectionnée
-      const variant = item.variants.find((v) => 
+      const variant = item.variants.find((v) =>
         v.color === item.color
       );
       return variant ? (variant.quantite || variant.stock || 0) : 0;
     }
-    
+
     // Pour les produits sans variantes, utiliser le stock général du produit
     return item.quantite || item.stock || item.quantity_in_stock || 10;
   }, []);
@@ -406,7 +406,7 @@ export default function CartScreen({ navigation }) {
   const handleUpdateQuantity = useCallback((item, newQuantity) => {
     const availableStock = getAvailableStock(item);
     const finalQuantity = Math.max(1, Math.min(availableStock, newQuantity));
-    
+
     dispatch(updateArticleQuantity(
       item.id,
       item.color,
@@ -646,186 +646,164 @@ export default function CartScreen({ navigation }) {
     });
   }, [user, articles, selectedZone, shippingCalculations, groupedByStore, subtotal, reduction, totalShippingFee, total, appliedPromo, navigation]);
 
-  // Render variante de produit (AMÉLIORÉ - style web)
+  // ─────────────────────────────────────────────────────────────
+  // RENDER: variante individuelle (Temu-style)
+  // ─────────────────────────────────────────────────────────────
   const renderVariant = useCallback((item, index, storeId, productId) => {
     const isUnavailable = unavailableProducts.has(`${storeId}-${productId}`);
     const availableStock = getAvailableStock(item);
-    const price = item.prixPromo > 0 
-      ? item.prixPromo 
-      : item.prix;
+    const price = item.prixPromo > 0 ? item.prixPromo : item.prix;
     const hasPromo = item.prixPromo > 0;
 
     return (
-      <View key={`${item._id}-${index}`} style={[
-        styles.variantRow, 
-        isUnavailable && styles.variantRowUnavailable
-      ]}>
-        {/* Image et détails */}
-        <View style={styles.variantMainInfo}>
+      <View
+        key={`${item._id}-${index}`}
+        style={[styles.variantRow, isUnavailable && styles.variantRowUnavailable]}
+      >
+        {/* Thumbnail rond */}
+        <View style={styles.variantImageWrap}>
           {item.colorImage || item.image1 ? (
-            <Image 
-              source={{ uri: item.colorImage || item.image1 }} 
-              style={styles.variantThumbnail} 
+            <Image
+              source={{ uri: item.colorImage || item.image1 }}
+              style={styles.variantThumb}
             />
           ) : (
-            <View style={[styles.variantThumbnail, styles.placeholderThumbnail]}>
-              <Ionicons name="image-outline" size={20} color={COLORS.textLighter} />
+            <View style={[styles.variantThumb, styles.variantThumbPlaceholder]}>
+              <Ionicons name="image-outline" size={22} color="#ccc" />
             </View>
           )}
-          
-          <View style={styles.variantInfo}>
-            {/* Tags couleur et taille */}
-            <View style={styles.variantTags}>
-              {item.color && (
-                <View style={styles.variantTag}>
-                  <Text style={styles.variantTagText}>{item.color}</Text>
-                </View>
-              )}
-              {item.taille && (
-                <View style={styles.variantTag}>
-                  <Text style={styles.variantTagText}>{item.taille}</Text>
-                </View>
-              )}
-              {isUnavailable && (
-                <View style={styles.unavailableTag}>
-                  <Text style={styles.unavailableTagText}>Non disponible</Text>
-                </View>
-              )}
+          {isUnavailable && (
+            <View style={styles.unavailableOverlay}>
+              <Text style={styles.unavailableOverlayText}>Indisponible</Text>
             </View>
-
-            {/* Prix */}
-            <View style={styles.variantPrices}>
-              {hasPromo && (
-                <Text style={styles.variantOldPrice} numberOfLines={1}>{formatPrice(item.prix)} CFA</Text>
-              )}
-              <Text style={[styles.variantPrice, hasPromo && styles.variantPromoPrice]} numberOfLines={1}>
-                {formatPrice(price)} CFA
-              </Text>
-            </View>
-          </View>
+          )}
         </View>
 
-        {/* Contrôles */}
-        <View style={styles.variantControls}>
-          <View style={styles.quantityControlsCompact}>
-            <TouchableOpacity
-              style={[
-                styles.quantityBtnCompact,
-                item.quantite <= 1 && styles.quantityBtnDisabled
-              ]}
-              onPress={() => handleUpdateQuantity(item, item.quantite - 1)}
-              activeOpacity={0.7}
-              disabled={item.quantite <= 1}
-            >
-              <Ionicons 
-                name="remove" 
-                size={16} 
-                color={item.quantite <= 1 ? COLORS.border : COLORS.primary} 
-              />
-            </TouchableOpacity>
-            
-            <Text style={styles.quantityValue}>{item.quantite}</Text>
-            
-            <TouchableOpacity
-              style={[
-                styles.quantityBtnCompact,
-                item.quantite >= availableStock && styles.quantityBtnDisabled
-              ]}
-              onPress={() => handleUpdateQuantity(item, item.quantite + 1)}
-              activeOpacity={0.7}
-              disabled={item.quantite >= availableStock}
-            >
-              <Ionicons 
-                name="add" 
-                size={16} 
-                color={item.quantite >= availableStock ? COLORS.border : COLORS.primary} 
-              />
-            </TouchableOpacity>
-          </View>
-          
-          <Text style={styles.stockIndicator}>Stock: {availableStock}</Text>
-          
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => handleRemoveItem(item)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="trash-outline" size={18} color={COLORS.error} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }, [unavailableProducts, getAvailableStock, formatPrice, handleUpdateQuantity, handleRemoveItem]);
-
-  // Render groupe produit (MODIFIÉ)
-  const renderProduct = useCallback((product, storeId) => {
-    const key = `${storeId}-${product.productId}`;
-    const isExpanded = expandedProducts[key];
-    const isUnavailable = unavailableProducts.has(key);
-
-    return (
-      <View key={product.productId} style={styles.productCard}>
-        <TouchableOpacity
-          style={styles.productHeader}
-          onPress={() => toggleProductExpansion(storeId, product.productId)}
-          activeOpacity={0.8}
-        >
-          <Image source={{ uri: product.imageUrl }} style={styles.productImage} />
-          
-          <View style={styles.productInfo}>
-            <Text style={styles.productName} numberOfLines={2}>
-              {product.name}
-            </Text>
-            <View style={styles.productMeta}>
-              <Text style={styles.productVariants}>
-                {product.variants?.length} variante{product.variants?.length > 1 ? 's' : ''}
-              </Text>
-              <Text style={styles.productWeight}>
-                Poids: {product.totalWeight.toFixed(2)} kg
-              </Text>
-            </View>
-            {isUnavailable && (
-              <View style={styles.unavailableBadge}>
-                <Ionicons name="warning-outline" size={14} color={COLORS.error} />
-                <Text style={styles.unavailableBadgeText}>Non livrable</Text>
+        {/* Infos centre */}
+        <View style={styles.variantBody}>
+          {/* Tags couleur / taille */}
+          <View style={styles.variantTagRow}>
+            {item.color && (
+              <View style={styles.variantChip}>
+                <Text style={styles.variantChipText}>{item.color}</Text>
+              </View>
+            )}
+            {item.taille && (
+              <View style={styles.variantChip}>
+                <Text style={styles.variantChipText}>{item.taille}</Text>
               </View>
             )}
           </View>
 
-          <View style={styles.productPriceContainer}>
-            <Text style={styles.productPrice}>{formatPrice(product.totalValue)} CFA</Text>
-            <View style={styles.productHeaderActions}>
-              {/* AJOUT: Bouton pour supprimer le produit complet */}
-              <TouchableOpacity
-                style={styles.deleteProductButton}
-                onPress={() => handleRemoveProductGroup(storeId, product.productId)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash-outline" size={18} color={COLORS.error} />
-              </TouchableOpacity>
-              <Ionicons
-                name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                size={20}
-                color={COLORS.textLight}
-              />
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {isExpanded && (
-          <View style={styles.variantsContainer}>
-            {product.variants?.map((item, index) => 
-              renderVariant(item, index, storeId, product.productId)
+          {/* Prix */}
+          <View style={styles.variantPriceRow}>
+            <Text style={styles.variantPriceMain}>
+              {formatPrice(price)} CFA
+            </Text>
+            {hasPromo && (
+              <Text style={styles.variantPriceOld}>
+                {formatPrice(item.prix)} CFA
+              </Text>
             )}
           </View>
-        )}
+
+          {/* Stepper quantité */}
+          <View style={styles.stepperRow}>
+            <TouchableOpacity
+              style={[styles.stepperBtn, item.quantite <= 1 && styles.stepperBtnDisabled]}
+              onPress={() => handleUpdateQuantity(item, item.quantite - 1)}
+              activeOpacity={0.7}
+              disabled={item.quantite <= 1}
+            >
+              <Ionicons
+                name="remove"
+                size={15}
+                color={item.quantite <= 1 ? '#ccc' : COLORS.primary}
+              />
+            </TouchableOpacity>
+            <Text style={styles.stepperValue}>{item.quantite}</Text>
+            <TouchableOpacity
+              style={[styles.stepperBtn, item.quantite >= availableStock && styles.stepperBtnDisabled]}
+              onPress={() => handleUpdateQuantity(item, item.quantite + 1)}
+              activeOpacity={0.7}
+              disabled={item.quantite >= availableStock}
+            >
+              <Ionicons
+                name="add"
+                size={15}
+                color={item.quantite >= availableStock ? '#ccc' : COLORS.primary}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Bouton supprimer */}
+        <TouchableOpacity
+          style={styles.variantDeleteBtn}
+          onPress={() => handleRemoveItem(item)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="trash" size={18} color="#EF4444" />
+        </TouchableOpacity>
       </View>
     );
-  }, [expandedProducts, unavailableProducts, toggleProductExpansion, renderVariant, formatPrice, handleRemoveProductGroup]);
+  }, [unavailableProducts, getAvailableStock, handleUpdateQuantity, handleRemoveItem]);
 
-  // Render groupe boutique
+  // ─────────────────────────────────────────────────────────────
+  // RENDER: groupe produit (toujours visible, pas d'accordion)
+  // ─────────────────────────────────────────────────────────────
+  const renderProduct = useCallback((product, storeId) => {
+    const key = `${storeId}-${product.productId}`;
+    const isUnavailable = unavailableProducts.has(key);
+
+    return (
+      <View key={product.productId} style={styles.productCard}>
+        {/* En-tête produit */}
+        <View style={styles.productHeader}>
+          <Image
+            source={{ uri: product.imageUrl }}
+            style={styles.productThumb}
+          />
+          <View style={styles.productHeaderInfo}>
+            <Text style={styles.productName} numberOfLines={2}>
+              {product.name}
+            </Text>
+            <Text style={styles.productSubtitle}>
+              {product.variants?.length} variante{product.variants?.length > 1 ? 's' : ''} · {product.totalWeight.toFixed(2)} kg
+            </Text>
+            {isUnavailable && (
+              <View style={styles.unavailablePill}>
+                <Ionicons name="warning-outline" size={12} color="#EF4444" />
+                <Text style={styles.unavailablePillText}>Non livrable</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.productHeaderRight}>
+            <Text style={styles.productTotalPrice}>{formatPrice(product.totalValue)} CFA</Text>
+            <TouchableOpacity
+              style={styles.productDeleteBtn}
+              onPress={() => handleRemoveProductGroup(storeId, product.productId)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Variantes toujours visibles */}
+        <View style={styles.productVariantsList}>
+          {product.variants?.map((item, index) =>
+            renderVariant(item, index, storeId, product.productId)
+          )}
+        </View>
+      </View>
+    );
+  }, [unavailableProducts, renderVariant, handleRemoveProductGroup]);
+
+  // ─────────────────────────────────────────────────────────────
+  // RENDER: groupe boutique (toujours déployé, pas d'accordion)
+  // ─────────────────────────────────────────────────────────────
   const renderStoreGroup = useCallback((storeGroup) => {
-    const isExpanded = expandedStores[storeGroup.storeId];
     const shippingCalc = shippingCalculations[storeGroup.storeId];
     const hasUnavailableProducts = Object.keys(storeGroup.products).some(productId =>
       unavailableProducts.has(`${storeGroup.storeId}-${productId}`)
@@ -833,164 +811,159 @@ export default function CartScreen({ navigation }) {
 
     return (
       <View key={storeGroup.storeId} style={styles.storeCard}>
-        <TouchableOpacity
-          style={[
-            styles.storeHeader,
-            hasUnavailableProducts && styles.storeHeaderWarning
-          ]}
-          onPress={() => toggleStoreExpansion(storeGroup.storeId)}
-          activeOpacity={0.8}
+        {/* En-tête boutique */}
+        <LinearGradient
+          colors={['#F0FAF8', '#FFFFFF']}
+          style={[styles.storeHeader, hasUnavailableProducts && styles.storeHeaderWarning]}
         >
-          <View style={styles.storeInfo}>
-            <View style={styles.storeIcon}>
-              {storeGroup.storeInfo.logo ? (
-                <Image
-                  source={{ uri: storeGroup.storeInfo.logo }}
-                  style={styles.storeLogo}
-                />
-              ) : (
-                <Ionicons name="storefront-outline" size={24} color={COLORS.white} />
-              )}
-            </View>
-            <View style={styles.storeDetails}>
-              <Text style={styles.storeName}>{storeGroup.storeName}</Text>
-              <Text style={styles.storeLocation}>
-                {storeGroup.storeInfo.city || 'N/A'}, {storeGroup.storeInfo.region || 'N/A'}
+          {/* Logo boutique */}
+          <View style={styles.storeLogoWrap}>
+            {storeGroup.storeInfo.logo ? (
+              <Image source={{ uri: storeGroup.storeInfo.logo }} style={styles.storeLogo} />
+            ) : (
+              <LinearGradient
+                colors={[COLORS.primary, '#1D7A6A']}
+                style={styles.storeLogoFallback}
+              >
+                <Ionicons name="storefront" size={20} color="#fff" />
+              </LinearGradient>
+            )}
+          </View>
+
+          {/* Nom + badge vérifié */}
+          <View style={styles.storeHeaderInfo}>
+            <View style={styles.storeNameRow}>
+              <Text style={styles.storeName} numberOfLines={1}>
+                {storeGroup.storeName}
               </Text>
-              <View style={styles.storeMeta}>
-                <Text style={styles.storeMetaText}>
-                  {Object.keys(storeGroup.products)?.length} produit(s)
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-circle" size={14} color={COLORS.primary} />
+                <Text style={styles.verifiedText}>Vérifié</Text>
+              </View>
+            </View>
+            <Text style={styles.storeSubtitle}>
+              {Object.keys(storeGroup.products).length} produit(s) · {storeGroup.totalWeight.toFixed(2)} kg
+            </Text>
+            {storeGroup.storeInfo.city && (
+              <Text style={styles.storeLocation}>
+                <Ionicons name="location-outline" size={11} color={COLORS.secondary} />
+                {' '}{storeGroup.storeInfo.city}{storeGroup.storeInfo.region ? `, ${storeGroup.storeInfo.region}` : ''}
+              </Text>
+            )}
+          </View>
+
+          {/* Frais de livraison boutique */}
+          <View style={styles.storeShippingBadge}>
+            {shippingCalc ? (
+              <>
+                <Ionicons name="bicycle-outline" size={14} color={COLORS.primary} />
+                <Text style={styles.storeShippingCost}>
+                  {formatPrice(shippingCalc.totalCost)} CFA
                 </Text>
-                <Text style={styles.storeMetaText}>•</Text>
-                <Text style={styles.storeMetaText}>
-                  {storeGroup.totalWeight.toFixed(2)} kg
+              </>
+            ) : loading ? (
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            ) : (
+              <Ionicons name="time-outline" size={14} color={COLORS.secondary} />
+            )}
+          </View>
+        </LinearGradient>
+
+        {/* Alerte livraison limitée */}
+        {hasUnavailableProducts && (
+          <View style={styles.storeWarningBanner}>
+            <Ionicons name="warning" size={14} color="#EF4444" />
+            <Text style={styles.storeWarningText}>
+              Certains produits ne sont pas livrables dans votre zone
+            </Text>
+          </View>
+        )}
+
+        {/* Détails expédition (si calculés) */}
+        {shippingCalc && (
+          <View style={styles.shippingDetailsCard}>
+            <View style={styles.shippingDetailsRow}>
+              <View style={styles.shippingDetailsItem}>
+                <Text style={styles.shippingDetailsLabel}>Coût fixe</Text>
+                <Text style={styles.shippingDetailsValue}>{formatPrice(shippingCalc.fixedCost || 0)} CFA</Text>
+              </View>
+              <View style={styles.shippingDetailsDivider} />
+              <View style={styles.shippingDetailsItem}>
+                <Text style={styles.shippingDetailsLabel}>Coût poids</Text>
+                <Text style={styles.shippingDetailsValue}>
+                  {formatPrice(shippingCalc.weightCost || (shippingCalc.costPerKg || 0) * storeGroup.totalWeight)} CFA
+                </Text>
+              </View>
+              <View style={styles.shippingDetailsDivider} />
+              <View style={styles.shippingDetailsItem}>
+                <Text style={styles.shippingDetailsLabel}>Politique</Text>
+                <Text style={[styles.shippingDetailsValue, styles.shippingDetailsPolicyText]} numberOfLines={1}>
+                  {shippingCalc.appliedPolicy?.zone || 'Défaut'}
                 </Text>
               </View>
             </View>
-          </View>
-          
-          <View style={styles.storeRight}>
-            {hasUnavailableProducts && (
-              <View style={styles.storeWarningBadge}>
-                <Ionicons name="warning-outline" size={14} color={COLORS.error} />
-                <Text style={styles.storeWarningText}>Livraison limitée</Text>
+            {!shippingCalc.success && (
+              <View style={styles.shippingFallbackBanner}>
+                <Ionicons name="information-circle-outline" size={13} color={COLORS.secondary} />
+                <Text style={styles.shippingFallbackText}>Tarif par défaut appliqué</Text>
               </View>
-            )}
-            
-            {shippingCalc && (
-              <View style={styles.shippingInfo}>
-                <Text style={styles.shippingCost}>{formatPrice(shippingCalc.totalCost)} CFA</Text>
-                <View style={styles.shippingLabel}>
-                  <Ionicons name="car-outline" size={12} color={COLORS.primary} />
-                  <Text style={styles.shippingLabelText}>expédition</Text>
-                </View>
-              </View>
-            )}
-            
-            <Ionicons
-              name={isExpanded ? 'chevron-up' : 'chevron-down'}
-              size={20}
-              color={COLORS.textLight}
-            />
-          </View>
-        </TouchableOpacity>
-
-        {isExpanded && (
-          <View style={styles.storeContent}>
-            {/* Informations d'expédition */}
-            {shippingCalc && (
-              <View style={styles.shippingDetailsCard}>
-                <View style={styles.shippingDetailsHeader}>
-                  <Text style={styles.shippingDetailsTitle}>Détails d'expédition</Text>
-                  {shippingCalc.success ? (
-                    <View style={styles.shippingStatusSuccess}>
-                      <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
-                      <Text style={styles.shippingStatusText}>Disponible</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.shippingStatusWarning}>
-                      <Ionicons name="warning-outline" size={14} color={COLORS.warning} />
-                      <Text style={styles.shippingStatusText}>Politique par défaut</Text>
-                    </View>
-                  )}
-                </View>
-                
-                <View style={styles.shippingDetailsGrid}>
-                  <View style={styles.shippingDetailItem}>
-                    <Text style={styles.shippingDetailLabel}>Coût fixe:</Text>
-                    <Text style={styles.shippingDetailValue}>
-                      {formatPrice(shippingCalc.fixedCost || 0)} CFA
-                    </Text>
-                  </View>
-                  <View style={styles.shippingDetailItem}>
-                    <Text style={styles.shippingDetailLabel}>Coût poids:</Text>
-                    <Text style={styles.shippingDetailValue}>
-                      {formatPrice(
-                        shippingCalc.weightCost || 
-                        ((shippingCalc.costPerKg || 0) * storeGroup.totalWeight)
-                      )} CFA
-                    </Text>
-                  </View>
-                  <View style={[styles.shippingDetailItem, styles.shippingDetailFull]}>
-                    <Text style={styles.shippingDetailLabel}>Politique appliquée:</Text>
-                    <Text style={styles.shippingDetailValue}>
-                      {shippingCalc.appliedPolicy?.zone || 'Zone par défaut'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {Object.values(storeGroup.products)?.map((product) =>
-              renderProduct(product, storeGroup.storeId)
             )}
           </View>
         )}
+
+        {/* Produits */}
+        <View style={styles.storeProductsList}>
+          {Object.values(storeGroup.products).map((product) =>
+            renderProduct(product, storeGroup.storeId)
+          )}
+        </View>
       </View>
     );
-  }, [expandedStores, shippingCalculations, unavailableProducts, toggleStoreExpansion, renderProduct, formatPrice]);
+  }, [shippingCalculations, unavailableProducts, renderProduct, loading]);
 
-  // Empty state
+  // ─────────────────────────────────────────────────────────────
+  // EMPTY STATE
+  // ─────────────────────────────────────────────────────────────
   if (articles?.length === 0) {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={[COLORS.primary, COLORS.tertiary]}
+          colors={['#30A08B', '#1D7A6A']}
           style={styles.header}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          end={{ x: 1, y: 0 }}
         >
-          <Text style={styles.headerTitle}>Mon Panier</Text>
+          <View style={styles.headerInner}>
+            <Text style={styles.headerTitle}>Mon Panier</Text>
+          </View>
         </LinearGradient>
 
         <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconContainer}>
+          <View style={styles.emptyIllustration}>
             <LinearGradient
-              colors={[COLORS.primary + '20', COLORS.tertiary + '20']}
-              style={styles.emptyIconGradient}
+              colors={['rgba(48,160,139,0.12)', 'rgba(48,160,139,0.04)']}
+              style={styles.emptyIllustrationGradient}
             >
-              <Ionicons name="cart-outline" size={80} color={COLORS.primary} />
+              <Ionicons name="cart-outline" size={88} color={COLORS.primary} />
             </LinearGradient>
           </View>
-          
           <Text style={styles.emptyTitle}>Votre panier est vide</Text>
-          <Text style={styles.emptyText}>
-            Découvrez nos produits et ajoutez-les à votre panier
+          <Text style={styles.emptySubtitle}>
+            Parcourez nos boutiques et ajoutez{'\n'}vos articles préférés
           </Text>
-          
           <TouchableOpacity
-            style={styles.shopButton}
+            style={styles.emptyShopBtn}
             onPress={() => navigation.navigate('MainTabs')}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[COLORS.primary, COLORS.tertiary]}
-              style={styles.shopButtonGradient}
+              colors={['#30A08B', '#1D7A6A']}
+              style={styles.emptyShopBtnGradient}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              end={{ x: 1, y: 0 }}
             >
-              <Ionicons name="storefront-outline" size={20} color={COLORS.white} />
-              <Text style={styles.shopButtonText}>Découvrir les produits</Text>
+              <Ionicons name="storefront-outline" size={18} color="#fff" />
+              <Text style={styles.emptyShopBtnText}>Continuer mes achats</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -998,34 +971,37 @@ export default function CartScreen({ navigation }) {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // MAIN RENDER
+  // ─────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* ── HEADER ── */}
       <LinearGradient
-        colors={[COLORS.primary, COLORS.tertiary]}
+        colors={['#30A08B', '#1D7A6A']}
         style={styles.header}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        end={{ x: 1, y: 0 }}
       >
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Mon Panier</Text>
-          <View style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>{articles?.length}</Text>
+        <View style={styles.headerInner}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>Mon Panier</Text>
+            <View style={styles.headerCountBadge}>
+              <Text style={styles.headerCountText}>{articles?.length}</Text>
+            </View>
           </View>
-        </View>
-        
-        {articles?.length > 0 && (
           <TouchableOpacity
-            style={styles.clearButton}
+            style={styles.headerClearBtn}
             onPress={handleClearCart}
             activeOpacity={0.8}
           >
-            <Ionicons name="trash-outline" size={20} color={COLORS.white} />
-            <Text style={styles.clearButtonText}>Vider</Text>
+            <Ionicons name="trash-outline" size={16} color="#fff" />
+            <Text style={styles.headerClearText}>Vider</Text>
           </TouchableOpacity>
-        )}
+        </View>
       </LinearGradient>
 
+      {/* ── SCROLL ── */}
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -1039,18 +1015,21 @@ export default function CartScreen({ navigation }) {
           />
         }
       >
-        <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          {/* Sélecteur de zone - maintenant dans le scroll */}
-          <View style={styles.section}>
-            <View style={styles.zoneSectionHeader}>
-              <View style={styles.zoneTitleContainer}>
-                <Ionicons name="location-outline" size={20} color={COLORS.primary} />
+        <Animated.View style={{ opacity: fadeAnim }}>
+
+          {/* ── ZONE DE LIVRAISON ── */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.sectionTitleLeft}>
+                <View style={styles.sectionIconDot}>
+                  <Ionicons name="location" size={14} color="#fff" />
+                </View>
                 <Text style={styles.sectionTitle}>Zone de livraison</Text>
               </View>
               {selectedZone && (
-                <View style={styles.zoneSelectedBadge}>
-                  <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
-                  <Text style={styles.zoneSelectedBadgeText}>Sélectionné</Text>
+                <View style={styles.zonePill}>
+                  <Ionicons name="checkmark-circle" size={13} color={COLORS.primary} />
+                  <Text style={styles.zonePillText}>Détectée</Text>
                 </View>
               )}
             </View>
@@ -1062,201 +1041,222 @@ export default function CartScreen({ navigation }) {
             />
 
             {selectedZone ? (
-              <View style={styles.selectedZoneInfo}>
-                <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-                <Text style={styles.selectedZoneText}>
-                  Livraison vers: <Text style={styles.selectedZoneTextBold}>{selectedZone.fullPath || selectedZone.name}</Text>
+              <View style={styles.zoneSelectedRow}>
+                <Ionicons name="checkmark-circle" size={15} color={COLORS.primary} />
+                <Text style={styles.zoneSelectedText}>
+                  Livraison vers :{' '}
+                  <Text style={styles.zoneSelectedBold}>
+                    {selectedZone.fullPath || selectedZone.name}
+                  </Text>
                 </Text>
               </View>
             ) : (
-              <View style={styles.zoneWarning}>
-                <Ionicons name="alert-circle" size={18} color={COLORS.warning} />
+              <View style={styles.zoneWarningRow}>
+                <Ionicons name="alert-circle-outline" size={16} color="#B17236" />
                 <Text style={styles.zoneWarningText}>
                   Sélectionnez votre zone pour voir les frais d'expédition
                 </Text>
               </View>
             )}
           </View>
-      
-          {/* Articles groupés par boutique */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Articles ({articles?.length})</Text>
-            {storeGroupsArray?.map(renderStoreGroup)}
-          </View>
 
-          {/* Code promo */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Code promo</Text>
-            <View style={styles.promoCard}>
-              <View style={styles.promoInputContainer}>
-                <Ionicons name="pricetag" size={20} color={COLORS.primary} />
-                <TextInput
-                  style={styles.promoInput}
-                  placeholder="EX: BIENVENUE20"
-                  placeholderTextColor={COLORS.textLight}
-                  value={codePromo}
-                  onChangeText={(text) => setCodePromo(text.toUpperCase().replace(/\s/g, ''))}
-                  editable={!appliedPromo}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                />
-              </View>
-              
-              {!appliedPromo ? (
-                <TouchableOpacity
-                  style={styles.applyButton}
-                  onPress={handleApplyPromo}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={[COLORS.primary, COLORS.tertiary]}
-                    style={styles.applyButtonGradient}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <Text style={styles.applyButtonText}>Appliquer</Text>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              ) : (
-                  <View style={{ gap: 8 }}>
-                  <View style={styles.promoApplied}>
-                    <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.promoAppliedText}>Code {appliedPromo.code} appliqué</Text>
-                      <Text style={{ fontSize: 12, color: COLORS.success, fontWeight: '600' }}>
-                        {appliedPromo.type === 'percentage'
-                          ? `-${appliedPromo.value}% de réduction`
-                          : `-${formatPrice(appliedPromo.value)} CFA fixe`}
-                      </Text>
-                      {appliedPromo.description && (
-                         <Text style={{ fontSize: 12, color: COLORS.textLight, fontStyle: 'italic' }}>
-                           {appliedPromo.description}
-                         </Text>
-                      )}
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setAppliedPromo(null);
-                        setReduction(0);
-                        setCodePromo('');
-                      }}
-                      style={{ padding: 4 }}
-                    >
-                      <Ionicons name="close-circle" size={24} color={COLORS.error} />
-                    </TouchableOpacity>
-                  </View>
+          {/* ── ARTICLES GROUPÉS PAR BOUTIQUE ── */}
+          <View style={styles.sectionPadded}>
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.sectionTitleLeft}>
+                <View style={[styles.sectionIconDot, { backgroundColor: COLORS.secondary }]}>
+                  <Ionicons name="bag" size={14} color="#fff" />
                 </View>
-              )}
-            </View>
-          </View>
-
-          {/* Résumé */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Résumé de la commande</Text>
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Sous-total</Text>
-                <Text style={styles.summaryValue}>{formatPrice(subtotal)} CFA</Text>
-              </View>
-
-              {reduction > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: COLORS.success }]}>
-                    Réduction
-                  </Text>
-                  <Text style={[styles.summaryValue, { color: COLORS.success }]}>
-                    -{formatPrice(reduction)} CFA
-                  </Text>
-                </View>
-              )}
-              
-              {/* Détail des frais d'expédition par boutique */}
-              {Object.keys(shippingCalculations)?.length > 0 && (
-                <View style={styles.shippingDetails}>
-                  <Text style={styles.shippingDetailsTitle}>Frais d'expédition:</Text>
-                  {Object.entries(shippingCalculations)?.map(([storeId, calc]) => {
-                    const store = groupedByStore[storeId];
-                    return (
-                      <View key={storeId} style={styles.shippingDetailRow}>
-                        <Text style={styles.shippingStoreName}>{store?.storeName}</Text>
-                        <Text style={styles.shippingStoreCost}>
-                          {formatPrice(calc.totalCost)} CFA
-                        </Text>
-                      </View>
-                    );
-                  })}
-                  <View style={styles.shippingTotalRow}>
-                    <Text style={styles.shippingTotalLabel}>Total expédition</Text>
-                    <Text style={styles.shippingTotalValue}>
-                      {formatPrice(totalShippingFee)} CFA
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              <View style={styles.summaryDivider} />
-
-              <View style={styles.summaryRow}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue} numberOfLines={1}>{formatPrice(total)} CFA</Text>
-              </View>
-              
-              {/* Info sur le nombre d'articles */}
-              <View style={styles.summaryInfo}>
-                <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
-                <Text style={styles.summaryInfoText}>
-                  {articles.length} article{articles.length > 1 ? 's' : ''} • {Object.keys(groupedByStore).length} boutique{Object.keys(groupedByStore).length > 1 ? 's' : ''}
+                <Text style={styles.sectionTitle}>
+                  Articles{' '}
+                  <Text style={styles.sectionCount}>({articles?.length})</Text>
                 </Text>
               </View>
             </View>
+            {storeGroupsArray?.map(renderStoreGroup)}
           </View>
 
-          {/* Bottom spacing */}
-          <View style={styles.bottomSpacing} />
+          {/* ── CODE PROMO ── */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.sectionTitleLeft}>
+                <View style={[styles.sectionIconDot, { backgroundColor: '#B2905F' }]}>
+                  <Ionicons name="pricetag" size={14} color="#fff" />
+                </View>
+                <Text style={styles.sectionTitle}>Code promo</Text>
+              </View>
+            </View>
+
+            {!appliedPromo ? (
+              <View style={styles.promoInputRow}>
+                <View style={styles.promoInputWrap}>
+                  <Ionicons name="pricetag-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.promoInput}
+                    placeholder="Ex: BIENVENUE20"
+                    placeholderTextColor="#bbb"
+                    value={codePromo}
+                    onChangeText={(text) => setCodePromo(text.toUpperCase().replace(/\s/g, ''))}
+                    editable={!appliedPromo}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.promoApplyBtn}
+                  onPress={handleApplyPromo}
+                  disabled={loading}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={['#30A08B', '#1D7A6A']}
+                    style={styles.promoApplyBtnGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.promoApplyBtnText}>Appliquer</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.promoAppliedCard}>
+                <View style={styles.promoAppliedLeft}>
+                  <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.promoAppliedCode}>{appliedPromo.code}</Text>
+                    <Text style={styles.promoAppliedDesc}>
+                      {appliedPromo.type === 'percentage'
+                        ? `-${appliedPromo.value}% de réduction`
+                        : `-${formatPrice(appliedPromo.value)} CFA fixe`}
+                    </Text>
+                    {appliedPromo.description && (
+                      <Text style={styles.promoAppliedNote}>{appliedPromo.description}</Text>
+                    )}
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => { setAppliedPromo(null); setReduction(0); setCodePromo(''); }}
+                  style={styles.promoRemoveBtn}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={22} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {/* ── RÉSUMÉ COMMANDE ── */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.sectionTitleLeft}>
+                <View style={[styles.sectionIconDot, { backgroundColor: '#30A08B' }]}>
+                  <Ionicons name="receipt" size={14} color="#fff" />
+                </View>
+                <Text style={styles.sectionTitle}>Résumé de la commande</Text>
+              </View>
+            </View>
+
+            {/* Sous-total */}
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Sous-total</Text>
+              <Text style={styles.summaryValue}>{formatPrice(subtotal)} CFA</Text>
+            </View>
+
+            {/* Réduction */}
+            {reduction > 0 && (
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryDiscountLabel}>
+                  <Ionicons name="pricetag" size={14} color="#22C55E" />
+                  <Text style={[styles.summaryLabel, { color: '#22C55E' }]}>Réduction</Text>
+                </View>
+                <Text style={[styles.summaryValue, { color: '#22C55E' }]}>
+                  -{formatPrice(reduction)} CFA
+                </Text>
+              </View>
+            )}
+
+            {/* Détail livraison par boutique */}
+            {Object.keys(shippingCalculations).length > 0 && (
+              <View style={styles.shippingBreakdown}>
+                <Text style={styles.shippingBreakdownTitle}>Frais d'expédition</Text>
+                {Object.entries(shippingCalculations).map(([storeId, calc]) => {
+                  const store = groupedByStore[storeId];
+                  return (
+                    <View key={storeId} style={styles.shippingBreakdownRow}>
+                      <Text style={styles.shippingBreakdownStore} numberOfLines={1}>
+                        {store?.storeName}
+                      </Text>
+                      <Text style={styles.shippingBreakdownCost}>
+                        {formatPrice(calc.totalCost)} CFA
+                      </Text>
+                    </View>
+                  );
+                })}
+                <View style={styles.shippingBreakdownTotal}>
+                  <Text style={styles.shippingBreakdownTotalLabel}>Total livraison</Text>
+                  <Text style={styles.shippingBreakdownTotalValue}>
+                    {formatPrice(totalShippingFee)} CFA
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.summaryDivider} />
+
+            {/* TOTAL */}
+            <View style={styles.summaryTotalRow}>
+              <Text style={styles.summaryTotalLabel}>TOTAL</Text>
+              <Text style={styles.summaryTotalValue}>{formatPrice(total)} CFA</Text>
+            </View>
+
+            {/* Info articles / boutiques */}
+            <View style={styles.summaryMeta}>
+              <Ionicons name="information-circle-outline" size={14} color="#aaa" />
+              <Text style={styles.summaryMetaText}>
+                {articles.length} article{articles.length > 1 ? 's' : ''} · {Object.keys(groupedByStore).length} boutique{Object.keys(groupedByStore).length > 1 ? 's' : ''}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ height: 120 }} />
         </Animated.View>
       </ScrollView>
 
-      {/* Bouton Commander - TOUJOURS VISIBLE */}
-      <View style={styles.checkoutContainer}>
-        <View style={styles.checkoutSummary}>
-          <Text style={styles.checkoutTotalLabel}>Total</Text>
-          <Text style={styles.checkoutTotalValue} numberOfLines={1}>{formatPrice(total)}\u00a0CFA</Text>
+      {/* ── BARRE COMMANDER (sticky bas) ── */}
+      <View style={styles.checkoutBar}>
+        <View style={styles.checkoutBarSummary}>
+          <Text style={styles.checkoutBarLabel}>Total</Text>
+          <Text style={styles.checkoutBarTotal}>{formatPrice(total)} CFA</Text>
         </View>
-        
+
         {!selectedZone ? (
-          // Pas de zone sélectionnée
-          <View style={[styles.checkoutButton, styles.checkoutButtonDisabled]}>
-            <View style={styles.checkoutButtonDisabledContent}>
-              <Ionicons name="location-outline" size={20} color={COLORS.white} />
-              <Text style={styles.checkoutButtonText}>Sélectionner une zone</Text>
-            </View>
+          <View style={[styles.checkoutBarBtn, styles.checkoutBarBtnDisabled]}>
+            <Ionicons name="location-outline" size={18} color="#fff" />
+            <Text style={styles.checkoutBarBtnText}>Choisir une zone</Text>
           </View>
         ) : loading || (Object.keys(groupedByStore).length > 0 && Object.keys(shippingCalculations).length === 0) ? (
-          // Calcul en cours
-          <View style={[styles.checkoutButton, styles.checkoutButtonDisabled]}>
-            <View style={styles.checkoutButtonDisabledContent}>
-              <ActivityIndicator size="small" color={COLORS.white} />
-              <Text style={styles.checkoutButtonText}>Calcul en cours...</Text>
-            </View>
+          <View style={[styles.checkoutBarBtn, styles.checkoutBarBtnDisabled]}>
+            <ActivityIndicator size="small" color="#fff" />
+            <Text style={styles.checkoutBarBtnText}>Calcul en cours...</Text>
           </View>
         ) : (
-          // Bouton actif - Prêt à passer commande
           <TouchableOpacity
-            style={styles.checkoutButton}
+            style={styles.checkoutBarBtn}
             onPress={handleCheckout}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[COLORS.primary, COLORS.tertiary]}
-              style={styles.checkoutButtonGradient}
+              colors={['#30A08B', '#1D7A6A']}
+              style={styles.checkoutBarBtnGradient}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.checkoutButtonText}>Procéder au paiement</Text>
-              <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+              <Text style={styles.checkoutBarBtnText}>Commander</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
             </LinearGradient>
           </TouchableOpacity>
         )}
@@ -1265,783 +1265,822 @@ export default function CartScreen({ navigation }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════
+// STYLES
+// ═══════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
-  // --- Styles généraux ---
+
+  // ── Conteneur global ──
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F6F7FB',
   },
+
+  // ── Header gradient teal ──
   header: {
-    paddingTop: 50,
-    paddingBottom: 20,
+    paddingTop: 52,
+    paddingBottom: 16,
     paddingHorizontal: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
-  headerContent: {
+  headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.white,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.2,
   },
-  headerBadge: {
-    backgroundColor: COLORS.white,
+  headerCountBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
     borderRadius: 12,
+    minWidth: 26,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    minWidth: 24,
+    paddingVertical: 3,
     alignItems: 'center',
   },
-  headerBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+  headerCountText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
   },
-  clearButton: {
+  headerClearBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 20,
   },
-  clearButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
+  headerClearText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: '600',
   },
+
+  // ── Scroll ──
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 80, // Espace pour le bouton de paiement
+    paddingBottom: 20,
   },
-  content: {
+
+  // ── Sections ──
+  sectionCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 14,
+    marginTop: 14,
+    borderRadius: 16,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  section: {
-    marginBottom: 20,
+  sectionPadded: {
+    marginHorizontal: 14,
+    marginTop: 14,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-  
-  // --- Styles pour le sélecteur de zone (dans le scroll) ---
-  zoneSectionHeader: {
+  sectionTitleRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
-  zoneTitleContainer: {
+  sectionTitleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  zoneSelectedBadge: {
+  sectionIconDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#30A08B',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  sectionCount: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#888',
+  },
+
+  // ── Zone de livraison ──
+  zonePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.success + '15',
+    backgroundColor: 'rgba(48,160,139,0.1)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  zoneSelectedBadgeText: {
+  zonePillText: {
     fontSize: 12,
-    color: COLORS.success,
     fontWeight: '600',
+    color: '#30A08B',
   },
-  selectedZoneInfo: {
+  zoneSelectedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.success + '10',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
+    backgroundColor: 'rgba(48,160,139,0.08)',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 10,
   },
-  selectedZoneText: {
+  zoneSelectedText: {
     flex: 1,
     fontSize: 13,
-    color: COLORS.success,
+    color: '#30A08B',
   },
-  selectedZoneTextBold: {
+  zoneSelectedBold: {
     fontWeight: '700',
   },
-  zoneWarning: {
+  zoneWarningRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.warning + '10',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
+    backgroundColor: 'rgba(177,114,54,0.08)',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 10,
   },
   zoneWarningText: {
     flex: 1,
     fontSize: 13,
-    color: COLORS.warning,
+    color: '#B17236',
   },
-  
-  // --- Styles pour les groupes de boutiques ---
+
+  // ── Boutique card ──
   storeCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    marginBottom: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     elevation: 2,
     overflow: 'hidden',
   },
   storeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
   },
   storeHeaderWarning: {
-    backgroundColor: COLORS.error + '05',
+    backgroundColor: 'rgba(239,68,68,0.04)',
   },
-  storeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  storeIcon: {
-    width: 48,
-    height: 48,
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  storeLogoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(48,160,139,0.2)',
   },
   storeLogo: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
-  storeDetails: {
+  storeLogoFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storeHeaderInfo: {
     flex: 1,
+    gap: 2,
+  },
+  storeNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
   },
   storeName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    flexShrink: 1,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(48,160,139,0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  verifiedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#30A08B',
+  },
+  storeSubtitle: {
+    fontSize: 12,
+    color: '#888',
   },
   storeLocation: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    marginBottom: 4,
+    fontSize: 11,
+    color: '#B2905F',
+    marginTop: 1,
   },
-  storeMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  storeMetaText: {
-    fontSize: 12,
-    color: COLORS.textLighter,
-  },
-  storeRight: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  storeWarningBadge: {
+  storeShippingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.error + '15',
+    backgroundColor: 'rgba(48,160,139,0.08)',
+    borderRadius: 10,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+  },
+  storeShippingCost: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#30A08B',
+  },
+  storeWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239,68,68,0.06)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(239,68,68,0.1)',
   },
   storeWarningText: {
+    flex: 1,
     fontSize: 12,
-    color: COLORS.error,
+    color: '#EF4444',
   },
-  shippingInfo: {
-    alignItems: 'flex-end',
-  },
-  shippingCost: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  shippingLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  shippingLabelText: {
-    fontSize: 12,
-    color: COLORS.textLighter,
-  },
-  storeContent: {
-    padding: 16,
-    paddingTop: 8,
-  },
-  
-  // --- Styles pour les détails d'expédition ---
+
+  // ── Détails expédition (dans store card) ──
   shippingDetailsCard: {
-    backgroundColor: COLORS.primary + '08',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-  },
-  shippingDetailsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    marginHorizontal: 14,
     marginBottom: 8,
+    backgroundColor: 'rgba(48,160,139,0.05)',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(48,160,139,0.12)',
   },
-  shippingDetailsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  shippingStatusSuccess: {
+  shippingDetailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.success + '15',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    justifyContent: 'space-around',
   },
-  shippingStatusWarning: {
-    flexDirection: 'row',
+  shippingDetailsItem: {
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.warning + '15',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  shippingStatusText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  shippingDetailsGrid: {
-    gap: 4,
-  },
-  shippingDetailItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  shippingDetailFull: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     flex: 1,
   },
-  shippingDetailLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
+  shippingDetailsDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(48,160,139,0.15)',
   },
-  shippingDetailValue: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.text,
+  shippingDetailsLabel: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 2,
   },
-  
-  // --- Styles pour les groupes de produits ---
+  shippingDetailsValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  shippingDetailsPolicyText: {
+    fontSize: 11,
+    color: '#30A08B',
+  },
+  shippingFallbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+  },
+  shippingFallbackText: {
+    fontSize: 11,
+    color: '#B2905F',
+    fontStyle: 'italic',
+  },
+
+  // ── Products list ──
+  storeProductsList: {
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingTop: 4,
+    gap: 8,
+  },
+
+  // ── Product card ──
   productCard: {
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    marginBottom: 12,
+    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
     overflow: 'hidden',
   },
   productHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
+    gap: 10,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border + '50',
+    borderBottomColor: '#F0F0F0',
   },
-  productImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 6,
-    marginRight: 12,
+  productThumb: {
+    width: 46,
+    height: 46,
+    borderRadius: 8,
+    backgroundColor: '#eee',
   },
-  productInfo: {
+  productHeaderInfo: {
     flex: 1,
+    gap: 2,
   },
   productName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 4,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    lineHeight: 18,
   },
-  productMeta: {
+  productSubtitle: {
+    fontSize: 11,
+    color: '#aaa',
+  },
+  unavailablePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  productVariants: {
-    fontSize: 12,
-    color: COLORS.textLighter,
-  },
-  productWeight: {
-    fontSize: 12,
-    color: COLORS.textLighter,
-  },
-  unavailableBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.error + '15',
+    gap: 3,
+    backgroundColor: 'rgba(239,68,68,0.1)',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
     alignSelf: 'flex-start',
-    marginTop: 4,
+    marginTop: 3,
   },
-  unavailableBadgeText: {
-    fontSize: 12,
-    color: COLORS.error,
+  unavailablePillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#EF4444',
   },
-  productPriceContainer: {
+  productHeaderRight: {
     alignItems: 'flex-end',
+    gap: 6,
   },
-  productPrice: {
-    fontSize: 16,
-    fontWeight: '700',
+  productTotalPrice: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#1a1a1a',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
-  productHeaderActions: {
+  productDeleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 10,
   },
-  deleteProductButton: {
-    padding: 6,
-    borderRadius: 15,
-    backgroundColor: COLORS.error + '10',
+  productVariantsList: {
+    gap: 0,
   },
-  variantsContainer: {
-    padding: 12,
-    paddingTop: 8,
-  },
-  
-  // --- Styles pour les variantes (version web adaptée) ---
+
+  // ── Variant row ──
   variantRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    alignItems: 'center',
+    padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border + '40',
-    backgroundColor: COLORS.white,
-    minHeight: 80,
+    borderBottomColor: '#F5F5F5',
+    backgroundColor: '#fff',
+    gap: 10,
   },
   variantRowUnavailable: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
-  variantMainInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-    marginRight: 8,
-    minWidth: 0,
+  variantImageWrap: {
+    position: 'relative',
   },
-  variantThumbnail: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    marginRight: 10,
-    backgroundColor: COLORS.background,
-    flexShrink: 0,
+  variantThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#eee',
   },
-  placeholderThumbnail: {
+  variantThumbPlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.backgroundAlt,
+    backgroundColor: '#F5F5F5',
   },
-  variantInfo: {
+  unavailableOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(239,68,68,0.8)',
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  unavailableOverlayText: {
+    fontSize: 8,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  variantBody: {
     flex: 1,
-    minWidth: 0,
+    gap: 5,
   },
-  variantTags: {
+  variantTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 6,
-    gap: 4,
+    gap: 5,
   },
-  variantTag: {
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 6,
+  variantChip: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 6,
   },
-  variantTagText: {
-    fontSize: 10,
-    color: COLORS.textLight,
+  variantChipText: {
+    fontSize: 11,
+    color: '#555',
     fontWeight: '500',
   },
-  unavailableTag: {
-    backgroundColor: COLORS.error + '15',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  unavailableTagText: {
-    fontSize: 10,
-    color: COLORS.error,
-    fontWeight: '600',
-  },
-  variantPrices: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  variantOldPrice: {
-    fontSize: 12,
-    color: '#999',
-    textDecorationLine: 'line-through',
-    fontWeight: '400',
-  },
-  variantPrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    letterSpacing: 0.3,
-  },
-  variantPromoPrice: {
-    color: '#E74C3C',
-  },
-  variantControls: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 6,
-    flexShrink: 0,
-    minWidth: 80,
-  },
-  quantityControlsCompact: {
+  variantPriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  quantityBtnCompact: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-  },
-  quantityBtnDisabled: {
-    borderColor: COLORS.border,
-    opacity: 0.5,
-  },
-  quantityValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-    minWidth: 25,
-    textAlign: 'center',
-  },
-  stockIndicator: {
-    fontSize: 10,
-    color: COLORS.textLighter,
-    textAlign: 'right',
-  },
-  deleteButton: {
-    padding: 5,
-    borderRadius: 14,
-    backgroundColor: COLORS.error + '10',
-  },
-  
-  // --- Styles pour le code promo ---
-  promoCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  promoInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  promoInput: {
-    flex: 1,
+  variantPriceMain: {
     fontSize: 15,
-    color: COLORS.text,
+    fontWeight: '800',
+    color: '#EF4444',
+    letterSpacing: 0.2,
   },
-  applyButton: {
+  variantPriceOld: {
+    fontSize: 12,
+    color: '#bbb',
+    textDecorationLine: 'line-through',
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     borderRadius: 8,
     overflow: 'hidden',
   },
-  applyButtonGradient: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  applyButtonText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  promoApplied: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  stepperBtn: {
+    width: 30,
+    height: 28,
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 8,
-  },
-  promoAppliedText: {
-    fontSize: 15,
-    color: COLORS.success,
-    fontWeight: '600',
-  },
-  
-  // --- Styles pour le résumé ---
-  summaryCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    backgroundColor: '#F9FAFB',
   },
-  summaryLabel: {
-    fontSize: 15,
-    color: COLORS.textLight,
+  stepperBtnDisabled: {
+    backgroundColor: '#F9FAFB',
   },
-  summaryValue: {
-    fontSize: 16,
+  stepperValue: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#1a1a1a',
-    letterSpacing: 0.3,
+    minWidth: 28,
+    textAlign: 'center',
+    paddingHorizontal: 4,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#E5E7EB',
+    lineHeight: 28,
   },
-  shippingDetailsSection: {
-    marginVertical: 8,
-  },
-  shippingDetailsTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textLight,
-    marginBottom: 6,
-  },
-  shippingDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  variantDeleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    flexShrink: 0,
+  },
+
+  // ── Code promo ──
+  promoInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  promoInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F6F7FB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  promoInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    letterSpacing: 1,
+  },
+  promoApplyBtn: {
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  promoApplyBtnGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 95,
+  },
+  promoApplyBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  promoAppliedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(48,160,139,0.07)',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(48,160,139,0.2)',
+  },
+  promoAppliedLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  promoAppliedCode: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: 0.5,
+  },
+  promoAppliedDesc: {
+    fontSize: 13,
+    color: '#22C55E',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  promoAppliedNote: {
+    fontSize: 11,
+    color: '#888',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  promoRemoveBtn: {
+    padding: 4,
     marginLeft: 8,
   },
-  shippingStoreName: {
-    fontSize: 12,
-    color: COLORS.textLighter,
-    flex: 1,
-    marginRight: 8,
-  },
-  shippingStoreCost: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.text,
-  },
-  shippingTotalRow: {
+
+  // ── Résumé ──
+  summaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
-    paddingTop: 4,
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+  },
+  summaryDiscountLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  shippingBreakdown: {
+    backgroundColor: '#F6F7FB',
+    borderRadius: 10,
+    padding: 10,
+    marginVertical: 6,
+    gap: 5,
+  },
+  shippingBreakdownTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#555',
+    marginBottom: 4,
+  },
+  shippingBreakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  shippingBreakdownStore: {
+    flex: 1,
+    fontSize: 12,
+    color: '#888',
+    marginRight: 10,
+  },
+  shippingBreakdownCost: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  shippingBreakdownTotal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: COLORS.border + '50',
+    borderTopColor: '#E5E7EB',
+    marginTop: 5,
+    paddingTop: 5,
   },
-  shippingTotalLabel: {
+  shippingBreakdownTotalLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textLight,
+    fontWeight: '700',
+    color: '#444',
   },
-  shippingTotalValue: {
+  shippingBreakdownTotalValue: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
+    fontWeight: '700',
+    color: '#30A08B',
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 12,
+    backgroundColor: '#F0F0F0',
+    marginVertical: 10,
   },
-  totalLabel: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  totalValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.primary,
-    letterSpacing: 0.5,
-    flexShrink: 0,
-  },
-  summaryInfo: {
+  summaryTotalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  summaryTotalLabel: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: 0.5,
+  },
+  summaryTotalValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#30A08B',
+    letterSpacing: 0.3,
+  },
+  summaryMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border + '40',
+    borderTopColor: '#F0F0F0',
   },
-  summaryInfoText: {
+  summaryMetaText: {
     fontSize: 12,
-    color: COLORS.textLight,
+    color: '#aaa',
   },
-  shippingDetailsSection: {
-    marginVertical: 8,
-  },
-  
-  // --- Styles pour l'état vide ---
+
+  // ── Empty state ──
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 20,
   },
-  emptyIconContainer: {
-    marginBottom: 24,
+  emptyIllustration: {
+    marginBottom: 28,
   },
-  emptyIconGradient: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+  emptyIllustrationGradient: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
     justifyContent: 'center',
     alignItems: 'center',
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1a1a1a',
     textAlign: 'center',
+    marginBottom: 10,
   },
-  emptyText: {
-    fontSize: 16,
-    color: COLORS.textLight,
+  emptySubtitle: {
+    fontSize: 15,
+    color: '#888',
     textAlign: 'center',
+    lineHeight: 22,
     marginBottom: 32,
-    lineHeight: 24,
   },
-  shopButton: {
-    borderRadius: 12,
+  emptyShopBtn: {
+    borderRadius: 14,
     overflow: 'hidden',
-    minWidth: 200,
   },
-  shopButtonGradient: {
+  emptyShopBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 15,
+    paddingHorizontal: 28,
+  },
+  emptyShopBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  // ── Checkout bar sticky ──
+  checkoutBar: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 28,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 10,
+    gap: 10,
+  },
+  checkoutBarSummary: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  checkoutBarLabel: {
+    fontSize: 14,
+    color: '#888',
+    fontWeight: '500',
+  },
+  checkoutBarTotal: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#30A08B',
+    letterSpacing: 0.3,
+  },
+  checkoutBarBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    minHeight: 52,
+  },
+  checkoutBarBtnDisabled: {
+    backgroundColor: '#CBD5E1',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
   },
-  shopButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  
-  // --- Styles pour le bouton de paiement ---
-  checkoutContainer: {
-    backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    padding: 16,
-    paddingBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  checkoutSummary: {
+  checkoutBarBtnGradient: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
   },
-  checkoutTotalLabel: {
+  checkoutBarBtnText: {
+    color: '#fff',
     fontSize: 16,
-    color: COLORS.textLight,
-    fontWeight: '500',
-  },
-  checkoutTotalValue: {
-    fontSize: 26,
     fontWeight: '800',
-    color: COLORS.primary,
-    letterSpacing: 0.5,
-    flexShrink: 0,
-  },
-  checkoutButton: {
-    borderRadius: 10,
-    overflow: 'hidden',
-    minHeight: 48,
-  },
-  checkoutButtonDisabled: {
-    backgroundColor: COLORS.textLighter,
-  },
-  checkoutButtonDisabledContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    backgroundColor: COLORS.textLighter,
-    minHeight: 48,
-  },
-  checkoutButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-  },
-  checkoutButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  
-  bottomSpacing: {
-    height: 40,
+    letterSpacing: 0.3,
   },
 });

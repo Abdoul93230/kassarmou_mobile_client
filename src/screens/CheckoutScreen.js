@@ -31,6 +31,12 @@ import {
   preparePayment,
   invalidatePromoCode,
 } from '../services/paymentHelpers';
+import {
+  fetchWallet,
+  fetchPublicConfig,
+  selectWallet,
+  selectConfig,
+} from '../redux/gamificationSlice';
 
 const COLORS = {
   primary: '#FF6B35',
@@ -50,6 +56,8 @@ export default function CheckoutScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
   const cartItems = useSelector((state) => state.panier?.articles || []);
+  const wallet = useSelector(selectWallet);
+  const gamificationConfig = useSelector(selectConfig);
 
   // Récupérer les paramètres depuis le panier
   const {
@@ -92,6 +100,8 @@ export default function CheckoutScreen({ navigation, route }) {
   });
   const [handleSecuritySubmit, setHandleSecuritySubmit] = useState(null);
   const [createdOrderId, setCreatedOrderId] = useState(null);
+  const [pointsToUse, setPointsToUse] = useState(0);
+  const [pointsDiscount, setPointsDiscount] = useState(0);
 
   // Charger les informations de livraison sauvegardées (EXACTEMENT comme sur le WEB)
   useEffect(() => {
@@ -131,6 +141,14 @@ export default function CheckoutScreen({ navigation, route }) {
       loadDeliveryInfo();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user?.id || user?._id) {
+      const userId = user.id || user._id;
+      dispatch(fetchPublicConfig());
+      dispatch(fetchWallet(userId));
+    }
+  }, [user?.id, user?._id, dispatch]);
 
   const saveDeliveryInfo = async () => {
     try {
@@ -484,18 +502,19 @@ export default function CheckoutScreen({ navigation, route }) {
           numero: deliveryInfo.numero,
           description: deliveryInfo.description,
         },
-        prod: cleanedProducts, // Produits nettoyés sans les objets imbriqués lourds
+        prod: cleanedProducts,
         ...(appliedPromo && {
           codePro: true,
           idCodePro: appliedPromo._id,
           codePromo: appliedPromo.code,
           reduction: appliedPromo.discount || reduction,
         }),
-        prix: total, // Grand Total (comme le champ 'prix' sur le web)
-        prixTotal: subtotal, // Sous-total HT/Remise (PARITÉ WEB)
+        ...(pointsToUse > 0 && { pointsToUse }),
+        prix: pointsDiscount > 0 ? total - pointsDiscount : total,
+        prixTotal: subtotal,
         fraisLivraison: shippingFee,
         reduction: reduction,
-        fraisSousTotalArticles: subtotal, // Alias déjà présent
+        fraisSousTotalArticles: subtotal,
       };
 
       if (existingOrder?.transactionId) {
@@ -784,42 +803,93 @@ export default function CheckoutScreen({ navigation, route }) {
     </View>
   );
 
+  // Inline points widget
+  const renderPointsWidget = () => {
+    if (!gamificationConfig?.enabled || !wallet || wallet.balance <= 0) return null;
+    const rate = gamificationConfig?.redemption?.pointsToFcfaRate ?? 20;
+    const maxPct = gamificationConfig?.redemption?.maxPercentPerOrder ?? 30;
+    const maxFcfa = Math.floor(subtotal * maxPct / 100);
+    const maxPoints = Math.min(wallet.balance, Math.floor(maxFcfa / rate));
+    if (maxPoints <= 0) return null;
+    return (
+      <View style={[styles.section, { borderWidth: 1.5, borderColor: pointsToUse > 0 ? '#30A08B' : '#E8E8E8', borderRadius: 12 }]}>
+        <Text style={styles.sectionTitle}>🌳 Baobab Points</Text>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Solde disponible</Text>
+          <Text style={[styles.summaryValue, { color: '#30A08B', fontWeight: '700' }]}>{wallet.balance} BP</Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, marginBottom: 4 }}>
+          {[0, Math.floor(maxPoints * 0.5), maxPoints].map((val) => (
+            <TouchableOpacity
+              key={val}
+              onPress={() => { setPointsToUse(val); setPointsDiscount(val * rate); }}
+              style={{ flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center', backgroundColor: pointsToUse === val ? '#30A08B' : '#f0f0f0' }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '700', color: pointsToUse === val ? '#fff' : '#777' }}>
+                {val === 0 ? 'Aucun' : val === maxPoints ? 'Max (' + maxPoints + ')' : (val + ' BP')}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {pointsToUse > 0 && (
+          <View style={{ backgroundColor: '#f0faf7', borderRadius: 8, padding: 8, marginTop: 4, flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#30A08B' }}>{pointsToUse} BP utilisés</Text>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#30A08B' }}>-{formatPrice(pointsDiscount)} CFA</Text>
+          </View>
+        )}
+        <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 6, textAlign: 'center' }}>
+          1 BP = {rate} FCFA · Plafond {maxPct}% du montant
+        </Text>
+      </View>
+    );
+  };
+
   // Render order summary
   const renderOrderSummary = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Résumé de la commande</Text>
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Articles ({cartItems.length})</Text>
-          <Text style={styles.summaryValue}>{formatPrice(subtotal)} CFA</Text>
-        </View>
-
-        {reduction > 0 && (
+    <View>
+      {renderPointsWidget()}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Résumé de la commande</Text>
+        <View style={styles.summaryCard}>
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: COLORS.success }]}>Réduction</Text>
-            <Text style={[styles.summaryValue, { color: COLORS.success }]}>
-              -{formatPrice(reduction)} CFA
-            </Text>
+            <Text style={styles.summaryLabel}>Articles ({cartItems.length})</Text>
+            <Text style={styles.summaryValue}>{formatPrice(subtotal)} CFA</Text>
           </View>
-        )}
 
-        {totalWeight > 0 && (
+          {reduction > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: COLORS.success }]}>Réduction promo</Text>
+              <Text style={[styles.summaryValue, { color: COLORS.success }]}>
+                -{formatPrice(reduction)} CFA
+              </Text>
+            </View>
+          )}
+
+          {pointsDiscount > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: '#30A08B' }]}>Réduction BP ({pointsToUse} pts)</Text>
+              <Text style={[styles.summaryValue, { color: '#30A08B' }]}>-{formatPrice(pointsDiscount)} CFA</Text>
+            </View>
+          )}
+
+          {totalWeight > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Poids total</Text>
+              <Text style={styles.summaryValue}>{totalWeight.toFixed(2)} kg</Text>
+            </View>
+          )}
+
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Poids total</Text>
-            <Text style={styles.summaryValue}>{totalWeight.toFixed(2)} kg</Text>
+            <Text style={styles.summaryLabel}>Frais de livraison</Text>
+            <Text style={styles.summaryValue}>{formatPrice(shippingFee)} CFA</Text>
           </View>
-        )}
 
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Frais de livraison</Text>
-          <Text style={styles.summaryValue}>{formatPrice(shippingFee)} CFA</Text>
-        </View>
+          <View style={styles.summaryDivider} />
 
-        <View style={styles.summaryDivider} />
-
-        <View style={styles.summaryRow}>
-          <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue} numberOfLines={1}>{formatPrice(total)} CFA</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue} numberOfLines={1}>{formatPrice(total - pointsDiscount)} CFA</Text>
+          </View>
         </View>
       </View>
     </View>

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   Alert,
   Image,
   TextInput,
@@ -48,7 +48,7 @@ export default function ProfileScreen({ navigation }) {
   const { user } = useSelector(state => state.auth);
   const { likedProducts } = useSelector(state => state.likes);
   const { isConnected } = useNetworkStatus();
-  
+
   // États
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,7 +58,7 @@ export default function ProfileScreen({ navigation }) {
   const [selectedImageUri, setSelectedImageUri] = useState(null);
   const [ordersCount, setOrdersCount] = useState(0);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
-  
+
   // Données utilisateur
   const [userData, setUserData] = useState({
     nom: '',
@@ -76,7 +76,7 @@ export default function ProfileScreen({ navigation }) {
     }
 
     // Rechercher l'indicatif correspondant
-    const foundCountry = countryCodes.find(country => 
+    const foundCountry = countryCodes.find(country =>
       fullPhoneNumber.startsWith(country.code)
     );
 
@@ -91,7 +91,7 @@ export default function ProfileScreen({ navigation }) {
 
   // Fonction pour construire le numéro complet
   const buildFullPhoneNumber = () => {
-    return phoneNumberOnly.trim() 
+    return phoneNumberOnly.trim()
       ? `${selectedCountryCode.code}${phoneNumberOnly.trim()}`
       : '';
   };
@@ -145,12 +145,12 @@ export default function ProfileScreen({ navigation }) {
 
         setUserData(prev => ({
           ...prev,
-          photo: profileData?.image && 
+          photo: profileData?.image &&
                  profileData.image !== "https://chagona.onrender.com/images/image-1688253105925-0.jpeg"
             ? profileData.image
             : null,
         }));
-        
+
         setWhatsapp(profileData?.whatsapp !== false);
       }
 
@@ -191,10 +191,10 @@ export default function ProfileScreen({ navigation }) {
   // Charger le nombre de commandes
   const fetchOrdersCount = useCallback(async () => {
     if (!user || !user.id) return;
-    
+
     try {
       const response = await apiClient.get(`/getCommandesByClefUser/${user.id}`);
-      
+
       if (response.data?.commandes) {
         setOrdersCount(response.data.commandes.length);
       }
@@ -208,7 +208,7 @@ export default function ProfileScreen({ navigation }) {
   useEffect(() => {
     fetchUserData();
     fetchOrdersCount();
-    
+
   }, [fetchUserData, fetchOrdersCount,]);
 
   // Recharger les données quand on revient sur cet écran
@@ -284,14 +284,14 @@ export default function ProfileScreen({ navigation }) {
       await fetchUserData();
     } catch (error) {
       console.error('Erreur sauvegarde:', error);
-      
+
       let errorMessage = 'Impossible de sauvegarder';
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
       }
-      
+
       Toast.show({
         type: 'error',
         text1: 'Erreur',
@@ -337,7 +337,7 @@ export default function ProfileScreen({ navigation }) {
   const handleTakePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      
+
       if (status !== 'granted') {
         Alert.alert('Permission refusée', 'Nous avons besoin de votre permission pour accéder à la caméra');
         return;
@@ -365,7 +365,7 @@ export default function ProfileScreen({ navigation }) {
   const handlePickFromGallery = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (status !== 'granted') {
         Alert.alert('Permission refusée', 'Nous avons besoin de votre permission pour accéder aux photos');
         return;
@@ -432,14 +432,14 @@ export default function ProfileScreen({ navigation }) {
       await fetchUserData();
     } catch (error) {
       console.error('Erreur upload:', error);
-      
+
       let errorMessage = 'Impossible de télécharger la photo';
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
       }
-      
+
       Toast.show({
         type: 'error',
         text1: 'Erreur',
@@ -486,250 +486,415 @@ export default function ProfileScreen({ navigation }) {
     );
   };
 
-  const menuItems = [
+  // ─── Définition des sections du menu ────────────────────────────────────────
+
+  const menuSections = [
     {
-      icon: 'person-outline',
-      title: 'Informations personnelles',
-      subtitle: 'Modifier votre profil',
-      onPress: () => navigation.navigate('EditProfile'),
+      title: 'Mon compte',
+      items: [
+        {
+          icon: 'person',
+          iconColor: '#30A08B',
+          iconBg: 'rgba(48, 160, 139, 0.12)',
+          title: 'Informations personnelles',
+          subtitle: 'Modifier votre profil',
+          onPress: () => navigation.navigate('EditProfile'),
+        },
+        {
+          icon: 'bag-handle',
+          iconColor: '#B2905F',
+          iconBg: 'rgba(178, 144, 95, 0.12)',
+          title: 'Mes commandes',
+          subtitle: `${ordersCount} commande${ordersCount !== 1 ? 's' : ''}`,
+          onPress: () => navigation.navigate('Orders'),
+          badge: ordersCount > 0 ? ordersCount : null,
+        },
+        {
+          icon: 'heart',
+          iconColor: '#E74C3C',
+          iconBg: 'rgba(231, 76, 60, 0.10)',
+          title: 'Mes favoris',
+          subtitle: `${likedProducts.length} produit${likedProducts.length !== 1 ? 's' : ''} sauvegardé${likedProducts.length !== 1 ? 's' : ''}`,
+          onPress: () => navigation.navigate('MainTabs', { screen: 'Favorites' }),
+          badge: likedProducts.length > 0 ? likedProducts.length : null,
+        },
+        {
+          icon: 'location',
+          iconColor: '#8E6BBF',
+          iconBg: 'rgba(142, 107, 191, 0.12)',
+          title: 'Mes adresses',
+          subtitle: 'Gérer vos adresses de livraison',
+          onPress: () => navigation.navigate('EditProfile'),
+        },
+        {
+          icon: 'leaf',
+          iconColor: '#30A08B',
+          iconBg: 'rgba(48, 160, 139, 0.12)',
+          title: 'Baobab Points',
+          subtitle: 'Mes points de fidélité',
+          onPress: () => navigation.navigate('Wallet'),
+        },
+      ],
     },
     {
-      icon: 'cart-outline',
-      title: 'Mes commandes',
-      subtitle: 'Historique des achats',
-      onPress: () => navigation.navigate('Orders'),
+      title: 'Communauté',
+      items: [
+        {
+          icon: 'people',
+          iconColor: '#F39C12',
+          iconBg: 'rgba(243, 156, 18, 0.12)',
+          title: 'Inviter un ami',
+          subtitle: 'Partagez Ihambaobab',
+          onPress: () => {},
+        },
+      ],
     },
     {
-      icon: 'heart-outline',
-      title: 'Mes favoris',
-      subtitle: 'Produits sauvegardés',
-      onPress: () => navigation.navigate('MainTabs', { screen: 'Favorites' }),
-    },
-    {
-      icon: 'help-circle-outline',
-      title: 'Aide et support',
-      subtitle: 'FAQ et contact',
-      onPress: () => navigation.navigate('Faq'),
+      title: 'Informations',
+      items: [
+        {
+          icon: 'help-circle',
+          iconColor: '#30A08B',
+          iconBg: 'rgba(48, 160, 139, 0.12)',
+          title: 'FAQ & Aide',
+          subtitle: 'Questions fréquentes et support',
+          onPress: () => navigation.navigate('Faq'),
+        },
+        {
+          icon: 'settings',
+          iconColor: '#718096',
+          iconBg: 'rgba(113, 128, 150, 0.12)',
+          title: 'Paramètres',
+          subtitle: 'Notifications, langue, thème',
+          onPress: () => navigation.navigate('EditProfile'),
+        },
+        {
+          icon: 'shield-checkmark',
+          iconColor: '#2980B9',
+          iconBg: 'rgba(41, 128, 185, 0.12)',
+          title: 'Confidentialité',
+          subtitle: 'Politique de confidentialité',
+          onPress: () => navigation.navigate('Faq'),
+        },
+      ],
     },
   ];
 
+  // ─── Rendu des initiales de l'avatar ────────────────────────────────────────
+  const getInitials = () => {
+    const name = userData.nom || user?.name || '';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+    }
+    return name.charAt(0).toUpperCase() || 'U';
+  };
+
+  // ─── RENDU PRINCIPAL ─────────────────────────────────────────────────────────
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
       {!user && <View style={styles.statusBarBackground} />}
       <SafeAreaView style={styles.container} edges={['bottom']}>
+
+        {/* ── CAS 1 : Non connecté ── */}
         {!user ? (
-          // Utilisateur non connecté
-          <ScrollView style={styles.notLoggedInContainer} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.guestScroll}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.guestScrollContent}
+          >
+            {/* Hero gradient */}
             <LinearGradient
-              colors={['#30A08B', '#2D9175', '#26805F']}
+              colors={['#30A08B', '#2D9175', '#1E6B5E']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.notLoggedInHeader}
+              style={styles.guestHero}
             >
-              <View style={styles.notLoggedInAvatarContainer}>
-                <View style={styles.notLoggedInAvatar}>
-                  <Ionicons name="person-outline" size={60} color={COLORS.white} />
+              {/* Cercles décoratifs */}
+              <View style={styles.guestDecorCircle1} />
+              <View style={styles.guestDecorCircle2} />
+
+              <View style={styles.guestAvatarRing}>
+                <View style={styles.guestAvatarInner}>
+                  <Ionicons name="person" size={52} color="#30A08B" />
                 </View>
               </View>
-              <Text style={styles.notLoggedInTitle}>Bienvenue sur Ihambaobab</Text>
-              <Text style={styles.notLoggedInSubtitle}>
-                Connectez-vous pour accéder à votre profil et vos commandes
+              <Text style={styles.guestHeroTitle}>Bienvenue sur{'\n'}Ihambaobab</Text>
+              <Text style={styles.guestHeroSubtitle}>
+                Connectez-vous pour profiter de{'\n'}toute l'expérience shopping
               </Text>
             </LinearGradient>
 
-            <View style={styles.notLoggedInContent}>
+            {/* Boutons d'authentification */}
+            <View style={styles.guestActions}>
               <TouchableOpacity
-                style={styles.loginButton}
+                style={styles.guestLoginBtn}
                 onPress={() => navigation.navigate('QuickAuth', {
                   pendingAction: 'open-profile',
                   returnScreen: 'MainTabs',
                   returnParams: { screen: 'Profile' },
                 })}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
                 <LinearGradient
                   colors={['#30A08B', '#26805F']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.loginButtonGradient}
+                  style={styles.guestLoginGradient}
                 >
-                  <Ionicons name="log-in-outline" size={24} color={COLORS.white} />
-                  <Text style={styles.loginButtonText}>Se connecter</Text>
+                  <Ionicons name="log-in-outline" size={22} color="#fff" />
+                  <Text style={styles.guestLoginText}>Se connecter</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.registerButton}
+                style={styles.guestRegisterBtn}
                 onPress={() => navigation.navigate('QuickAuth', {
                   pendingAction: 'open-profile',
                   returnScreen: 'MainTabs',
                   returnParams: { screen: 'Profile' },
                 })}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
-                <Text style={styles.registerButtonText}>Créer un compte</Text>
+                <Text style={styles.guestRegisterText}>Créer un compte</Text>
               </TouchableOpacity>
+            </View>
 
-              <View style={styles.featuresContainer}>
-                <Text style={styles.featuresTitle}>Profitez de tous les avantages :</Text>
-                <View style={styles.featureItem}>
-                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                  <Text style={styles.featureText}>Suivre vos commandes en temps réel</Text>
+            {/* Avantages */}
+            <View style={styles.guestBenefitsCard}>
+              <Text style={styles.guestBenefitsTitle}>Vos avantages membres</Text>
+              {[
+                { icon: 'cube-outline', text: 'Suivez vos commandes en temps réel' },
+                { icon: 'heart-outline', text: 'Sauvegardez vos produits favoris' },
+                { icon: 'receipt-outline', text: 'Accédez à l\'historique de vos achats' },
+                { icon: 'location-outline', text: 'Gérez vos adresses de livraison' },
+                { icon: 'gift-outline', text: 'Accédez aux offres exclusives membres' },
+              ].map((benefit, i) => (
+                <View key={i} style={styles.guestBenefitRow}>
+                  <View style={styles.guestBenefitIconWrap}>
+                    <Ionicons name={benefit.icon} size={18} color="#30A08B" />
+                  </View>
+                  <Text style={styles.guestBenefitText}>{benefit.text}</Text>
                 </View>
-                <View style={styles.featureItem}>
-                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                  <Text style={styles.featureText}>Sauvegarder vos produits favoris</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                  <Text style={styles.featureText}>Accéder à l'historique de vos achats</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                  <Text style={styles.featureText}>Gérer vos adresses de livraison</Text>
-                </View>
-              </View>
+              ))}
+            </View>
+
+            {/* Footer version */}
+            <View style={styles.footer}>
+              <Text style={styles.footerVersion}>Version 1.0.0</Text>
+              <Text style={styles.footerCopy}>© 2025 Ihambaobab</Text>
             </View>
           </ScrollView>
+
         ) : loading ? (
+          /* ── CAS 2 : Chargement ── */
           <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Chargement du profil...</Text>
-        </View>
-      ) : (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Header avec gradient */}
-          <LinearGradient
-            colors={['#30A08B', '#2D9175', '#26805F']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.header}
-          >
-            {/* Indicateur hors ligne */}
-            {!isConnected && (
-              <View style={styles.offlineIndicator}>
-                <Ionicons name="cloud-offline" size={14} color={COLORS.white} />
-                <Text style={styles.offlineText}>Hors ligne</Text>
-              </View>
-            )}
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Chargement du profil...</Text>
+          </View>
 
-            {/* Photo de profil */}
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatarCircle}>
-                {userData.photo ? (
-                  <Image 
-                    source={{ uri: userData.photo }} 
-                    style={styles.avatar}
-                    defaultSource={require('../../assets/icon.png')}
-                  />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarText}>
-                      {userData.nom?.charAt(0)?.toUpperCase() || user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <TouchableOpacity 
-                style={styles.editAvatarButton}
-                onPress={handleSelectPhoto}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color={COLORS.white} />
-                ) : (
-                  <Ionicons name="camera" size={18} color={COLORS.white} />
-                )}
-              </TouchableOpacity>
-            </View>
+        ) : (
+          /* ── CAS 3 : Connecté ── */
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-            {/* Informations utilisateur */}
-            <Text style={styles.userName}>{userData.nom || user?.name || 'Utilisateur'}</Text>
-            <Text style={styles.userEmail}>{userData.email || user?.email || 'email@example.com'}</Text>
-            
-            {/* Téléphone avec WhatsApp */}
-            {userData.telephone && (
-              <View style={styles.phoneContainer}>
-                <Ionicons name="call-outline" size={16} color={COLORS.white} />
-                <Text style={styles.phoneText}>
-                  {countryCode} {userData.telephone}
-                </Text>
-                {whatsapp && (
-                  <Ionicons name="logo-whatsapp" size={16} color="#25D366" style={styles.whatsappIcon} />
-                )}
-              </View>
-            )}
-            
-            {/* Badges/Stats */}
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{ordersCount}</Text>
-                <Text style={styles.statLabel}>Commandes</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{likedProducts.length}</Text>
-                <Text style={styles.statLabel}>Favoris</Text>
-              </View>
-            </View>
-          </LinearGradient>
-
-        {/* Menu items */}
-        <View style={styles.menuContainer}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.menuItem}
-              onPress={item.onPress}
-              activeOpacity={0.7}
+            {/* ── HERO HEADER ── */}
+            <LinearGradient
+              colors={['#30A08B', '#2D9175', '#1E6B5E']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroHeader}
             >
-              <View style={styles.menuIconContainer}>
-                <Ionicons name={item.icon} size={24} color={COLORS.primary} />
+              {/* Cercles décoratifs arrière-plan */}
+              <View style={styles.heroDecorCircle1} />
+              <View style={styles.heroDecorCircle2} />
+
+              {/* Indicateur hors ligne */}
+              {!isConnected && (
+                <View style={styles.offlinePill}>
+                  <Ionicons name="cloud-offline" size={13} color="#fff" />
+                  <Text style={styles.offlinePillText}>Hors ligne</Text>
+                </View>
+              )}
+
+              {/* Badge "Connecté" */}
+              <View style={styles.connectedBadge}>
+                <View style={styles.connectedDot} />
+                <Text style={styles.connectedBadgeText}>Connecté</Text>
               </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+
+              {/* Avatar */}
+              <View style={styles.avatarWrapper}>
+                <View style={styles.avatarRing}>
+                  {userData.photo ? (
+                    <Image
+                      source={{ uri: userData.photo }}
+                      style={styles.avatarImage}
+                      defaultSource={require('../../assets/icon.png')}
+                    />
+                  ) : (
+                    <LinearGradient
+                      colors={['#B2905F', '#8C6A3F']}
+                      style={styles.avatarInitialsBg}
+                    >
+                      <Text style={styles.avatarInitials}>{getInitials()}</Text>
+                    </LinearGradient>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={styles.cameraBadge}
+                  onPress={handleSelectPhoto}
+                  disabled={isSubmitting}
+                  activeOpacity={0.85}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Ionicons name="camera" size={15} color="#fff" />
+                  )}
+                </TouchableOpacity>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
-            </TouchableOpacity>
-          ))}
-        </View>
 
-        {/* Bouton de déconnexion */}
-        <View style={styles.logoutContainer}>
-          <LoadingButton
-            title="Se déconnecter"
-            onPress={handleLogout}
-            loading={loggingOut}
-            variant="outline"
-            leftIcon={<Ionicons name="log-out-outline" size={20} color={COLORS.error} />}
-            style={styles.logoutButton}
-            textStyle={styles.logoutButtonText}
-          />
-        </View>
+              {/* Nom & email */}
+              <Text style={styles.heroName}>
+                {userData.nom || user?.name || 'Utilisateur'}
+              </Text>
+              <Text style={styles.heroEmail}>
+                {userData.email || user?.email || ''}
+              </Text>
 
-        {/* Version */}
-        <View style={styles.footer}>
-          <Text style={styles.versionText}>Version 1.0.0</Text>
-          <Text style={styles.footerText}>© 2025 Ihambaobab</Text>
-        </View>
-      </ScrollView>
-      )}
+              {/* Numéro whatsapp si présent */}
+              {phoneNumberOnly ? (
+                <View style={styles.heroPhonenRow}>
+                  <Ionicons name="call-outline" size={14} color="rgba(255,255,255,0.85)" />
+                  <Text style={styles.heroPhoneText}>
+                    {selectedCountryCode.code} {phoneNumberOnly}
+                  </Text>
+                  {whatsapp && (
+                    <Ionicons name="logo-whatsapp" size={15} color="#25D366" style={{ marginLeft: 6 }} />
+                  )}
+                </View>
+              ) : null}
 
-      {/* Image Editor Modal */}
-      <ImageEditorModal
-        visible={showImageEditor}
-        imageUri={selectedImageUri}
-        onSave={handleSaveEditedImage}
-        onCancel={handleCancelImageEditing}
-      />
+              {/* ── STATS ROW ── */}
+              <View style={styles.statsRow}>
+                <View style={styles.statCell}>
+                  <Text style={styles.statNum}>{ordersCount}</Text>
+                  <Text style={styles.statLbl}>Commandes</Text>
+                </View>
+                <View style={styles.statSep} />
+                <View style={styles.statCell}>
+                  <Text style={styles.statNum}>{likedProducts.length}</Text>
+                  <Text style={styles.statLbl}>Favoris</Text>
+                </View>
+                <View style={styles.statSep} />
+                <View style={styles.statCell}>
+                  <Text style={styles.statNum}>0</Text>
+                  <Text style={styles.statLbl}>Points</Text>
+                </View>
+              </View>
+            </LinearGradient>
+
+            {/* ── SECTIONS MENU ── */}
+            {menuSections.map((section, sIdx) => (
+              <View key={sIdx} style={styles.section}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <View style={styles.sectionCard}>
+                  {section.items.map((item, iIdx) => (
+                    <React.Fragment key={iIdx}>
+                      <TouchableOpacity
+                        style={styles.menuRow}
+                        onPress={item.onPress}
+                        activeOpacity={0.7}
+                      >
+                        {/* Icône colorée */}
+                        <View style={[styles.menuIconBox, { backgroundColor: item.iconBg }]}>
+                          <Ionicons name={item.icon} size={20} color={item.iconColor} />
+                        </View>
+
+                        {/* Texte */}
+                        <View style={styles.menuTextBlock}>
+                          <Text style={styles.menuRowTitle}>{item.title}</Text>
+                          <Text style={styles.menuRowSub}>{item.subtitle}</Text>
+                        </View>
+
+                        {/* Badge optionnel */}
+                        {item.badge ? (
+                          <View style={styles.badgePill}>
+                            <Text style={styles.badgePillText}>{item.badge}</Text>
+                          </View>
+                        ) : null}
+
+                        <Ionicons name="chevron-forward" size={18} color="#CBD5E0" />
+                      </TouchableOpacity>
+
+                      {/* Séparateur (sauf dernier) */}
+                      {iIdx < section.items.length - 1 && (
+                        <View style={styles.rowDivider} />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </View>
+              </View>
+            ))}
+
+            {/* ── SECTION COMPTE : DÉCONNEXION ── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Compte</Text>
+              <View style={styles.sectionCard}>
+                <TouchableOpacity
+                  style={styles.logoutRow}
+                  onPress={handleLogout}
+                  disabled={loggingOut}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.logoutIconBox}>
+                    {loggingOut ? (
+                      <ActivityIndicator size="small" color="#E74C3C" />
+                    ) : (
+                      <Ionicons name="log-out-outline" size={20} color="#E74C3C" />
+                    )}
+                  </View>
+                  <View style={styles.menuTextBlock}>
+                    <Text style={styles.logoutTitle}>
+                      {loggingOut ? 'Déconnexion...' : 'Se déconnecter'}
+                    </Text>
+                    <Text style={styles.logoutSub}>Fermer votre session</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#CBD5E0" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* ── FOOTER ── */}
+            <View style={styles.footer}>
+              <View style={styles.footerLogoRow}>
+                <View style={styles.footerLogoDot} />
+                <Text style={styles.footerBrand}>Ihambaobab</Text>
+              </View>
+              <Text style={styles.footerVersion}>Version 1.0.0</Text>
+              <Text style={styles.footerCopy}>© 2025 Ihambaobab. Tous droits réservés.</Text>
+            </View>
+
+          </ScrollView>
+        )}
+
+        {/* ── Image Editor Modal ── */}
+        <ImageEditorModal
+          visible={showImageEditor}
+          imageUri={selectedImageUri}
+          onSave={handleSaveEditedImage}
+          onCancel={handleCancelImageEditing}
+        />
       </SafeAreaView>
     </>
   );
 }
 
+// ─── STYLES ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+
+  // Layout de base
   statusBarBackground: {
     position: 'absolute',
     top: 0,
@@ -741,311 +906,493 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F7F8FA',
   },
-  header: {
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+  scrollContent: {
+    paddingBottom: 40,
   },
-  offlineIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  offlineText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginTop: 17,
-    marginBottom: 16,
-  },
-  avatarCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  avatarText: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: COLORS.white,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 20,
-  },
-  phoneContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  phoneText: {
-    color: COLORS.white,
-    fontSize: 14,
-    marginLeft: 6,
-  },
-  whatsappIcon: {
-    marginLeft: 8,
-  },
-  avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+
+  // ── Loading ──
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F7F8FA',
   },
   loadingText: {
-    marginTop: 12,
-    color: COLORS.textLight,
+    marginTop: 14,
     fontSize: 14,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  menuContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  menuIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  menuContent: {
-    flex: 1,
-  },
-  menuTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  menuSubtitle: {
-    fontSize: 13,
     color: COLORS.textLight,
+    fontWeight: '500',
   },
-  logoutContainer: {
-    paddingHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  logoutButton: {
-    borderColor: COLORS.error,
-    borderWidth: 2,
-  },
-  logoutButtonText: {
-    color: COLORS.error,
-    fontWeight: '700',
-  },
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingBottom: 40,
-  },
-  versionText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginBottom: 4,
-  },
-  footerText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  // Styles pour utilisateur non connecté
-  notLoggedInContainer: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-  },
-  notLoggedInHeader: {
-    paddingTop: Platform.OS === 'ios' ? 70 : 60,
-    paddingBottom: 60,
+
+  // ── Hero Header (connecté) ──
+  heroHeader: {
+    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+    paddingBottom: 32,
     paddingHorizontal: 24,
     alignItems: 'center',
-  },
-  notLoggedInAvatarContainer: {
-    marginBottom: 24,
-  },
-  notLoggedInAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: COLORS.white,
-  },
-  notLoggedInTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  notLoggedInSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  notLoggedInContent: {
-    padding: 24,
-  },
-  loginButton: {
-    borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
-  loginButtonGradient: {
+  heroDecorCircle1: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    top: -60,
+    right: -50,
+  },
+  heroDecorCircle2: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    bottom: -20,
+    left: -30,
+  },
+
+  // Pill hors ligne
+  offlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginBottom: 12,
+    gap: 5,
+  },
+  offlinePillText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Badge Connecté
+  connectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    marginBottom: 18,
+    gap: 6,
+  },
+  connectedDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#4ADE80',
+  },
+  connectedBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+
+  // Avatar
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatarRing: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.6)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  avatarImage: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+  },
+  avatarInitialsBg: {
+    width: 104,
+    height: 104,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitials: {
+    fontSize: 38,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 1,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#B2905F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2.5,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+
+  // Nom & email
+  heroName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.2,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  heroEmail: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  heroPhonenRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 5,
+  },
+  heroPhoneText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+  },
+
+  // Stats row
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    width: '100%',
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNum: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  statLbl: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+  statSep: {
+    width: 1,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+
+  // ── Sections menu ──
+  section: {
+    paddingHorizontal: 16,
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#A0AEC0',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  menuIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  menuTextBlock: {
+    flex: 1,
+  },
+  menuRowTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1A202C',
+    marginBottom: 2,
+  },
+  menuRowSub: {
+    fontSize: 12,
+    color: '#A0AEC0',
+    fontWeight: '400',
+  },
+  badgePill: {
+    backgroundColor: '#30A08B',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginRight: 8,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  badgePillText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 70,
+    marginRight: 16,
+  },
+
+  // ── Déconnexion ──
+  logoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  logoutIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(231, 76, 60, 0.10)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  logoutTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E74C3C',
+    marginBottom: 2,
+  },
+  logoutSub: {
+    fontSize: 12,
+    color: '#A0AEC0',
+  },
+
+  // ── Footer ──
+  footer: {
+    alignItems: 'center',
+    paddingTop: 28,
+    paddingBottom: 20,
+  },
+  footerLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 7,
+  },
+  footerLogoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#30A08B',
+  },
+  footerBrand: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#30A08B',
+    letterSpacing: 0.5,
+  },
+  footerVersion: {
+    fontSize: 12,
+    color: '#CBD5E0',
+    marginBottom: 2,
+  },
+  footerCopy: {
+    fontSize: 11,
+    color: '#CBD5E0',
+  },
+
+  // ── Écran invité (non connecté) ──
+  guestScroll: {
+    flex: 1,
+    backgroundColor: '#F7F8FA',
+  },
+  guestScrollContent: {
+    paddingBottom: 40,
+  },
+  guestHero: {
+    paddingTop: Platform.OS === 'ios' ? 64 : 52,
+    paddingBottom: 52,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  guestDecorCircle1: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    top: -70,
+    right: -60,
+  },
+  guestDecorCircle2: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    bottom: -30,
+    left: -40,
+  },
+  guestAvatarRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  guestAvatarInner: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  guestHeroTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 34,
+    marginBottom: 10,
+  },
+  guestHeroSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.88)',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  // Boutons auth
+  guestActions: {
+    paddingHorizontal: 20,
+    marginTop: 24,
+    gap: 12,
+  },
+  guestLoginBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#30A08B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  guestLoginGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    gap: 12,
+    gap: 10,
   },
-  loginButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.white,
+  guestLoginText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.3,
   },
-  registerButton: {
-    borderRadius: 12,
+  guestRegisterBtn: {
+    borderRadius: 14,
     borderWidth: 2,
-    borderColor: COLORS.primary,
-    paddingVertical: 16,
+    borderColor: '#30A08B',
+    paddingVertical: 15,
     alignItems: 'center',
-    marginBottom: 32,
+    backgroundColor: '#fff',
   },
-  registerButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.primary,
+  guestRegisterText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#30A08B',
+    letterSpacing: 0.3,
   },
-  featuresContainer: {
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
+
+  // Avantages membres
+  guestBenefitsCard: {
+    marginHorizontal: 20,
+    marginTop: 24,
+    backgroundColor: '#fff',
+    borderRadius: 18,
     padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  featuresTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 20,
+  guestBenefitsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A202C',
+    marginBottom: 16,
   },
-  featureItem: {
+  guestBenefitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
     gap: 12,
   },
-  featureText: {
+  guestBenefitIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(48, 160, 139, 0.10)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  guestBenefitText: {
     flex: 1,
-    fontSize: 15,
-    color: COLORS.textLight,
-    lineHeight: 22,
+    fontSize: 14,
+    color: '#4A5568',
+    lineHeight: 20,
+    fontWeight: '400',
   },
 });

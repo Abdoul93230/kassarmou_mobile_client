@@ -65,10 +65,9 @@ export default function OrderDetailScreen({ route, navigation }) {
   // Logique identique au web (CommandeSuivi.tsx lignes 319-321)
   const shouldShowPaymentButton = () => {
     if (!order) return false;
-    return (
-      order.statusPayment === 'échec' ||
-      (order.statusPayment !== 'recu' && order.statusPayment !== 'payé')
-    );
+    // "payé à la livraison" garde le bouton : l'acheteur peut toujours payer en ligne
+    const finalPaidStatuses = ['payé', 'recu', 'payé par téléphone'];
+    return order.statusPayment === 'échec' || !finalPaidStatuses.includes(order.statusPayment || '');
   };
 
   const handlePaymentRetry = async () => {
@@ -361,39 +360,62 @@ export default function OrderDetailScreen({ route, navigation }) {
           <View style={st.section}>
             <View style={st.sectionHeader}>
               <Ionicons name="time" size={20} color={BRAND} />
-              <Text style={st.sectionTitle}>Historique de la commande</Text>
+              <Text style={st.sectionTitle}>Suivi de la commande</Text>
             </View>
             <View style={st.timeline}>
-              {/* Commande passée */}
-              <View style={st.timelineItem}>
-                <View style={[st.dot, { backgroundColor: BRAND }]} />
-                <View style={st.timelineLine} />
-                <View style={st.timelineContent}>
-                  <Text style={st.timelineTitle}>Commande passée</Text>
-                  <Text style={st.timelineDate}>{fmtDateTime(order.date)}</Text>
-                </View>
-              </View>
-
-              {/* Validée */}
-              {order.dateValidation && (
-                <View style={st.timelineItem}>
-                  <View style={[st.dot, { backgroundColor: '#3b82f6' }]} />
-                  <View style={st.timelineLine} />
+              {[
+                {
+                  title: 'Commande passée',
+                  sub: fmtDateTime(order.date),
+                  done: true,
+                  color: BRAND,
+                },
+                {
+                  title: 'Paiement',
+                  sub: order.statusPayment === 'payé par téléphone' ? 'Paiement assisté'
+                    : order.statusPayment === 'payé à la livraison' ? 'Payé à la livraison'
+                    : order.statusPayment === 'payé' || order.statusPayment === 'recu' ? 'Paiement confirmé'
+                    : order.statusPayment === 'échec' ? 'Échec du paiement'
+                    : 'En attente de paiement',
+                  done: ['payé', 'recu', 'payé à la livraison', 'payé par téléphone'].includes(order.statusPayment || ''),
+                  error: order.statusPayment === 'échec',
+                  color: order.statusPayment === 'échec' ? '#ef4444' : '#3b82f6',
+                },
+                {
+                  title: 'Traitement',
+                  sub: { traitement: 'En traitement', 'reçu par le livreur': 'Remis au livreur',
+                    'en cours de livraison': 'En livraison', 'livraison reçu': 'Livraison confirmée',
+                    livré: 'Livré', Traité: 'Traité', annulé: 'Annulée' }[order.etatTraitement] || order.etatTraitement || 'En attente',
+                  done: ['livraison reçu', 'livré', 'Traité'].includes(order.etatTraitement || ''),
+                  error: order.etatTraitement === 'annulé',
+                  color: order.etatTraitement === 'annulé' ? '#ef4444'
+                    : ['livraison reçu', 'livré', 'Traité'].includes(order.etatTraitement || '') ? '#16a34a' : '#f59e0b',
+                },
+                {
+                  title: 'Livraison',
+                  sub: isCancelled ? 'Annulée'
+                    : order.statusLivraison === 'livré' || order.etatTraitement === 'livré' ? 'Livrée'
+                    : order.etatTraitement === 'en cours de livraison' ? 'En cours de livraison'
+                    : order.etatTraitement === 'reçu par le livreur' ? 'Remis au livreur'
+                    : 'En attente',
+                  done: order.statusLivraison === 'livré' || order.etatTraitement === 'livré'
+                    || order.etatTraitement === 'livraison reçu' || order.etatTraitement === 'Traité',
+                  error: isCancelled,
+                  color: isCancelled ? '#ef4444'
+                    : (order.statusLivraison === 'livré' || order.etatTraitement === 'livré') ? '#16a34a' : '#9ca3af',
+                },
+              ].map((step, i, arr) => (
+                <View key={i} style={st.timelineItem}>
+                  <View style={[st.dot, { backgroundColor: step.error ? '#ef4444' : step.done ? step.color : '#d1d5db' }]} />
+                  {i < arr.length - 1 && <View style={st.timelineLine} />}
                   <View style={st.timelineContent}>
-                    <Text style={st.timelineTitle}>Commande validée</Text>
-                    <Text style={st.timelineDate}>{fmtDateTime(order.dateValidation)}</Text>
+                    <Text style={[st.timelineTitle, step.error && { color: '#ef4444' }, step.done && !step.error && { color: step.color }]}>
+                      {step.title}
+                    </Text>
+                    <Text style={st.timelineDate}>{step.sub}</Text>
                   </View>
                 </View>
-              )}
-
-              {/* Current */}
-              <View style={st.timelineItem}>
-                <View style={[st.dot, { backgroundColor: isCancelled ? '#ef4444' : order.statusLivraison === 'livré' ? '#16a34a' : '#f59e0b' }]} />
-                <View style={st.timelineContent}>
-                  <Text style={st.timelineTitle}>Statut actuel : {order.etatTraitement || order.statusLivraison}</Text>
-                  <Text style={st.timelineDate}>Livraison : {order.statusLivraison} · Paiement : {order.statusPayment}</Text>
-                </View>
-              </View>
+              ))}
             </View>
           </View>
 

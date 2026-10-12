@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   Dimensions,
   Animated,
   RefreshControl,
-  ActivityIndicator,
   StatusBar,
   Platform,
   Image,
@@ -23,29 +22,132 @@ import { fetchCategories } from '../redux/categoriesSlice';
 import { getProducts, getTypes } from '../redux/productsSlice';
 
 const { width } = Dimensions.get('window');
-const CARD_MARGIN = 12;
+const CARD_MARGIN = 10;
 const NUM_COLUMNS = 2;
-const CARD_WIDTH = (width - (NUM_COLUMNS + 1) * CARD_MARGIN) / NUM_COLUMNS;
+const CARD_WIDTH = (width - (NUM_COLUMNS + 1) * CARD_MARGIN * 1.5) / NUM_COLUMNS;
+const CARD_HEIGHT = CARD_WIDTH * 1.15;
+const HEADER_MAX_HEIGHT = Platform.OS === 'ios' ? 175 : 160;
+const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 120 : 108;
 
+// ─── Skeleton animé ────────────────────────────────────────────────────────────
+function SkeletonCard() {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [shimmer]);
+
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+
+  return (
+    <Animated.View style={[styles.skeletonCard, { opacity }]}>
+      <View style={styles.skeletonInner} />
+      <View style={styles.skeletonLabel} />
+      <View style={styles.skeletonSub} />
+    </Animated.View>
+  );
+}
+
+// ─── Palette de couleurs pour les overlays ────────────────────────────────────
+const OVERLAYS = [
+  ['rgba(48,160,139,0.55)', 'rgba(48,160,139,0.82)'],
+  ['rgba(178,144,95,0.55)', 'rgba(178,144,95,0.82)'],
+  ['rgba(99,102,241,0.55)', 'rgba(99,102,241,0.82)'],
+  ['rgba(236,72,153,0.55)', 'rgba(236,72,153,0.82)'],
+  ['rgba(16,185,129,0.55)', 'rgba(16,185,129,0.82)'],
+  ['rgba(245,158,11,0.55)', 'rgba(245,158,11,0.82)'],
+  ['rgba(239,68,68,0.55)',  'rgba(239,68,68,0.82)'],
+  ['rgba(59,130,246,0.55)', 'rgba(59,130,246,0.82)'],
+];
+
+// ─── Composant carte catégorie ─────────────────────────────────────────────────
+const CategoryCard = React.memo(({ item, index, onPress }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const overlay = OVERLAYS[index % OVERLAYS.length];
+
+  const handlePressIn = () =>
+    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 30 }).start();
+  const handlePressOut = () =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
+
+  return (
+    <Animated.View style={[styles.cardWrapper, { transform: [{ scale }] }]}>
+      <TouchableOpacity
+        style={styles.categoryCard}
+        onPress={() => onPress(item)}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+      >
+        {/* Image de fond */}
+        <Image
+          source={{ uri: item.image }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+        />
+
+        {/* Overlay dégradé du bas vers le haut */}
+        <LinearGradient
+          colors={['transparent', overlay[0], overlay[1]]}
+          locations={[0.0, 0.45, 1.0]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+
+        {/* Badge count en haut à droite */}
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{item._productCount ?? 0}</Text>
+        </View>
+
+        {/* Infos en bas */}
+        <View style={styles.cardFooter}>
+          <Text style={styles.categoryName} numberOfLines={2}>
+            {item.name}
+          </Text>
+          <View style={styles.countRow}>
+            <Ionicons name="pricetag" size={11} color="rgba(255,255,255,0.85)" />
+            <Text style={styles.productCountText}>
+              {' '}{item._productCount ?? 0} {(item._productCount ?? 0) === 1 ? 'produit' : 'produits'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Flèche */}
+        <View style={styles.arrowBadge}>
+          <Ionicons name="chevron-forward" size={14} color="#FFF" />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
+
+// ─── Screen principal ──────────────────────────────────────────────────────────
 export default function CategoryScreen() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
-  
-  const { categories, loading } = useSelector((state) => state.categories || { categories: [], loading: false });
-  const products = useSelector((state) => state.products?.data || []);
-  const types = useSelector((state) => state.products?.types || []);
-  
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredCategories, setFilteredCategories] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [scrollY] = useState(new Animated.Value(0));
 
-  // Create mapping once with useMemo for performance
+  const { categories, loading } = useSelector(
+    (state) => state.categories || { categories: [], loading: false }
+  );
+  const products = useSelector((state) => state.products?.data || []);
+  const types    = useSelector((state) => state.products?.types || []);
+
+  const [searchQuery, setSearchQuery]           = useState('');
+  const [filteredCategories, setFilteredCategories] = useState([]);
+  const [refreshing, setRefreshing]             = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const searchInputRef = useRef(null);
+
+  // ── Logique métier originale ──────────────────────────────────────────────
   const typeToCategory = useMemo(() => {
     const mapping = {};
-    types.forEach(type => {
-      mapping[type._id] = type.clefCategories;
-    });
+    types.forEach(type => { mapping[type._id] = type.clefCategories; });
     return mapping;
   }, [types]);
 
@@ -55,6 +157,12 @@ export default function CategoryScreen() {
     dispatch(getProducts());
     dispatch(getTypes());
   }, [dispatch]);
+
+  const getCategoryProductCount = useCallback(
+    (categoryId) =>
+      products.filter(product => typeToCategory[product.ClefType] === categoryId).length,
+    [products, typeToCategory]
+  );
 
   useEffect(() => {
     if (categories.length > 0) {
@@ -66,30 +174,25 @@ export default function CategoryScreen() {
   }, [categories, searchQuery, products, types]);
 
   const filterCategories = (query) => {
+    const base = categories.map(cat => ({
+      ...cat,
+      _productCount: getCategoryProductCount(cat._id),
+    }));
     if (!query.trim()) {
-      setFilteredCategories(categories);
+      setFilteredCategories(base);
     } else {
-      const filtered = categories.filter((cat) =>
-        cat.name?.toLowerCase().includes(query.toLowerCase())
+      setFilteredCategories(
+        base.filter(cat => cat.name?.toLowerCase().includes(query.toLowerCase()))
       );
-      setFilteredCategories(filtered);
     }
   };
-
-  const getCategoryProductCount = useCallback((categoryId) => {
-    // Filter products whose type belongs to this category
-    return products.filter(product => {
-      const productCategoryId = typeToCategory[product.ClefType];
-      return productCategoryId === categoryId;
-    }).length;
-  }, [products, typeToCategory]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
       dispatch(fetchCategories()),
       dispatch(getProducts()),
-      dispatch(getTypes())
+      dispatch(getTypes()),
     ]);
     setRefreshing(false);
   }, [dispatch]);
@@ -100,170 +203,116 @@ export default function CategoryScreen() {
       categoryName: category.name,
     });
   };
+  // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Animations du header ──────────────────────────────────────────────────
   const headerHeight = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [120, 80],
+    inputRange: [0, 80],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+  const titleScale = scrollY.interpolate({
+    inputRange: [0, 80],
+    outputRange: [1, 0.82],
+    extrapolate: 'clamp',
+  });
+  const subtitleOpacity = scrollY.interpolate({
+    inputRange: [0, 40],
+    outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 50],
-    outputRange: [1, 0.9],
-    extrapolate: 'clamp',
-  });
-
-  const renderCategoryCard = ({ item, index }) => {
-    const productCount = getCategoryProductCount(item._id);
-    const colors = [
-      ['#30A08B', '#62aca2'],
-      ['#FC913A', '#FFB366'],
-      ['#6366F1', '#818CF8'],
-      ['#EC4899', '#F472B6'],
-      ['#10B981', '#34D399'],
-      ['#F59E0B', '#FBBF24'],
-    ];
-    const colorPair = colors[index % colors.length];
-
-    return (
-      <TouchableOpacity
-        style={styles.categoryCard}
-        onPress={() => handleCategoryPress(item)}
-        activeOpacity={0.8}
-      >
-        {/* Category Image Background */}
-        <Image 
-          source={{ uri: item.image }} 
-          style={styles.categoryImageBackground}
-          resizeMode="cover"
-        />
-        
-        {/* Gradient Overlay - Reduced opacity for better image visibility */}
-        <LinearGradient
-          colors={[
-            colorPair[0] + '60',  // 60 = 37.5% opacity
-            colorPair[1] + '80',  // 80 = 50% opacity
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.categoryGradientOverlay}
-        >
-          {/* Product Count Badge */}
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{productCount}</Text>
-          </View>
-
-          {/* Category Icon - Removed for better image visibility */}
-
-          {/* Category Name */}
-          <View style={styles.categoryInfo}>
-            <Text style={styles.categoryName} numberOfLines={2}>
-              {item.name}
-            </Text>
-            <Text style={styles.productCountText}>
-              {productCount} {productCount === 1 ? 'produit' : 'produits'}
-            </Text>
-          </View>
-
-          {/* Arrow Icon */}
-          <View style={styles.arrowContainer}>
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.9)" />
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <MaterialCommunityIcons name="package-variant" size={100} color="#E0E0E0" />
-      <Text style={styles.emptyTitle}>Aucune catégorie trouvée</Text>
-      <Text style={styles.emptySubtitle}>
-        {searchQuery ? 'Essayez une autre recherche' : 'Les catégories seront bientôt disponibles'}
-      </Text>
-    </View>
+  // ── Rendus ────────────────────────────────────────────────────────────────
+  const renderCategoryCard = ({ item, index }) => (
+    <CategoryCard item={item} index={index} onPress={handleCategoryPress} />
   );
 
   const renderSkeletonLoader = () => (
-    <View style={styles.skeletonContainer}>
-      {[1, 2, 3, 4, 5, 6].map((_, index) => (
-        <View key={index} style={styles.skeletonCard}>
-          <LinearGradient
-            colors={['#f0f0f0', '#e0e0e0', '#f0f0f0']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.skeletonGradient}
-          />
-        </View>
-      ))}
+    <View style={styles.skeletonGrid}>
+      {[0, 1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
+    </View>
+  );
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconCircle}>
+        <MaterialCommunityIcons name="package-variant-closed" size={56} color="#30A08B" />
+      </View>
+      <Text style={styles.emptyTitle}>Aucune catégorie trouvée</Text>
+      <Text style={styles.emptySubtitle}>
+        {searchQuery
+          ? 'Essayez une autre recherche'
+          : 'Les catégories seront bientôt disponibles'}
+      </Text>
+      {searchQuery.length > 0 && (
+        <TouchableOpacity style={styles.emptyResetBtn} onPress={() => setSearchQuery('')}>
+          <Text style={styles.emptyResetText}>Effacer la recherche</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
-      
-      {/* Animated Header */}
-      <Animated.View
-        style={[
-          styles.headerContainer,
-          { height: headerHeight, opacity: headerOpacity },
-        ]}
-      >
+
+      {/* ── Header animé ── */}
+      <Animated.View style={[styles.headerContainer, { height: headerHeight }]}>
         <LinearGradient
-          colors={['#30A08B', '#62aca2', '#4FB8A4']}
+          colors={['#30A08B', '#27897A', '#1E6B5F']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
-          <View style={styles.headerContent}>
-            {/* Header Top Section */}
-            <View style={styles.headerTop}>
-              <View style={styles.headerTitleContainer}>
-                <View style={styles.iconBadge}>
-                  <Ionicons name="grid" size={24} color="#FFF" />
-                </View>
-                <View style={styles.headerTextWrapper}>
-                  <Text style={styles.headerTitle}>Catégories</Text>
-                  <Text style={styles.headerSubtitle}>
-                    {filteredCategories.length} {filteredCategories.length === 1 ? 'catégorie disponible' : 'catégories disponibles'}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerActionButton}>
-                  <Ionicons name="filter" size={22} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
+          style={StyleSheet.absoluteFillObject}
+        />
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <View style={styles.searchInputWrapper}>
-                <Ionicons name="search" size={20} color="#30A08B" style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Rechercher une catégorie..."
-                  placeholderTextColor="#999"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity 
-                    onPress={() => setSearchQuery('')}
-                    style={styles.clearButton}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#999" />
-                  </TouchableOpacity>
-                )}
+        {/* Cercles décoratifs */}
+        <View style={styles.headerDecorCircle1} />
+        <View style={styles.headerDecorCircle2} />
+
+        <View style={styles.headerContent}>
+          {/* Ligne titre */}
+          <Animated.View
+            style={[styles.headerTop, { transform: [{ scale: titleScale }] }]}
+          >
+            <View style={styles.headerLeft}>
+              <View style={styles.iconBadge}>
+                <Ionicons name="grid" size={22} color="#FFF" />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>Catégories</Text>
+                <Animated.Text style={[styles.headerSubtitle, { opacity: subtitleOpacity }]}>
+                  {filteredCategories.length}{' '}
+                  {filteredCategories.length === 1 ? 'catégorie' : 'catégories'}
+                </Animated.Text>
               </View>
             </View>
+            <TouchableOpacity style={styles.headerActionBtn} onPress={onRefresh}>
+              <Ionicons name="refresh" size={20} color="#FFF" />
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Barre de recherche */}
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={18} color="#30A08B" />
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              placeholder="Rechercher une catégorie..."
+              placeholderTextColor="#AAA"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={18} color="#CCC" />
+              </TouchableOpacity>
+            )}
           </View>
-        </LinearGradient>
+        </View>
       </Animated.View>
 
-      {/* Category List */}
+      {/* ── Contenu ── */}
       {loading && !refreshing ? (
         renderSkeletonLoader()
       ) : (
@@ -273,6 +322,7 @@ export default function CategoryScreen() {
           keyExtractor={(item) => item._id}
           numColumns={NUM_COLUMNS}
           contentContainerStyle={styles.listContent}
+          columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={renderEmptyState}
           refreshControl={
@@ -281,6 +331,7 @@ export default function CategoryScreen() {
               onRefresh={onRefresh}
               colors={['#30A08B']}
               tintColor="#30A08B"
+              progressBackgroundColor="#FFF"
             />
           }
           onScroll={Animated.event(
@@ -293,228 +344,270 @@ export default function CategoryScreen() {
     </View>
   );
 }
+
+// ─── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F2F4F6',
   },
+
+  // ─ Header ─
   headerContainer: {
     overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
     zIndex: 100,
+    elevation: 10,
+    shadowColor: '#30A08B',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
   },
-  headerGradient: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 50 : 35,
+  headerDecorCircle1: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    top: -60,
+    right: -40,
+  },
+  headerDecorCircle2: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    bottom: 10,
+    left: -25,
   },
   headerContent: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 54 : 38,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
     justifyContent: 'space-between',
-    paddingBottom: 15,
   },
   headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    transformOrigin: 'left center',
   },
-  headerTitleContainer: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 12,
   },
   iconBadge: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  headerTextWrapper: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#FFF',
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  headerActionButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 0.3,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  headerActionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 46,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+
+  // ─ Grille ─
+  listContent: {
+    paddingHorizontal: CARD_MARGIN,
+    paddingTop: 14,
+    paddingBottom: 24,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    marginBottom: CARD_MARGIN,
+  },
+  cardWrapper: {
+    width: CARD_WIDTH,
+  },
+  categoryCard: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#E8E8E8',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+  },
+  countBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#30A08B',
+  },
+  cardFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+    paddingBottom: 14,
+  },
+  categoryName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+    letterSpacing: 0.2,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  productCountText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.88)',
+    fontWeight: '600',
+  },
+  arrowBadge: {
+    position: 'absolute',
+    bottom: 12,
+    right: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
-  searchContainer: {
-    marginTop: 5,
-  },
-  searchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    height: 50,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-    fontWeight: '500',
-  },
-  clearButton: {
-    padding: 4,
-  },
-  listContent: {
-    padding: CARD_MARGIN,
-    paddingTop: 15,
-  },
-  categoryCard: {
-    width: CARD_WIDTH,
-    height: 180,
-    margin: CARD_MARGIN / 2,
-    borderRadius: 20,
-    overflow: 'hidden',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    position: 'relative',
-  },
-  categoryImageBackground: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#F0F0F0',
-  },
-  categoryGradientOverlay: {
-    flex: 1,
-    padding: 15,
-    justifyContent: 'space-between',
-  },
-  countBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  countText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  iconContainer: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-  },
-  categoryInfo: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  categoryName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 4,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  productCountText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.95)',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  arrowContainer: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 80,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 20,
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: '#999',
-    marginTop: 8,
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-  skeletonContainer: {
+
+  // ─ Skeleton ─
+  skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: CARD_MARGIN,
-    paddingTop: 15,
+    paddingHorizontal: CARD_MARGIN,
+    paddingTop: 14,
+    gap: CARD_MARGIN,
   },
   skeletonCard: {
     width: CARD_WIDTH,
-    height: 180,
-    margin: CARD_MARGIN / 2,
-    borderRadius: 20,
+    height: CARD_HEIGHT,
+    borderRadius: 18,
+    backgroundColor: '#E0E0E0',
     overflow: 'hidden',
-    backgroundColor: '#f0f0f0',
+    padding: 12,
+    justifyContent: 'flex-end',
   },
-  skeletonGradient: {
-    flex: 1,
+  skeletonInner: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#EBEBEB',
+  },
+  skeletonLabel: {
+    height: 14,
+    width: '70%',
+    borderRadius: 7,
+    backgroundColor: '#D0D0D0',
+    marginBottom: 8,
+  },
+  skeletonSub: {
+    height: 10,
+    width: '45%',
+    borderRadius: 5,
+    backgroundColor: '#D8D8D8',
+  },
+
+  // ─ Empty ─
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 72,
+    paddingHorizontal: 40,
+  },
+  emptyIconCircle: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: '#E8F7F4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#222',
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyResetBtn: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: '#30A08B',
+  },
+  emptyResetText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

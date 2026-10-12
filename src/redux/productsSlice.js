@@ -56,8 +56,7 @@ const fetchDataWithCache = async (endpoint, cacheKey, dispatch, actionCreator, s
 // Thunks avec logique de cache intégrée - ENDPOINTS DE L'ANCIEN SYSTÈME
 export const getProducts = (setLoading) => async (dispatch) => {
   await fetchDataWithCache(
-    // '/ProductsClients',
-    '/Products',
+    '/ProductsClients',
     'products_cache',
     dispatch,
     setProducts,
