@@ -1,709 +1,298 @@
-import { IPAY, SITE_URL } from '../config/env';
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert, BackHandler } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, BackHandler, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearPanierData } from '../redux/cartSlice';
-import axios from 'axios';
-import { API_URL } from '../config/api';
+import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
-const COLORS = {
-  primary: '#FF6B35',
-  background: '#F8F9FA',
+import apiClient from '../config/api';
+import { API_URL, IPAY, SITE_URL } from '../config/env';
+import { clearPanierData } from '../redux/cartSlice';
+import { catalogApi } from '../redux/catalogApi';
+import { Button, IconButton, Text } from '../ui';
+import { formatPrice } from '../utils/formatPrice';
+import { colors, GUTTER, radius, shadows } from '../theme';
+
+/** Montant de test : uniquement en développement et si explicitement défini */
+const DEV_TEST_AMOUNT = __DEV__ ? Number(process.env.EXPO_PUBLIC_PAYMENT_TEST_AMOUNT) || 0 : 0;
+
+const normalize = (status) => {
+  const v = String(status || '').trim().toLowerCase();
+  if (['payé', 'paye', 'paid', 'success', 'succeeded', 'completed'].includes(v)) return 'succeeded';
+  if (['échec', 'echec', 'failed', 'cancelled', 'canceled', 'rejected'].includes(v)) return 'failed';
+  return 'pending';
 };
 
-const MAX_STATUS_CHECK_ATTEMPTS = 12;
-const TEST_MODE = true; // Passer à false pour utiliser les montants réels et l'environnement de production
-const TEST_AMOUNT = 100;
+/** Page HTML qui lance le SDK iPay (même configuration que payment-page.html du web) */
+const buildHtml = ({ amount, transactionId }) => `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,Roboto,'Segoe UI',sans-serif;background:#FAFAF8;color:#16181D;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{width:100%;max-width:420px;background:#fff;border-radius:24px;padding:28px 24px;text-align:center;box-shadow:0 10px 30px rgba(11,26,23,.08)}
+  .brand{font-weight:800;font-size:20px;letter-spacing:-.3px}.brand span{color:#30A08B}.brand b{color:#B2905F}
+  .amount{font-size:34px;font-weight:800;margin:18px 0 4px}.amount small{font-size:16px;font-weight:600;color:#5B6170}
+  .ref{color:#9A9FAB;font-size:12px}
+  .spin{width:34px;height:34px;border:3px solid #E8F5F2;border-top-color:#30A08B;border-radius:50%;margin:22px auto 10px;animation:r .9s linear infinite}
+  @keyframes r{to{transform:rotate(360deg)}}
+  .hint{color:#5B6170;font-size:14px;line-height:20px}
+  .ipaymoney-button{margin-top:20px;width:100%;border:0;border-radius:999px;padding:15px;font-size:16px;font-weight:700;color:#fff;background:linear-gradient(135deg,#30A08B,#1F7A69)}
+  .secure{margin-top:16px;font-size:12px;color:#1E9E6A}
+</style></head><body>
+<div class="card">
+  <div class="brand"><span>Iham</span><b>baobab</b></div>
+  <div class="amount">${formatPrice(amount)} <small>FCFA</small></div>
+  <div class="ref">Commande n° ${transactionId}</div>
+  <div class="spin" id="spin"></div>
+  <p class="hint" id="hint">Ouverture de la page de paiement sécurisée…</p>
+  <button type="button" id="checkout-button" class="ipaymoney-button"
+    data-environement="${IPAY.environment}" data-key="${IPAY.publicKey}"
+    data-amount="${amount}" data-transaction-id="${transactionId}"
+    data-redirect-url="${IPAY.redirectUrl}" data-cancel-url="${IPAY.cancelUrl}" data-callback-url="${IPAY.callbackUrl}">
+    Choisir mon moyen de paiement
+  </button>
+  <div class="secure">🔒 Paiement chiffré et sécurisé par iPay</div>
+</div>
+<script src="https://i-pay.money/checkout.js"></script>
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+  var sent = {};
+  function toRN(p){ if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(p)); }
+  function norm(s){ s=String(s||'').trim().toLowerCase();
+    if(['payé','paye','paid','success','succeeded','completed'].indexOf(s)>=0) return 'succeeded';
+    if(['échec','echec','failed','cancelled','canceled','rejected'].indexOf(s)>=0) return 'failed';
+    return 'pending'; }
+  function onIpay(e){
+    var d=e.data; if(typeof d==='string'){ try{ d=JSON.parse(d);}catch(x){ return; } }
+    if(!d||typeof d!=='object') return;
+    if(d.type==='payment.response' && d.other){
+      // Relais du résultat iPay (format iPay d'origine) — même comportement que le web
+      var k=[d.other.externalReference||'',d.other.reference||'',d.other.status||''].join('::');
+      if(!sent[k]){ sent[k]=1; fetch('${IPAY.callbackUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d.other)}).catch(function(){}); }
+      toRN({type:'ipay_result', status:norm(d.other.status)});
+    }
+  }
+  window.addEventListener('message', onIpay); window.addEventListener('message', onIpay, true); document.addEventListener('message', onIpay);
+  function monitor(){
+    var done=false, attempts=0, total=0;
+    var steps=[3000,5000,8000,13000,21000,34000,55000];
+    function finish(s){ if(done) return; done=true; toRN({type:'payment_status_final', status:s}); }
+    function poll(){ if(done) return; attempts++;
+      fetch('${API_URL}/getOrderPaymentStatus/'+encodeURIComponent('${transactionId}')).then(function(r){return r.ok?r.json():null}).then(function(j){
+        var s=norm(j&&j.status); if(s!=='pending') return finish(s);
+        if(total>=600000) return; var n=steps[Math.min(attempts-1,steps.length-1)]; total+=n; setTimeout(poll,n);
+      }).catch(function(){ var n=steps[Math.min(attempts-1,steps.length-1)]; total+=n; setTimeout(poll,n); });
+    }
+    try{
+      var sock=io('${API_URL}',{transports:['websocket','polling'],timeout:10000,reconnectionAttempts:3});
+      var ok=false;
+      sock.on('connect',function(){ ok=true; sock.emit('payment:join',{reference:'${transactionId}'}); });
+      sock.on('payment:status',function(ev){ var ref=ev&&(ev.reference||ev.externalReference); if(ref!=='${transactionId}') return;
+        var s=norm(ev.statusPayment||ev.status); if(s!=='pending'){ finish(s); sock.disconnect(); } });
+      sock.on('disconnect',function(){ if(!done) poll(); });
+      setTimeout(function(){ if(!ok && !done){ sock.close(); poll(); } },10000);
+    }catch(x){ poll(); }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    var b=document.getElementById('checkout-button');
+    b.addEventListener('click', function(){ toRN({type:'checkout_clicked'}); });
+    setTimeout(function(){ b.click(); document.getElementById('spin').style.display='none';
+      document.getElementById('hint').textContent="Si la fenêtre de paiement s'est fermée, touchez le bouton ci-dessous."; }, 600);
+    monitor();
+  });
+</script></body></html>`;
 
-const PaymentWebViewScreen = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
+/** Paiement en ligne via le SDK iPay (mobile money, portefeuilles, cartes) */
+export default function PaymentWebViewScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const { amount, transactionId } = route.params || {};
-  const effectiveAmount = TEST_MODE ? TEST_AMOUNT : Number(amount || 0);
+  const payAmount = DEV_TEST_AMOUNT || Math.round(Number(amount) || 0);
 
-  const [loading, setLoading] = useState(true);
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [phase, setPhase] = useState('loading'); // loading | ready | verifying | success | failed
+  const settled = useRef(false);
+  const html = useMemo(() => buildHtml({ amount: payAmount, transactionId }), [payAmount, transactionId]);
 
-  const hasHandledFinalStatus = useRef(false);
-  const hasPaymentStarted = useRef(false);
-  const statusCheckAttemptsRef = useRef(0);
-  const hasShownPendingLimitAlertRef = useRef(false);
-  const backendSyncKeysRef = useRef(new Set());
-
-  const IPAY_CONFIG = IPAY;
-
-  const normalizeText = (value = '') => String(value || '').toLowerCase().trim();
-
-  const normalizePaymentStatus = (status) => {
-    const value = normalizeText(status);
-
-    if (['payé', 'paye', 'paid', 'success', 'succeeded', 'completed', 'payé à la livraison', 'payé par téléphone'].includes(value)) {
-      return 'succeeded';
-    }
-
-    if (['échec', 'echec', 'failed', 'cancelled', 'canceled', 'rejected'].includes(value)) {
-      return 'failed';
-    }
-
-    return 'pending';
-  };
-
-  const extractPaymentOther = (payload) => {
-    if (!payload || typeof payload !== 'object') return null;
-    if (payload.other) return payload.other;
-    if (payload.data?.other) return payload.data.other;
-    return null;
-  };
-
-  const clearCheckoutLocalState = async () => {
-    await AsyncStorage.multiRemove([
-      'panier',
-      'pendingOrder',
-      'paymentInitiated',
-      'shippingDetails',
-      'idCodePro',
-      'appliedPromoCode',
-    ]);
-  };
-
-  const syncPaymentCallbackToBackend = async ({ status, details = {} } = {}) => {
-    const normalizedStatus = normalizePaymentStatus(status);
-    if (normalizedStatus !== 'succeeded' && normalizedStatus !== 'failed') {
-      return;
-    }
-
-    const externalReference = details.externalReference || details.transactionId || transactionId;
-    const syncKey = `${externalReference}::${normalizedStatus}`;
-
-    if (backendSyncKeysRef.current.has(syncKey)) {
-      return;
-    }
-
-    backendSyncKeysRef.current.add(syncKey);
-
-    try {
-      await axios.post(`${API_URL}/payment_callback2`, {
-        status: normalizedStatus,
-        externalReference,
-        reference: details.reference,
-        publicReference: details.publicReference,
-        customerName: details.customerName,
-        msisdn: details.msisdn,
-        amount: details.amount != null ? Number(details.amount) : effectiveAmount,
-        paymentDate: details.paymentDate || new Date().toISOString(),
-        failureReason: details.failureReason || null,
-        paymentMethod: details.paymentMethod || null,
-      });
-    } catch (error) {
-      backendSyncKeysRef.current.delete(syncKey);
-    }
-  };
-
-  const handleSuccessNavigation = async () => {
-    hasHandledFinalStatus.current = true;
-
+  const succeed = useCallback(async () => {
+    if (settled.current) return;
+    settled.current = true;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     await dispatch(clearPanierData());
-    await clearCheckoutLocalState();
+    await AsyncStorage.multiRemove(['pendingOrder', 'paymentInitiated', 'shippingDetails', 'appliedPromoCode']).catch(() => {});
+    dispatch(catalogApi.util.invalidateTags(['Orders']));
+    setPhase('success');
+  }, [dispatch]);
 
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-    });
-    setTimeout(() => navigation.navigate('Orders'), 100);
-  };
-
-  const handleFailureNavigation = async (message = 'Le paiement a échoué. Veuillez réessayer.') => {
-    hasHandledFinalStatus.current = true;
-
-    await AsyncStorage.removeItem('paymentInitiated');
-
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-    });
-    setTimeout(() => navigation.navigate('Orders'), 100);
-  };
-
-  const checkPaymentStatus = async ({ silent = false } = {}) => {
-    if (hasHandledFinalStatus.current || !hasPaymentStarted.current) {
-      return null;
-    }
-
-    if (statusCheckAttemptsRef.current >= MAX_STATUS_CHECK_ATTEMPTS) {
-      hasShownPendingLimitAlertRef.current = true;
-      return null;
-    }
-
-    try {
-      statusCheckAttemptsRef.current += 1;
-      if (!silent) {
-        setPaymentProcessing(true);
-      }
-
-      const statusResponse = await axios.get(`${API_URL}/getOrderPaymentStatus/${transactionId}`);
-      const normalizedStatus = normalizePaymentStatus(statusResponse?.data?.status);
-
-      if (normalizedStatus === 'succeeded') {
-        await handleSuccessNavigation();
-        return true;
-      }
-
-      if (normalizedStatus === 'failed') {
-        await handleFailureNavigation();
-        return false;
-      }
-
-      return null;
-    } catch (error) {
-      if (error?.response?.status === 404) {
-        return null;
-      }
-      return null;
-    } finally {
-      if (!silent) {
-        setPaymentProcessing(false);
-      }
-    }
-  };
-
-  const syncPaymentFromRedirect = async (redirectUrl) => {
-    try {
-      const parsed = new URL(redirectUrl);
-      const statusParam = normalizeText(parsed.searchParams.get('status') || '');
-      const txParam = parsed.searchParams.get('transactionId') || parsed.searchParams.get('externalReference');
-      const amountParam = parsed.searchParams.get('amount');
-
-      const isSuccess = ['succeeded', 'success', 'paid'].includes(statusParam);
-      const isFailure = ['failed', 'error', 'cancelled', 'canceled'].includes(statusParam);
-
-      if (!isSuccess && !isFailure) {
-        return;
-      }
-
-      await syncPaymentCallbackToBackend({
-        status: isSuccess ? 'succeeded' : 'failed',
-        details: {
-          externalReference: txParam || transactionId,
-          amount: amountParam ? Number(amountParam) : effectiveAmount,
-          paymentDate: new Date().toISOString(),
-        },
-      });
-
-      await checkPaymentStatus({ silent: false });
-    } catch (error) {
-      // Ignore redirect parsing errors and keep polling fallback.
-    }
-  };
-
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      Alert.alert('Annuler le paiement ?', 'Voulez-vous vraiment annuler ce paiement ?', [
-        { text: 'Non', style: 'cancel' },
-        { text: 'Oui', onPress: () => navigation.goBack() },
-      ]);
-      return true;
-    });
-
-    return () => {
-      backHandler.remove();
-    };
+  const fail = useCallback(() => {
+    if (settled.current) return;
+    settled.current = true;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    AsyncStorage.removeItem('paymentInitiated').catch(() => {});
+    setPhase('failed');
   }, []);
 
-  const paymentHTML = `
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Paiement IHAM Baobab</title>
-      <style>
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
-          color: #333;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 100vh;
-          padding: 20px;
-        }
-
-        .payment-container {
-          background: rgba(255, 255, 255, 0.95);
-          padding: 2.5rem;
-          border-radius: 15px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-          width: 100%;
-          max-width: 450px;
-          text-align: center;
-        }
-
-        h1 {
-          font-size: 1.8rem;
-          color: #333;
-          margin-bottom: 1rem;
-        }
-
-        p {
-          color: #666;
-          margin-bottom: 2rem;
-          font-size: 1.1rem;
-        }
-
-        .ipaymoney-button {
-          background-color: #4CAF50;
-          color: white;
-          border: none;
-          padding: 1rem 2rem;
-          font-size: 1.1rem;
-          border-radius: 8px;
-          cursor: pointer;
-          width: 100%;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .ipaymoney-button:hover {
-          background-color: #45a049;
-        }
-
-        .loading {
-          animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-          0% { opacity: 1; }
-          50% { opacity: 0.7; }
-          100% { opacity: 1; }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="payment-container">
-        <h1>Finaliser votre paiement</h1>
-        <p>Cliquez sur le bouton ci-dessous pour procéder au paiement en toute sécurité</p>
-        <button
-          type="button"
-          id="checkout-button"
-          class="ipaymoney-button"
-          data-environement="${IPAY_CONFIG.environment}"
-          data-key="${IPAY_CONFIG.publicKey}"
-          data-amount="${effectiveAmount}"
-          data-transaction-id="${transactionId}"
-          data-redirect-url="${IPAY_CONFIG.redirectUrl}"
-          data-cancel-url="${IPAY_CONFIG.cancelUrl}"
-          data-callback-url="${IPAY_CONFIG.callbackUrl}"
-        >
-          Procéder au paiement
-        </button>
-      </div>
-      
-      <!-- Garder le chargement statique: le SDK initialise ses listeners au chargement de page. -->
-      <script src="https://i-pay.money/checkout.js"></script>
-      <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-
-      <script>
-        const callbackSentMap = Object.create(null);
-        const backendUrl = '${API_URL}';
-
-        function sendToRN(payload) {
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-          }
-        }
-
-        function normalizePaymentStatus(status) {
-          const value = String(status || '').trim().toLowerCase();
-
-          if (['payé', 'paye', 'paid', 'success', 'succeeded', 'completed', 'payé à la livraison', 'payé par téléphone'].includes(value)) {
-            return 'succeeded';
-          }
-
-          if (['échec', 'echec', 'failed', 'cancelled', 'canceled', 'rejected'].includes(value)) {
-            return 'failed';
-          }
-
-          return 'pending';
-        }
-
-        function normalizeEventData(rawData) {
-          if (rawData && typeof rawData === 'object') {
-            return rawData;
-          }
-
-          if (typeof rawData === 'string') {
-            try {
-              return JSON.parse(rawData);
-            } catch (e) {
-              // Laisser en string si ce n'est pas du JSON.
-              return { type: 'raw_text_message', raw: rawData };
-            }
-          }
-
-          return { type: 'unknown_message_format', raw: rawData };
-        }
-
-        function handleIpayMessage(event) {
-          const data = normalizeEventData(event.data);
-
-          if (data && data.type === 'payment.response' && data.other) {
-            const status = data.other.status;
-            const callbackKey = [
-              data.other.externalReference || '',
-              data.other.reference || '',
-              status || ''
-            ].join('::');
-
-            if ('${IPAY_CONFIG.callbackUrl}' && !callbackSentMap[callbackKey]) {
-              callbackSentMap[callbackKey] = true;
-              fetch('${IPAY_CONFIG.callbackUrl}', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data.other),
-              }).catch(function() {});
-            }
-
-            sendToRN({
-              type: 'payment.response',
-              data: data,
-            });
-            return;
-          }
-
-          sendToRN(data);
-        }
-
-        function startOrderStatusMonitoring() {
-          let resolved = false;
-          let wsConnected = false;
-          let wsTimedOut = false;
-          let pollTimer = null;
-          let attempts = 0;
-          let totalTime = 0;
-          const maxTime = 10 * 60 * 1000;
-
-          const getNextInterval = (currentAttempts) => {
-            const intervals = [3000, 5000, 8000, 13000, 21000, 34000, 55000];
-            return intervals[Math.min(currentAttempts, intervals.length - 1)];
-          };
-
-          const finish = (status, source) => {
-            if (resolved) return;
-            resolved = true;
-            if (pollTimer) clearTimeout(pollTimer);
-            sendToRN({ type: 'payment_status_final', status, source });
-          };
-
-          const poll = async () => {
-            if (resolved) return;
-            attempts += 1;
-
-            try {
-              const response = await fetch(backendUrl + '/getOrderPaymentStatus/' + encodeURIComponent('${transactionId}'));
-              if (response.ok) {
-                const data = await response.json();
-                const status = normalizePaymentStatus(data?.status);
-                if (status === 'succeeded' || status === 'failed') {
-                  finish(status, 'polling');
-                  return;
-                }
-              }
-            } catch (e) {}
-
-            if (totalTime >= maxTime) return;
-            const nextInterval = getNextInterval(attempts - 1);
-            pollTimer = setTimeout(() => {
-              totalTime += nextInterval;
-              poll();
-            }, nextInterval);
-          };
-
-          const startPollingFallback = () => {
-            if (resolved) return;
-            poll();
-          };
-
-          try {
-            const socket = io(backendUrl, {
-              transports: ['websocket', 'polling'],
-              timeout: 10000,
-              reconnection: true,
-              reconnectionAttempts: 3,
-              reconnectionDelay: 1000,
-            });
-
-            socket.on('connect', () => {
-              wsConnected = true;
-              socket.emit('payment:join', { reference: '${transactionId}' });
-            });
-
-            socket.on('payment:status', (event) => {
-              if (resolved) return;
-              const eventReference = event?.reference || event?.externalReference;
-              if (eventReference !== '${transactionId}') return;
-              const status = normalizePaymentStatus(event?.statusPayment || event?.status);
-              if (status === 'succeeded' || status === 'failed') {
-                finish(status, 'websocket');
-                socket.emit('payment:leave', { reference: '${transactionId}' });
-                socket.disconnect();
-              }
-            });
-
-            socket.on('disconnect', () => {
-              if (!resolved && !wsTimedOut) {
-                wsTimedOut = true;
-                startPollingFallback();
-              }
-            });
-
-            setTimeout(() => {
-              if (!wsConnected && !resolved) {
-                wsTimedOut = true;
-                socket.close();
-                startPollingFallback();
-              }
-            }, 10000);
-          } catch (e) {
-            startPollingFallback();
-          }
-        }
-
-        window.addEventListener('message', handleIpayMessage);
-        window.addEventListener('message', handleIpayMessage, true);
-        window.onmessage = handleIpayMessage;
-        document.addEventListener('message', handleIpayMessage);
-
-        window.addEventListener('hashchange', function() {
-          const hash = window.location.hash;
-
-          if (hash.includes('success') || hash.includes('paid')) {
-            sendToRN({
-              event: 'ipay_success',
-              type: 'payment_success',
-              hash: hash
-            });
-          } else if (hash.includes('cancel') || hash.includes('error')) {
-            sendToRN({
-              event: 'ipay_cancel',
-              type: 'payment_cancel',
-              hash: hash
-            });
-          }
-        });
-
-        document.addEventListener("DOMContentLoaded", function() {
-          const button = document.getElementById("checkout-button");
-          if (!button) {
-            sendToRN({ type: 'web_error', message: 'Bouton checkout introuvable' });
-            return;
-          }
-
-          button.addEventListener('click', function() {
-            this.classList.add('loading');
-            sendToRN({ type: 'checkout_clicked' });
-          });
-
-          setTimeout(function() {
-            button.click();
-          }, 500);
-
-          startOrderStatusMonitoring();
-        });
-      </script>
-    </body>
-    </html>
-  `;
-
-  // Gérer les messages du WebView
-  const handleWebViewMessage = (event) => {
-    try {
-      const raw = event.nativeEvent.data;
-      let data = raw;
-
-      if (typeof raw === 'string') {
-        try {
-          data = JSON.parse(raw);
-        } catch (parseError) {
-          data = {
-            type: 'rn_raw_message',
-            raw,
-            parseError: parseError?.message,
-          };
-        }
+  /** Source de vérité : le statut enregistré par le backend (webhook iPay) */
+  const verify = useCallback(async () => {
+    if (settled.current) return;
+    setPhase('verifying');
+    for (let i = 0; i < 6 && !settled.current; i += 1) {
+      try {
+        const r = await apiClient.get(`/getOrderPaymentStatus/${encodeURIComponent(transactionId)}`);
+        const s = normalize(r.data?.status);
+        if (s === 'succeeded') return succeed();
+        if (s === 'failed') return fail();
+      } catch {
+        // réseau : on réessaie
       }
+      await new Promise((res) => setTimeout(res, 2500));
+    }
+    if (!settled.current) setPhase('ready'); // toujours en attente : la page continue de surveiller
+    return undefined;
+  }, [fail, succeed, transactionId]);
 
-      if (data.type === 'checkout_clicked') {
-        hasPaymentStarted.current = true;
-        return;
-      }
+  const confirmLeave = useCallback(() => {
+    if (phase === 'success' || phase === 'failed') {
+      navigation.goBack();
+      return;
+    }
+    Alert.alert('Quitter le paiement ?', 'Votre commande reste enregistrée : vous pourrez la payer plus tard depuis « Mes commandes ».', [
+      { text: 'Continuer le paiement', style: 'cancel' },
+      { text: 'Quitter', style: 'destructive', onPress: () => navigation.goBack() },
+    ]);
+  }, [navigation, phase]);
 
-      if (data.type === 'web_error') {
-        Alert.alert('Erreur paiement', data.message || 'Erreur interne page de paiement');
-        return;
-      }
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      confirmLeave();
+      return true;
+    });
+    return () => sub.remove();
+  }, [confirmLeave]);
 
-      const paymentResponseData = extractPaymentOther(data);
-      if (paymentResponseData) {
-        syncPaymentCallbackToBackend({
-          status: paymentResponseData.status,
-          details: paymentResponseData,
-        });
-      }
-
-      if (data.type === 'payment_status_final') {
-        hasPaymentStarted.current = true;
-        if (data.status === 'succeeded') {
-          handleSuccessNavigation();
-        } else if (data.status === 'failed') {
-          handleFailureNavigation();
-        }
-        return;
-      }
-
-      // iPay Money envoie des événements
-      if (
-        data.event === 'ipay_success' ||
-        data.type === 'payment_success' ||
-        (data.type === 'payment.response' && data.data?.other?.status === 'succeeded') ||
-        (data.type === 'payment.response' && data.other?.status === 'succeeded')
-      ) {
-        hasPaymentStarted.current = true;
-
-        syncPaymentCallbackToBackend({
-          status: 'succeeded',
-          details: paymentResponseData || {},
-        });
-
-        checkPaymentStatus({ silent: false });
-      } else if (
-        data.event === 'ipay_cancel' ||
-        data.type === 'payment_cancel' ||
-        (data.type === 'payment.response' && data.data?.other?.status === 'canceled') ||
-        (data.type === 'payment.response' && data.other?.status === 'canceled')
-      ) {
-        if (hasHandledFinalStatus.current) return;
-        syncPaymentCallbackToBackend({
-          status: 'failed',
-          details: paymentResponseData || {},
-        });
-        handleFailureNavigation('Vous avez annulé le paiement.');
-      } else if (
-        data.event === 'ipay_error' ||
-        data.type === 'payment_error' ||
-        (data.type === 'payment.response' && data.data?.other?.status === 'failed') ||
-        (data.type === 'payment.response' && data.other?.status === 'failed')
-      ) {
-        if (hasHandledFinalStatus.current) return;
-
-        syncPaymentCallbackToBackend({
-          status: 'failed',
-          details: paymentResponseData || {},
-        });
-        handleFailureNavigation('Le paiement n\'a pas abouti. Veuillez réessayer.');
-      }
-    } catch (error) {
-      // Ignore malformed transient messages.
+  const onMessage = (e) => {
+    let d;
+    try { d = JSON.parse(e.nativeEvent.data); } catch { return; }
+    if (d.type === 'payment_status_final') {
+      if (d.status === 'succeeded') succeed();
+      else if (d.status === 'failed') fail();
+    } else if (d.type === 'ipay_result') {
+      if (d.status === 'succeeded') verify();
+      else if (d.status === 'failed') fail();
     }
   };
 
-  // Gérer la navigation dans le WebView
-  const handleNavigationStateChange = (navState) => {
-    const { url } = navState;
-    const normalizedUrl = normalizeText(url);
-    const isIhamDomainRedirect = normalizedUrl.includes('ihambaobab.com');
-    const hasSuccessHint =
-      normalizedUrl.includes('commandesreference') ||
-      normalizedUrl.includes('payment-success') ||
-      normalizedUrl.includes('status=succeeded') ||
-      normalizedUrl.includes('status=success') ||
-      normalizedUrl.includes('status=paid');
-    const hasFailureHint =
-      normalizedUrl.includes('/error') ||
-      normalizedUrl.includes('payment-cancel') ||
-      normalizedUrl.includes('status=failed') ||
-      normalizedUrl.includes('status=error') ||
-      normalizedUrl.includes('status=cancelled') ||
-      normalizedUrl.includes('status=canceled');
-
-    if (isIhamDomainRedirect && hasSuccessHint) {
-      hasPaymentStarted.current = true;
-      syncPaymentFromRedirect(url);
-      return false; // Empêcher la navigation
-    } else if (isIhamDomainRedirect && hasFailureHint) {
-      hasPaymentStarted.current = true;
-      syncPaymentFromRedirect(url);
+  // Redirections iPay vers le site : on les intercepte et on vérifie côté serveur
+  const onShouldStart = (req) => {
+    const url = String(req.url || '').toLowerCase();
+    if (url.includes('ihambaobab.com') && (url.includes('commandesreference') || url.includes('/error'))) {
+      if (url.includes('/error') || /status=(failed|error|cancel)/.test(url)) fail();
+      else verify();
       return false;
     }
-
     return true;
   };
 
-  return (
-    <View style={styles.container}>
-      <WebView
-        source={{ html: paymentHTML, baseUrl: `${SITE_URL}/` }}
-        onMessage={handleWebViewMessage}
-        onNavigationStateChange={handleNavigationStateChange}
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
-        onShouldStartLoadWithRequest={() => true}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        startInLoadingState={true}
-        scalesPageToFit={true}
-        mixedContentMode="always"
-        originWhitelist={["*"]}
-        javaScriptCanOpenWindowsAutomatically={true}
-        style={styles.webview}
-      />
+  // Nouvel essai : retour au checkout, qui met à jour la commande avec une NOUVELLE référence
+  // (iPay n'accepte pas de rejouer une transaction échouée — même logique que le web)
+  const retry = () => navigation.goBack();
 
-      {(loading || paymentProcessing) && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          {paymentProcessing && (
-            <Text style={styles.loadingText}>
-              Vérification du paiement...
+  const goOrders = () => navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Orders' }] });
+
+  return (
+    <View style={styles.screen}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <IconButton name="close" onPress={confirmLeave} bg={colors.surfaceAlt} accessibilityLabel="Quitter le paiement" />
+        <View style={styles.flex}>
+          <Text variant="title">Paiement sécurisé</Text>
+          <View style={styles.secure}>
+            <Ionicons name="lock-closed" size={11} color={colors.success} />
+            <Text variant="caption" color="success">Chiffré par iPay</Text>
+          </View>
+        </View>
+        <Text variant="price">{formatPrice(payAmount)} F</Text>
+      </View>
+
+      {phase === 'success' || phase === 'failed' ? null : (
+        <View style={styles.flex}>
+        <WebView
+          source={{ html, baseUrl: `${SITE_URL}/` }}
+          onMessage={onMessage}
+          onShouldStartLoadWithRequest={onShouldStart}
+          onLoadEnd={() => setPhase((p) => (p === 'loading' ? 'ready' : p))}
+          javaScriptEnabled
+          domStorageEnabled
+          originWhitelist={['*']}
+          javaScriptCanOpenWindowsAutomatically
+          setSupportMultipleWindows={false}
+          style={styles.web}
+        />
+        {phase === 'loading' || phase === 'verifying' ? (
+          <Animated.View entering={FadeIn} style={styles.overlay}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text variant="title" style={styles.mt16}>{phase === 'verifying' ? 'Confirmation du paiement…' : 'Connexion sécurisée…'}</Text>
+            <Text variant="small" color="textSecondary" align="center" style={styles.mt6}>
+              {phase === 'verifying' ? 'Ne fermez pas l’application, cela prend quelques secondes.' : 'Préparation de votre paiement'}
             </Text>
-          )}
+          </Animated.View>
+        ) : null}
         </View>
       )}
+
+      {phase === 'success' ? (
+        <View style={[styles.result, { paddingBottom: insets.bottom + 24 }]}>
+          <Animated.View entering={ZoomIn.springify().damping(12)} style={[styles.bigIcon, { backgroundColor: colors.success }]}>
+            <Ionicons name="checkmark" size={56} color={colors.textInverse} />
+          </Animated.View>
+          <Text variant="h1" align="center" style={styles.mt24}>Paiement confirmé !</Text>
+          <Text variant="body" color="textSecondary" align="center" style={styles.mt8}>
+            Merci pour votre achat. Le vendeur prépare votre commande, vous pouvez suivre chaque étape.
+          </Text>
+          <View style={styles.refPill}><Text variant="caption" color="textSecondary">Référence</Text><Text variant="title" selectable>{transactionId}</Text></View>
+          <View style={styles.actions}>
+            <Button title="Suivre ma commande" icon="cube-outline" size="lg" full onPress={goOrders} />
+            <Button title="Continuer mes achats" variant="ghost" full onPress={() => navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })} />
+          </View>
+        </View>
+      ) : null}
+
+      {phase === 'failed' ? (
+        <View style={[styles.result, { paddingBottom: insets.bottom + 24 }]}>
+          <Animated.View entering={ZoomIn.springify().damping(12)} style={[styles.bigIcon, { backgroundColor: colors.danger }]}>
+            <Ionicons name="close" size={56} color={colors.textInverse} />
+          </Animated.View>
+          <Text variant="h1" align="center" style={styles.mt24}>Paiement non abouti</Text>
+          <Text variant="body" color="textSecondary" align="center" style={styles.mt8}>
+            Aucun montant n'a été validé. Votre commande est conservée : réessayez ou choisissez un autre moyen de paiement.
+          </Text>
+          <View style={styles.actions}>
+            <Button title="Réessayer le paiement" icon="refresh" size="lg" full onPress={retry} />
+            <Button title="Voir mes commandes" variant="ghost" full onPress={goOrders} />
+          </View>
+        </View>
+      ) : null}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  mt6: { marginTop: 6 },
+  mt8: { marginTop: 8 },
+  mt16: { marginTop: 16 },
+  mt24: { marginTop: 24 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 12,
+    backgroundColor: colors.surface, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, zIndex: 2,
   },
-  webview: {
-    flex: 1,
-  },
-  loadingContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
+  secure: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  web: { flex: 1, backgroundColor: colors.bg },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  result: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  bigIcon: { width: 110, height: 110, borderRadius: 55, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
+  refPill: { marginTop: 20, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  actions: { alignSelf: 'stretch', gap: 8, marginTop: 32 },
 });
-
-export default PaymentWebViewScreen;

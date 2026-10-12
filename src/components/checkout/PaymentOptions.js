@@ -4,88 +4,89 @@ import { Ionicons } from '@expo/vector-icons';
 import { PressableScale, Text } from '../../ui';
 import { colors, radius } from '../../theme';
 
-/** Identifiants identiques au web / backend (voir services/paymentHelpers) */
-export const PAYMENT_GROUPS = [
+/**
+ * Trois vrais choix, comme sur le web : la page sécurisée iPay propose elle-même
+ * tous les moyens en ligne (le client y choisit Mobile Money, MyNita, carte…).
+ * Les identifiants restent ceux attendus par services/paymentHelpers (PaymentMethods).
+ */
+export const ONLINE = 'Mobile Money';
+export const CASH = 'payé à la livraison';
+export const ASSISTED = 'paiement_assiste';
+
+const ONLINE_BRANDS = ['Airtel', 'Moov', 'Zamani', 'MyNita', 'Amana', 'Zeyna', 'Visa', 'Mastercard'];
+
+const OPTIONS = [
   {
-    title: 'Mobile money & portefeuilles',
-    items: [
-      { id: 'Mobile Money', label: 'Mobile Money', hint: 'Airtel, Moov, Zamani…', icon: 'phone-portrait-outline' },
-      { id: 'nita', label: 'MyNita', hint: 'Portefeuille MyNita', icon: 'wallet-outline' },
-      { id: 'amana', label: 'Amana', hint: 'Portefeuille Amana', icon: 'wallet-outline' },
-      { id: 'zeyna', label: 'Zeyna', hint: 'Portefeuille Zeyna', icon: 'wallet-outline' },
-    ],
+    id: ONLINE,
+    icon: 'shield-checkmark',
+    title: 'Payer en ligne',
+    hint: 'Mobile money, portefeuille ou carte — sur la page sécurisée iPay',
+    badge: 'Recommandé',
   },
-  {
-    title: 'Carte bancaire',
-    items: [
-      { id: 'Visa', label: 'Visa', hint: 'Paiement sécurisé 3-D Secure', icon: 'card-outline' },
-      { id: 'master Card', label: 'Mastercard', hint: 'Paiement sécurisé 3-D Secure', icon: 'card-outline' },
-    ],
-  },
-  {
-    title: 'Autres options',
-    items: [
-      { id: 'payé à la livraison', label: 'Paiement à la livraison', hint: 'Payez en espèces à la réception', icon: 'cash-outline' },
-      { id: 'paiement_assiste', label: 'Paiement assisté', hint: 'Un conseiller vous rappelle pour finaliser', icon: 'call-outline' },
-    ],
-  },
+  { id: CASH, icon: 'cash-outline', title: 'Paiement à la livraison', hint: 'Payez le livreur en espèces à la réception' },
+  { id: ASSISTED, icon: 'call-outline', title: 'Paiement assisté', hint: 'Un conseiller vous appelle pour finaliser le paiement' },
 ];
 
-const Option = memo(function Option({ item, active, onPress }) {
-  return (
-    <PressableScale
-      onPress={onPress}
-      haptic="selection"
-      scaleTo={0.985}
-      style={[styles.option, active && styles.optionActive]}
-      accessibilityRole="radio"
-      accessibilityState={{ checked: active }}
-      accessibilityLabel={item.label}
-    >
-      <View style={[styles.icon, active && styles.iconActive]}>
-        <Ionicons name={item.icon} size={20} color={active ? colors.textInverse : colors.primaryDark} />
-      </View>
-      <View style={styles.flex}>
-        <Text variant="title">{item.label}</Text>
-        <Text variant="caption" color="textSecondary">{item.hint}</Text>
-      </View>
-      <View style={[styles.radio, active && styles.radioActive]}>
-        {active ? <View style={styles.radioDot} /> : null}
-      </View>
-    </PressableScale>
-  );
-});
-
-/** Liste des moyens de paiement (boutons radio) */
 function PaymentOptions({ value, onChange }) {
   return (
-    <View>
-      {PAYMENT_GROUPS.map((g) => (
-        <View key={g.title} style={styles.group}>
-          <Text variant="caption" color="textMuted" style={styles.groupTitle}>{g.title.toUpperCase()}</Text>
-          {g.items.map((it) => (
-            <Option key={it.id} item={it} active={value === it.id} onPress={() => onChange(it.id)} />
-          ))}
-        </View>
-      ))}
+    <View style={styles.list}>
+      {OPTIONS.map((o) => {
+        const active = value === o.id;
+        return (
+          <PressableScale
+            key={o.id}
+            onPress={() => onChange(o.id)}
+            haptic="selection"
+            scaleTo={0.985}
+            style={[styles.option, active && styles.optionActive]}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active }}
+            accessibilityLabel={o.title}
+          >
+            <View style={styles.row}>
+              <View style={[styles.icon, active && styles.iconActive]}>
+                <Ionicons name={o.icon} size={20} color={active ? colors.textInverse : colors.primaryDark} />
+              </View>
+              <View style={styles.flex}>
+                <View style={styles.titleRow}>
+                  <Text variant="title">{o.title}</Text>
+                  {o.badge ? (
+                    <View style={styles.badge}><Text variant="caption" color="success">{o.badge}</Text></View>
+                  ) : null}
+                </View>
+                <Text variant="caption" color="textSecondary">{o.hint}</Text>
+              </View>
+              <View style={[styles.radio, active && styles.radioActive]}>{active ? <View style={styles.dot} /> : null}</View>
+            </View>
+            {o.id === ONLINE ? (
+              <View style={styles.brands}>
+                {ONLINE_BRANDS.map((b) => (
+                  <View key={b} style={styles.brand}><Text variant="caption" color="textSecondary">{b}</Text></View>
+                ))}
+              </View>
+            ) : null}
+          </PressableScale>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  group: { marginTop: 10 },
-  groupTitle: { marginBottom: 8, marginLeft: 2, letterSpacing: 0.6 },
+  list: { gap: 10 },
   flex: { flex: 1 },
-  option: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 8,
-    borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-  },
+  option: { padding: 14, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   optionActive: { borderColor: colors.primary, borderWidth: 1.5, backgroundColor: colors.primarySoft },
-  icon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  icon: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   iconActive: { backgroundColor: colors.primary },
+  badge: { backgroundColor: colors.successSoft, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   radioActive: { borderColor: colors.primary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  brands: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12, marginLeft: 54 },
+  brand: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.xs, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
 });
 
 export default memo(PaymentOptions);

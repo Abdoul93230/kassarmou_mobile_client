@@ -270,10 +270,7 @@ function AppNavigator() {
             <Stack.Screen 
               name="PaymentWebView" 
               component={PaymentWebViewScreen}
-              options={{ 
-                title: 'Paiement sécurisé',
-                headerShown: true,
-              }}
+              options={{ title: 'Paiement sécurisé', gestureEnabled: false }}
             />
             <Stack.Screen 
               name="Orders" 

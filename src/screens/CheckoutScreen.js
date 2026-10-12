@@ -15,7 +15,7 @@ import { generateUniqueID } from '../services/paymentHelpers';
 import { buildOrder, isOfflinePayment } from '../services/orderBuilder';
 import { Button, Chip, IconButton, PressableScale, SmartImage, Text } from '../ui';
 import TextField from '../ui/TextField';
-import PaymentOptions from '../components/checkout/PaymentOptions';
+import PaymentOptions, { ONLINE } from '../components/checkout/PaymentOptions';
 import {
   DEFAULT_PHONE_COUNTRY,
   PHONE_COUNTRIES,
@@ -83,7 +83,7 @@ export default function CheckoutScreen({ navigation, route }) {
   const [countryPicker, setCountryPicker] = useState(false);
   const [editingAddress, setEditingAddress] = useState(true);
   const [errors, setErrors] = useState({});
-  const [method, setMethod] = useState('');
+  const [method, setMethod] = useState(ONLINE);
   const [points, setPoints] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null); // { reference, method }
@@ -333,7 +333,7 @@ export default function CheckoutScreen({ navigation, route }) {
             <View style={styles.note}>
               <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
               <Text variant="small" color="textSecondary" style={styles.flex}>
-                Vous allez être redirigé vers la page sécurisée iPay pour saisir vos informations de paiement.
+                Vous choisirez votre moyen de paiement (mobile money, portefeuille ou carte) sur la page sécurisée iPay.
               </Text>
             </View>
           ) : null}
