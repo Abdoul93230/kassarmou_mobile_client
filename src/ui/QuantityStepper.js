@@ -21,7 +21,7 @@ function QuantityStepper({ value, onChange, min = 1, max = 99, size = 'md' }) {
         style={[styles.btn, { width: h, height: h }]}
         accessibilityLabel="Diminuer la quantité"
       >
-        <Ionicons name={value <= min && min === 0 ? 'trash-outline' : 'remove'} size={size === 'sm' ? 16 : 18} color={canDec ? colors.text : colors.textMuted} />
+        <Ionicons name={min === 0 && value <= 1 ? 'trash-outline' : 'remove'} size={size === 'sm' ? 16 : 18} color={canDec ? colors.text : colors.textMuted} />
       </PressableScale>
       <Text variant="title" style={styles.value} accessibilityLabel={`Quantité ${value}`}>{value}</Text>
       <PressableScale

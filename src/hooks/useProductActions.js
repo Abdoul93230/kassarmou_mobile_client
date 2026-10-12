@@ -51,10 +51,11 @@ export default function useProductActions() {
         addArticleToPanier({
           ...product,
           id: product._id,
+          stockDisponible: Number(product.quantite),
           quantite,
           color,
           taille,
-          colorImage: productImage(product),
+          colorImage: (color && product.variants?.find((v) => v.color === color)?.imageUrl) || productImage(product),
         }),
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

@@ -1,1409 +1,431 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useSelector, useDispatch } from 'react-redux';
-import axios from 'axios';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDispatch, useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearPanierData, clearCartData } from '../redux/cartSlice';
-import { API_URL } from '../config/api';
-import { formatPrice } from '../utils/formatPrice';
-import SecurityCodeModal from '../components/SecurityCodeModal';
-import PaymentMethodSelector from '../components/PaymentMethodSelector';
-import PaymentDetailsForm from '../components/PaymentDetailsForm';
-import {
-  PaymentMethods,
-  generateUniqueID,
-  formatCardNumber,
-  validatePaymentInfo,
-  getPaymentDescription,
-  preparePayment,
-  invalidatePromoCode,
-} from '../services/paymentHelpers';
-import {
-  fetchWallet,
-  fetchPublicConfig,
-  selectWallet,
-  selectConfig,
-} from '../redux/gamificationSlice';
+import Animated, { ZoomIn, FadeInDown } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import Toast from 'react-native-toast-message';
 
-const COLORS = {
-  primary: '#FF6B35',
-  secondary: '#004E89',
-  tertiary: '#FF9F1C',
-  success: '#06D6A0',
-  error: '#EF476F',
-  warning: '#FCA311',
-  background: '#F8F9FA',
-  white: '#FFFFFF',
-  text: '#2D3436',
-  textLight: '#636E72',
-  border: '#DFE6E9',
+import apiClient from '../config/api';
+import { clearPanierData, selectPanierArticles } from '../redux/cartSlice';
+import { fetchPublicConfig, fetchWallet, selectConfig, selectWallet } from '../redux/gamificationSlice';
+import { generateUniqueID } from '../services/paymentHelpers';
+import { buildOrder, isOfflinePayment } from '../services/orderBuilder';
+import { Button, Chip, IconButton, PressableScale, SmartImage, Text } from '../ui';
+import TextField from '../ui/TextField';
+import PaymentOptions from '../components/checkout/PaymentOptions';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  PHONE_COUNTRIES,
+  applyPhoneInputChange,
+  getPhonePlaceholder,
+  parseStoredPhone,
+  toBackendPhone,
+  validatePhone,
+} from '../utils/phoneRules';
+import { formatPrice } from '../utils/formatPrice';
+import { productImage } from '../utils/image';
+import { colors, GUTTER, radius, shadows } from '../theme';
+
+const F = (n) => `${formatPrice(n)} FCFA`;
+const EMPTY_DELIVERY = { name: '', email: '', region: '', quartier: '', description: '' };
+
+/** Déduit région / quartier de la zone choisie au panier (« Niger > Niamey > Commune 1 ») */
+const fromZone = (zone) => {
+  const parts = String(zone?.fullPath || '').split('>').map((s) => s.trim()).filter(Boolean);
+  return {
+    region: parts[1] || parts[0] || '',
+    quartier: ['city', 'district'].includes(zone?.type) ? zone.name : '',
+  };
 };
+
+function Section({ title, icon, right, children }) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <View style={styles.sectionIcon}><Ionicons name={icon} size={16} color={colors.primary} /></View>
+        <Text variant="h3" style={styles.flex}>{title}</Text>
+        {right}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function Row({ label, value, tone, bold }) {
+  return (
+    <View style={styles.row}>
+      <Text variant={bold ? 'h3' : 'body'} color={bold ? 'text' : 'textSecondary'}>{label}</Text>
+      <Text variant={bold ? 'price' : 'bodyMedium'} color={tone || 'text'}>{value}</Text>
+    </View>
+  );
+}
 
 export default function CheckoutScreen({ navigation, route }) {
   const dispatch = useDispatch();
-  const user = useSelector((state) => state.auth.user);
-  const cartItems = useSelector((state) => state.panier?.articles || []);
+  const insets = useSafeAreaInsets();
+  const user = useSelector((s) => s.auth.user);
+  const cartItems = useSelector(selectPanierArticles) || [];
   const wallet = useSelector(selectWallet);
-  const gamificationConfig = useSelector(selectConfig);
+  const gConfig = useSelector(selectConfig);
+  const userId = user?.id || user?._id;
 
-  // Récupérer les paramètres depuis le panier
   const {
-    subtotal = 0,
-    reduction = 0,
-    shippingFee = 0,
-    total = 0,
-    totalWeight = 0,
-    selectedZone = null,
-    appliedPromo = null,
+    subtotal = 0, reduction = 0, shippingFee = 0, total = 0,
+    selectedZone = null, appliedPromo = null, shippingCalculations = {},
   } = route.params || {};
 
-  // États pour le formulaire de livraison (EXACTEMENT comme sur le WEB)
-  const [deliveryInfo, setDeliveryInfo] = useState({
-    name: '',
-    email: '',
-    numero: '',
-    region: '',
-    quartier: '',
-    description: '',
-  });
+  const [delivery, setDelivery] = useState({ ...EMPTY_DELIVERY, name: user?.name || '', ...fromZone(selectedZone) });
+  const [country, setCountry] = useState(DEFAULT_PHONE_COUNTRY);
+  const [phoneDigits, setPhoneDigits] = useState('');
+  const [countryPicker, setCountryPicker] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(true);
+  const [errors, setErrors] = useState({});
+  const [method, setMethod] = useState('');
+  const [points, setPoints] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(null); // { reference, method }
 
-  // États pour le paiement (EXACTEMENT comme sur le WEB)
-  const [paymentMethod, setPaymentMethod] = useState(''); // '', 'master Card', 'Visa', 'Mobile Money', 'payé à la livraison', 'nita', 'zeyna', 'amana'
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1: delivery, 2: payment, 3: confirmation
-  const [cardDetails, setCardDetails] = useState({
-    number: '',
-    expiry: '',
-    cvc: '',
-  });
-  const [mobileDetails, setMobileDetails] = useState({
-    number: '',
-    operateur: '227',
-  });
-  const [securityCodeModal, setSecurityCodeModal] = useState({
-    isOpen: false,
-    code: '',
-    error: '',
-  });
-  const [handleSecuritySubmit, setHandleSecuritySubmit] = useState(null);
-  const [createdOrderId, setCreatedOrderId] = useState(null);
-  const [pointsToUse, setPointsToUse] = useState(0);
-  const [pointsDiscount, setPointsDiscount] = useState(0);
-
-  // Charger les informations de livraison sauvegardées (EXACTEMENT comme sur le WEB)
+  // Adresse enregistrée (même source que le web)
   useEffect(() => {
-    const loadDeliveryInfo = async () => {
-      try {
-        const userId = user?.id || user?._id;
-        if (!userId) {
-          console.log('❌ Aucun utilisateur connecté');
-          return;
-        }
-
-        // Récupérer l'adresse de livraison depuis l'API (EXACTEMENT comme sur le WEB)
-        const response = await axios.get(`${API_URL}/getAddressByUserKey/${userId}`);
-
-        if (response.data.address) {
-          const address = response.data.address;
-          console.log('✅ Adresse chargée depuis API:', address);
-          
-          setDeliveryInfo({
-            name: address.name || '',
-            email: address.email || '',
-            numero: address.numero || '',
-            region: address.region || '',
-            quartier: address.quartier || '',
-            description: address.description || '',
-          });
-        } else {
-          console.log('ℹ️ Aucune adresse sauvegardée');
-        }
-      } catch (error) {
-        console.log('❌ Erreur lors du chargement de l\'adresse:', error);
-        // En cas d'erreur, ne rien faire (laisser les champs vides)
-      }
-    };
-
-    if (user) {
-      loadDeliveryInfo();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user?.id || user?._id) {
-      const userId = user.id || user._id;
-      dispatch(fetchPublicConfig());
-      dispatch(fetchWallet(userId));
-    }
-  }, [user?.id, user?._id, dispatch]);
-
-  const saveDeliveryInfo = async () => {
-    try {
-      // Sauvegarder localement
-      await AsyncStorage.setItem('deliveryInfo', JSON.stringify(deliveryInfo));
-      
-      // Envoyer au backend (comme sur le web)
-      if (user && (user.id || user._id)) {
-        const userId = user.id || user._id;
-        await axios.post(`${API_URL}/createOrUpdateAddress`, {
-          ...deliveryInfo,
-          email: deliveryInfo.email !== "" ? deliveryInfo.email : null,
-          clefUser: userId,
-        });
-      }
-    } catch (error) {
-      console.error('Erreur sauvegarde infos livraison:', error);
-    }
-  };
-
-  // Valider le formulaire de livraison
-  const validateDeliveryInfo = () => {
-    const { name, email, numero, region, quartier } = deliveryInfo;
-
-    if (!name.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre nom complet');
-      return false;
-    }
-
-    if (!email.trim() || !email.includes('@')) {
-      Alert.alert('Erreur', 'Veuillez entrer une adresse email valide');
-      return false;
-    }
-
-    if (!numero.trim() || numero.length < 8) {
-      Alert.alert('Erreur', 'Le numéro de téléphone doit contenir au moins 8 chiffres');
-      return false;
-    }
-
-    if (!region.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre région');
-      return false;
-    }
-
-    if (!quartier.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre quartier');
-      return false;
-    }
-
-    return true;
-  };
-
-  // Passer à l'étape suivante
-  const handleNextStep = async () => {
-    if (step === 1) {
-      if (validateDeliveryInfo()) {
-        await saveDeliveryInfo();
-        setStep(2);
-      }
-    } else if (step === 2) {
-      if (!paymentMethod) {
-        Alert.alert('Erreur', 'Veuillez sélectionner un mode de paiement');
-        return;
-      }
-      handlePaymentSubmit();
-    }
-  };
-
-  // Créer la commande et initialiser le paiement Stripe
-  const initializeStripePayment = async () => {
-    try {
-      // Récupérer les détails d'expédition
-      const shippingDetails = await AsyncStorage.getItem('shippingDetails');
-      const parsedShippingDetails = shippingDetails ? JSON.parse(shippingDetails) : null;
-
-      if (!parsedShippingDetails) {
-        Alert.alert('Erreur', 'Informations d\'expédition manquantes');
-        return null;
-      }
-
-      // Vérifier s'il existe une commande en attente
-      const pendingOrderJson = await AsyncStorage.getItem('pendingOrder');
-      const pendingOrder = pendingOrderJson ? JSON.parse(pendingOrderJson) : null;
-
-      // Préparer les données de la commande
-      const orderData = {
-        clefUser: user.id || user._id,
-        nbrProduits: cartItems.map((item) => ({
-          produit: item.product._id,
-          quantite: item.quantity,
-          tailles: item.selectedSize ? [item.selectedSize] : [],
-          couleurs: item.selectedColor ? [item.selectedColor] : [],
-        })),
-        livraisonDetails: {
-          customerName: deliveryInfo.name,
-          email: deliveryInfo.email,
-          numero: `${deliveryInfo.countryCode}${deliveryInfo.phone}`,
-          region: deliveryInfo.region,
-          quartier: deliveryInfo.quartier,
-          description: deliveryInfo.description,
-          appart: deliveryInfo.appart,
-          codePost: deliveryInfo.codePost,
-        },
-        shippingDetails: parsedShippingDetails,
-        prix: subtotal - reduction,
-        prixTotal: total,
-        reduction: reduction,
-        codePro: appliedPromo ? true : false,
-        idCodePro: appliedPromo ? appliedPromo._id : null,
-        statusPayment: 'en cours',
-        statusLivraison: 'en cours',
-        reference: `CMD-${Date.now()}`,
-        prod: cartItems.map((item) => ({
-          id: item.product._id,
-          name: item.product.name,
-          image: item.colorImage || item.product.image1,
-          price: item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix,
-          quantity: item.quantity,
-        })),
-      };
-
-      let commandeId;
-
-      // Si une commande en attente existe, mettre à jour au lieu de créer
-      if (pendingOrder && pendingOrder.commandeId) {
-        console.log('📝 Mise à jour de la commande existante:', pendingOrder.commandeId);
-        orderData.id = pendingOrder.commandeId;
-        
-        const updateResponse = await axios.put(
-          `${API_URL}/api/ordersRoutes/updateCommande`,
-          orderData
-        );
-        
-        console.log('✅ Commande mise à jour:', updateResponse.data);
-        commandeId = updateResponse.data.commande._id;
-      } else {
-        // Créer une nouvelle commande
-        console.log('📦 Création de la commande avec orderData:', orderData);
-        const orderResponse = await axios.post(`${API_URL}/api/ordersRoutes/create`, orderData);
-
-        console.log('✅ Commande créée:', orderResponse.data);
-
-        if (!orderResponse.data.commande) {
-          throw new Error('Impossible de créer la commande');
-        }
-
-        commandeId = orderResponse.data.commande._id;
-        
-        // Sauvegarder la commande en attente
-        await AsyncStorage.setItem('pendingOrder', JSON.stringify({
-          commandeId,
-          reference: orderData.reference,
-          timestamp: Date.now(),
+    if (!userId) return;
+    apiClient
+      .get(`/getAddressByUserKey/${userId}`)
+      .then((r) => {
+        const a = r.data?.address;
+        if (!a) return;
+        setDelivery((d) => ({
+          name: a.name || d.name,
+          email: a.email || '',
+          region: a.region || d.region,
+          quartier: a.quartier || d.quartier,
+          description: a.description || '',
         }));
-      }
-
-      setCreatedOrderId(commandeId);
-
-      console.log('💳 Initialisation du paiement Stripe pour commande:', commandeId);
-      console.log('📍 URL:', `${API_URL}/api/payment/create-payment-intent`);
-      console.log('📝 Payload:', {
-        commandeId,
-        customer_email: deliveryInfo.email || user?.email || '',
-        userId: user.id || user._id,
-      });
-
-      // Initialiser le paiement Stripe
-      const paymentResponse = await axios.post(
-        `${API_URL}/api/payment/create-payment-intent`,
-        {
-          commandeId,
-          customer_email: deliveryInfo.email || user?.email || '',
-          userId: user.id || user._id,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
+        if (a.numero) {
+          const p = parseStoredPhone(a.numero);
+          setCountry(p.country);
+          setPhoneDigits(p.digits);
         }
-      );
+        if (a.name && a.numero && a.region && a.quartier) setEditingAddress(false);
+      })
+      .catch(() => {});
+    dispatch(fetchPublicConfig());
+    dispatch(fetchWallet(userId));
+  }, [dispatch, userId]);
 
-      console.log('✅ Réponse du paiement:', paymentResponse.data);
+  // Baobab Points
+  const pointsInfo = useMemo(() => {
+    if (!gConfig?.enabled || !wallet || wallet.balance <= 0) return null;
+    const rate = gConfig?.redemption?.pointsToFcfaRate ?? 20;
+    const maxPct = gConfig?.redemption?.maxPercentPerOrder ?? 30;
+    const maxPoints = Math.min(wallet.balance, Math.floor((subtotal * maxPct) / 100 / rate));
+    return maxPoints > 0 ? { rate, maxPct, maxPoints, balance: wallet.balance } : null;
+  }, [gConfig, subtotal, wallet]);
+  const pointsDiscount = pointsInfo ? points * pointsInfo.rate : 0;
+  const payable = Math.max(0, total - pointsDiscount);
 
-      if (paymentResponse.data.success) {
-        return paymentResponse.data.clientSecret;
-      } else {
-        throw new Error(paymentResponse.data.message || 'Erreur lors de l\'initialisation du paiement');
-      }
-    } catch (error) {
-      console.error('Erreur initialisation paiement:', error);
-      console.error('Détails de l\'erreur:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-      });
-      throw error;
+  const setField = useCallback((k, v) => {
+    setDelivery((d) => ({ ...d, [k]: v }));
+    setErrors((e) => ({ ...e, [k]: undefined }));
+  }, []);
+
+  const validate = useCallback(() => {
+    const e = {};
+    if (delivery.name.trim().length < 2) e.name = 'Indiquez votre nom complet';
+    const phone = validatePhone(country, phoneDigits, true);
+    if (!phone.isValid) e.phone = phone.message;
+    if (!delivery.region.trim()) e.region = 'Indiquez votre région ou ville';
+    if (!delivery.quartier.trim()) e.quartier = 'Indiquez votre quartier';
+    if (delivery.email.trim() && !/^\S+@\S+\.\S+$/.test(delivery.email.trim())) e.email = 'Adresse email invalide';
+    setErrors(e);
+    if (Object.keys(e).length) setEditingAddress(true);
+    return !Object.keys(e).length;
+  }, [country, delivery, phoneDigits]);
+
+  const placeOrder = useCallback(async () => {
+    if (!userId) {
+      navigation.navigate('QuickAuth', { pendingAction: 'checkout', returnScreen: 'Cart' });
+      return;
     }
-  };
-
-  // Gérer le paiement Stripe
-  const handleStripePayment = async () => {
-    if (!cardDetails?.complete) {
-      Alert.alert('Erreur', 'Veuillez entrer des informations de carte valides');
+    if (!validate()) {
+      Toast.show({ type: 'error', text1: 'Adresse incomplète', text2: 'Vérifiez les champs en rouge.' });
+      return;
+    }
+    if (!method) {
+      Toast.show({ type: 'info', text1: 'Choisissez un mode de paiement' });
+      return;
+    }
+    if (!cartItems.length) {
+      Toast.show({ type: 'error', text1: 'Votre panier est vide' });
       return;
     }
 
-    console.log('🚀 Début du paiement Stripe');
-    setLoading(true);
-
+    setSubmitting(true);
     try {
-      // Initialiser le paiement et créer la commande
-      const secret = await initializeStripePayment();
-
-      console.log('🔐 Client Secret reçu:', secret ? 'Oui' : 'Non');
-
-      if (!secret) {
-        throw new Error('Impossible d\'initialiser le paiement');
-      }
-
-      console.log('💳 Confirmation du paiement avec Stripe...');
-
-      // Confirmer le paiement avec Stripe
-      const { error, paymentIntent } = await confirmPayment(secret, {
-        paymentMethodType: 'Card',
-        paymentMethodData: {
-          billingDetails: {
-            name: deliveryInfo.name,
-            email: deliveryInfo.email,
-            phone: `${deliveryInfo.countryCode}${deliveryInfo.phone}`,
-          },
-        },
-      });
-
-      console.log('📊 Résultat confirmation:', { error, paymentIntentStatus: paymentIntent?.status });
-
-      if (error) {
-        Alert.alert(
-          'Erreur de paiement',
-          error.message || 'Le paiement a échoué. Veuillez réessayer.'
-        );
-        setLoading(false);
-        return;
-      }
-
-      if (paymentIntent?.status === 'Succeeded') {
-        // Paiement réussi
-        console.log('✅ Paiement réussi ! Nettoyage des données...');
-        
-        // Vider le panier et supprimer toutes les données temporaires
-        await dispatch(clearPanierData());
-        await AsyncStorage.removeItem('shippingDetails');
-        await AsyncStorage.removeItem('pendingOrder');
-        await AsyncStorage.removeItem('deliveryInfo');
-        
-        Alert.alert('Succès', 'Paiement effectué avec succès !');
-        setStep(3);
-
-        // Rediriger vers les commandes après 3 secondes
-        setTimeout(() => {
-          navigation.navigate('Orders');
-        }, 3000);
-      }
-    } catch (error) {
-      console.error('Erreur paiement Stripe:', error);
-      Alert.alert(
-        'Erreur',
-        error.response?.data?.message || error.message || 'Une erreur est survenue lors du paiement'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Passer une commande (paiement à la livraison)
-  // Fonction principale de soumission du paiement (EXACTEMENT comme sur le WEB)
-  const handlePaymentSubmit = async () => {
-    setLoading(true);
-
-    try {
-      // 1. Validation utilisateur
-      const userId = user?.id || user?._id;
-      if (!userId) {
-        Alert.alert('Erreur', 'Veuillez vous connecter pour continuer');
-        setLoading(false);
-        return;
-      }
-
-      // 2. Validation des informations de paiement
-      const paymentErrors = validatePaymentInfo(paymentMethod, cardDetails, mobileDetails);
-      if (paymentErrors.length > 0) {
-        Alert.alert('Erreur', paymentErrors.join(', '));
-        setLoading(false);
-        return;
-      }
-
-      // 3. Vérification du panier
-      if (!cartItems || cartItems.length === 0) {
-        Alert.alert('Erreur', 'Votre panier est vide');
-        setLoading(false);
-        return;
-      }
-
-      // 4. Génération de l'ID de transaction
+      const phone = toBackendPhone(country, phoneDigits);
       const transactionId = generateUniqueID();
       const existingOrder = JSON.parse((await AsyncStorage.getItem('pendingOrder')) || 'null');
 
-      // 4. Nettoyage et Normalisation des produits (Parité WEB)
-      const cleanedProducts = cartItems.map((item) => {
-        // Déterminer le prix unitaire correct (après promo si applicable)
-        const unitPrice = item.prixPromo > 0 ? item.prixPromo : item.prix;
-        
-        return {
-          _id: item._id || item.product?._id,
-          name: item.name || item.product?.name,
-          image: item.image1 || item.imageUrl || item.product?.image1, 
-          imageUrl: item.image1 || item.imageUrl || item.product?.image1, // WEB KEY
-          prix: unitPrice, // WEB KEY
-          price: unitPrice, // MOBILE KEY
-          quantity: item.quantity || item.quantite || 1,
-          size: item.selectedSize,
-          color: item.selectedColor,
-          storeId: item.Clefournisseur?._id || item.createdBy,
-          storeName: item.Clefournisseur?.storeName || item.Clefournisseur?.name,
-          ClefType: item.ClefType,
-          weight: item.poids || item.shipping?.weight || 0,
-        };
+      const order = buildOrder({
+        userId, cartItems, delivery, phone, zone: selectedZone, shippingCalculations,
+        subtotal, shippingFee, reduction, total, promo: appliedPromo,
+        pointsToUse: points, pointsDiscount, paymentMethod: method, transactionId, existingOrder,
       });
 
-      // 5. Création de la commande (FORMAT EXACT DU WEB)
-      const orderData = {
-        clefUser: userId,
-        nbrProduits: cartItems.map((item) => ({
-          produit: item._id || item.product?._id,
-          quantite: item.quantity,
-          tailles: item.sizes || (item.selectedSize ? [item.selectedSize] : []),
-          couleurs: item.colors || (item.selectedColor ? [item.selectedColor] : []),
-        })),
-        prix: total,
-        statusPayment: PaymentMethods.CASH_ON_DELIVERY.includes(paymentMethod)
-          ? 'payé à la livraison'
-          : PaymentMethods.ASSISTED_PAYMENT.includes(paymentMethod)
-            ? 'payé par téléphone'
-            : 'en_attente',
-        reference: transactionId,
-        livraisonDetails: {
-          customerName: deliveryInfo.name,
-          email: deliveryInfo.email || null,
-          region: deliveryInfo.region,
-          quartier: deliveryInfo.quartier,
-          numero: deliveryInfo.numero,
-          description: deliveryInfo.description,
-        },
-        prod: cleanedProducts,
-        ...(appliedPromo && {
-          codePro: true,
-          idCodePro: appliedPromo._id,
-          codePromo: appliedPromo.code,
-          reduction: appliedPromo.discount || reduction,
-        }),
-        ...(pointsToUse > 0 && { pointsToUse }),
-        prix: pointsDiscount > 0 ? total - pointsDiscount : total,
-        prixTotal: subtotal,
-        fraisLivraison: shippingFee,
-        reduction: reduction,
-        fraisSousTotalArticles: subtotal,
-      };
-
-      if (existingOrder?.transactionId) {
-        orderData.oldReference = existingOrder.transactionId;
-        orderData.newReference = transactionId;
-      }
-
-      console.log('📦 Données commande envoyées:', JSON.stringify(orderData, null, 2));
-
-      // 6. Sauvegarder l'adresse de livraison
-      await axios.post(`${API_URL}/createOrUpdateAddress`, {
-        ...deliveryInfo,
-        email: deliveryInfo.email !== '' ? deliveryInfo.email : null,
+      await apiClient.post('/createOrUpdateAddress', {
+        ...delivery,
+        numero: phone,
+        email: delivery.email.trim() || null,
         clefUser: userId,
       });
 
-      // 7. Créer ou mettre à jour la commande (parité web pour repaiement)
-      const orderResponse = existingOrder?.transactionId
-        ? await axios.put(`${API_URL}/updateCommande`, orderData)
-        : await axios.post(`${API_URL}/createCommande`, orderData);
-      
-      if (!orderResponse.data.commande) {
-        throw new Error('Impossible de créer la commande');
-      }
+      const res = existingOrder?.transactionId
+        ? await apiClient.put('/updateCommande', order)
+        : await apiClient.post('/createCommande', order);
+      if (!res.data?.commande) throw new Error('Impossible de créer la commande');
 
-      setCreatedOrderId(orderResponse.data.commande._id);
-
-      // 8. Traiter le paiement (sauf cash) - EXACTEMENT comme sur le WEB
-      if (!PaymentMethods.CASH_ON_DELIVERY.includes(paymentMethod)) {
-        try {
-          // Préparer le paiement (comme sur le web avant la redirection vers payment-page.html)
-          const paymentInfo = await preparePayment(transactionId, total, paymentMethod);
-
-          console.log('💳 Informations de paiement préparées:', paymentInfo);
-
-          // Sur le web : window.location.href = "/payment-page.html"
-          // Sur mobile : navigation vers PaymentWebViewScreen avec iPay Money
-          navigation.navigate('PaymentWebView', {
-            amount: paymentInfo.amount,
-            transactionId: paymentInfo.transactionId,
-            paymentMethod: paymentInfo.paymentMethod,
-          });
-
-          // Ne pas vider le panier ici car l'utilisateur n'a pas encore payé
-          // Le panier sera vidé après confirmation du paiement (dans PaymentWebViewScreen)
-          // comme sur le web où on ne vide le panier qu'après le callback
-
-          // Ne pas continuer le flux ici, l'utilisateur va vers la page de paiement
-          return;
-        } catch (error) {
-          console.error('❌ Erreur préparation paiement:', error);
-          throw error;
-        }
-      }
-
-      // 9. Le backend V2 gère l'invalidation du code promo automatiquement
-      // Plus besoin d'appeler invalidatePromoCode manuellement
-
-      // 10. Vider le panier
-      await dispatch(clearCartData());
-
-      // 11. Succès
-      setStep(3);
-      setLoading(false);
-
-      // Redirection après 3 secondes
-      setTimeout(() => {
-        if (PaymentMethods.CASH_ON_DELIVERY.includes(paymentMethod)) {
-          navigation.navigate('Orders');
-        } else {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'MainTabs' }],
-          });
-        }
-      }, 3000);
-
-    } catch (error) {
-      console.error('Erreur lors du paiement:', error);
-      Alert.alert(
-        'Erreur',
-        error.response?.data?.message || error.message || 'Une erreur est survenue lors du traitement de votre commande'
-      );
-      setLoading(false);
-    }
-  };
-
-  const handlePlaceOrder = async () => {
-    setLoading(true);
-
-    try {
-      // Récupérer les détails d'expédition
-      const shippingDetails = await AsyncStorage.getItem('shippingDetails');
-      const parsedShippingDetails = shippingDetails ? JSON.parse(shippingDetails) : null;
-
-      if (!parsedShippingDetails) {
-        Alert.alert('Erreur', 'Informations d\'expédition manquantes');
-        setLoading(false);
+      if (isOfflinePayment(method)) {
+        await dispatch(clearPanierData());
+        await AsyncStorage.multiRemove(['pendingOrder', 'shippingDetails', 'appliedPromoCode', 'paymentInitiated']);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        setDone({ reference: transactionId, method });
         return;
       }
 
-      // Préparer les données de la commande selon le format backend
-      const orderData = {
-        clefUser: user.id || user._id,
-        nbrProduits: cartItems.map((item) => ({
-          produit: item.product._id,
-          quantite: item.quantity,
-          tailles: item.selectedSize ? [item.selectedSize] : [],
-          couleurs: item.selectedColor ? [item.selectedColor] : [],
-        })),
-        livraisonDetails: {
-          customerName: deliveryInfo.name,
-          email: deliveryInfo.email,
-          numero: deliveryInfo.numero,
-          region: deliveryInfo.region,
-          quartier: deliveryInfo.quartier,
-          description: deliveryInfo.description,
-        },
-        shippingDetails: parsedShippingDetails,
-        prix: subtotal - reduction,
-        prixTotal: total,
-        reduction: reduction,
-        codePro: appliedPromo ? true : false,
-        idCodePro: appliedPromo ? appliedPromo._id : null,
-        statusPayment: paymentMethod === 'cash' ? 'en cours' : 'en attente',
-        statusLivraison: 'en cours',
-        reference: `CMD-${Date.now()}`,
-        prod: cartItems.map((item) => ({
-          id: item.product._id,
-          name: item.product.name,
-          image: item.colorImage || item.product.image1,
-          price: item.product.prixPromo > 0 ? item.product.prixPromo : item.product.prix,
-          quantity: item.quantity,
-        })),
-      };
-
-      // Envoyer la commande au backend
-      const response = await axios.post(`${API_URL}/api/ordersRoutes/create`, orderData);
-
-      if (response.data.commande) {
-        // Vider le panier
-        await dispatch(clearPanierData());
-        await AsyncStorage.removeItem('shippingDetails');
-
-        // Afficher la confirmation
-        setStep(3);
-        
-        // Rediriger vers l'écran d'accueil après 3 secondes
-        setTimeout(() => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'MainTabs' }],
-          });
-        }, 3000);
-      } else {
-        Alert.alert('Erreur', 'Impossible de créer la commande. Veuillez réessayer.');
-      }
-    } catch (error) {
-      console.error('Erreur création commande:', error);
-      Alert.alert(
-        'Erreur',
-        error.response?.data?.message || 'Une erreur est survenue lors de la création de la commande'
-      );
+      // Paiement électronique : la commande est conservée pour un éventuel nouvel essai
+      await AsyncStorage.setItem('pendingOrder', JSON.stringify({ transactionId, total: payable }));
+      await AsyncStorage.setItem('paymentInitiated', JSON.stringify({ transactionId, method, timestamp: Date.now() }));
+      navigation.navigate('PaymentWebView', { amount: payable, transactionId, paymentMethod: method });
+    } catch (e) {
+      Toast.show({
+        type: 'error',
+        text1: 'Commande non envoyée',
+        text2: e.response?.data?.message || e.message || 'Vérifiez votre connexion et réessayez.',
+      });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
-  };
+  }, [
+    appliedPromo, cartItems, country, delivery, dispatch, method, navigation, payable, phoneDigits, points,
+    pointsDiscount, reduction, selectedZone, shippingCalculations, shippingFee, subtotal, total, userId, validate,
+  ]);
 
-  // Render delivery form
-  const renderDeliveryForm = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Informations de livraison</Text>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Nom complet *</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="person-outline" size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.input}
-            placeholder="Votre nom complet"
-            placeholderTextColor={COLORS.textLight}
-            value={deliveryInfo.name}
-            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, name: text })}
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Email</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="mail-outline" size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.input}
-            placeholder="Votre email"
-            placeholderTextColor={COLORS.textLight}
-            value={deliveryInfo.email}
-            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, email: text })}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Numéro de téléphone *</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="call-outline" size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.input}
-            placeholder="Votre numéro de téléphone"
-            placeholderTextColor={COLORS.textLight}
-            value={deliveryInfo.numero}
-            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, numero: text })}
-            keyboardType="phone-pad"
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Région *</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="location-outline" size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.input}
-            placeholder="Votre région"
-            placeholderTextColor={COLORS.textLight}
-            value={deliveryInfo.region}
-            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, region: text })}
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Quartier *</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="home-outline" size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.input}
-            placeholder="Votre quartier"
-            placeholderTextColor={COLORS.textLight}
-            value={deliveryInfo.quartier}
-            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, quartier: text })}
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Instructions de livraison</Text>
-        <View style={[styles.inputContainer, styles.textAreaContainer]}>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Instructions supplémentaires pour la livraison"
-            placeholderTextColor={COLORS.textLight}
-            value={deliveryInfo.description}
-            onChangeText={(text) => setDeliveryInfo({ ...deliveryInfo, description: text })}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
-      </View>
-    </View>
-  );
-
-  // Render payment methods (EXACTEMENT comme sur le WEB)
-  const renderPaymentMethods = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Mode de paiement</Text>
-      
-      <PaymentMethodSelector
-        selectedMethod={paymentMethod}
-        onSelectMethod={setPaymentMethod}
-      />
-
-      {paymentMethod && (
-        <PaymentDetailsForm
-          paymentMethod={paymentMethod}
-          cardDetails={cardDetails}
-          setCardDetails={setCardDetails}
-          mobileDetails={mobileDetails}
-          setMobileDetails={setMobileDetails}
-          formatCardNumber={formatCardNumber}
-          getPaymentDescription={getPaymentDescription}
-        />
-      )}
-    </View>
-  );
-
-  // Inline points widget
-  const renderPointsWidget = () => {
-    if (!gamificationConfig?.enabled || !wallet || wallet.balance <= 0) return null;
-    const rate = gamificationConfig?.redemption?.pointsToFcfaRate ?? 20;
-    const maxPct = gamificationConfig?.redemption?.maxPercentPerOrder ?? 30;
-    const maxFcfa = Math.floor(subtotal * maxPct / 100);
-    const maxPoints = Math.min(wallet.balance, Math.floor(maxFcfa / rate));
-    if (maxPoints <= 0) return null;
+  // ── Confirmation ─────────────────────────────────────────────────────────────
+  if (done) {
     return (
-      <View style={[styles.section, { borderWidth: 1.5, borderColor: pointsToUse > 0 ? '#30A08B' : '#E8E8E8', borderRadius: 12 }]}>
-        <Text style={styles.sectionTitle}>🌳 Baobab Points</Text>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Solde disponible</Text>
-          <Text style={[styles.summaryValue, { color: '#30A08B', fontWeight: '700' }]}>{wallet.balance} BP</Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, marginBottom: 4 }}>
-          {[0, Math.floor(maxPoints * 0.5), maxPoints].map((val) => (
-            <TouchableOpacity
-              key={val}
-              onPress={() => { setPointsToUse(val); setPointsDiscount(val * rate); }}
-              style={{ flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center', backgroundColor: pointsToUse === val ? '#30A08B' : '#f0f0f0' }}
-            >
-              <Text style={{ fontSize: 11, fontWeight: '700', color: pointsToUse === val ? '#fff' : '#777' }}>
-                {val === 0 ? 'Aucun' : val === maxPoints ? 'Max (' + maxPoints + ')' : (val + ' BP')}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        {pointsToUse > 0 && (
-          <View style={{ backgroundColor: '#f0faf7', borderRadius: 8, padding: 8, marginTop: 4, flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#30A08B' }}>{pointsToUse} BP utilisés</Text>
-            <Text style={{ fontSize: 13, fontWeight: '800', color: '#30A08B' }}>-{formatPrice(pointsDiscount)} CFA</Text>
-          </View>
-        )}
-        <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 6, textAlign: 'center' }}>
-          1 BP = {rate} FCFA · Plafond {maxPct}% du montant
-        </Text>
-      </View>
-    );
-  };
-
-  // Render order summary
-  const renderOrderSummary = () => (
-    <View>
-      {renderPointsWidget()}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Résumé de la commande</Text>
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Articles ({cartItems.length})</Text>
-            <Text style={styles.summaryValue}>{formatPrice(subtotal)} CFA</Text>
-          </View>
-
-          {reduction > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: COLORS.success }]}>Réduction promo</Text>
-              <Text style={[styles.summaryValue, { color: COLORS.success }]}>
-                -{formatPrice(reduction)} CFA
-              </Text>
-            </View>
-          )}
-
-          {pointsDiscount > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: '#30A08B' }]}>Réduction BP ({pointsToUse} pts)</Text>
-              <Text style={[styles.summaryValue, { color: '#30A08B' }]}>-{formatPrice(pointsDiscount)} CFA</Text>
-            </View>
-          )}
-
-          {totalWeight > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Poids total</Text>
-              <Text style={styles.summaryValue}>{totalWeight.toFixed(2)} kg</Text>
-            </View>
-          )}
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Frais de livraison</Text>
-            <Text style={styles.summaryValue}>{formatPrice(shippingFee)} CFA</Text>
-          </View>
-
-          <View style={styles.summaryDivider} />
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue} numberOfLines={1}>{formatPrice(total - pointsDiscount)} CFA</Text>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-
-  // Render confirmation
-  const renderConfirmation = () => (
-    <View style={styles.confirmationContainer}>
-      <View style={styles.confirmationIconContainer}>
-        <LinearGradient
-          colors={[COLORS.success + '20', COLORS.success + '10']}
-          style={styles.confirmationIconGradient}
-        >
-          <Ionicons name="checkmark-circle" size={80} color={COLORS.success} />
-        </LinearGradient>
-      </View>
-
-      <Text style={styles.confirmationTitle}>Paiement réussi !</Text>
-      <Text style={styles.confirmationText}>
-        Votre commande a été confirmée et payée avec succès.{'\n'}
-        Un email de confirmation vous sera envoyé.
-      </Text>
-
-      <View style={styles.confirmationDetails}>
-        {createdOrderId && (
-          <View style={styles.confirmationDetailRow}>
-            <Ionicons name="receipt-outline" size={20} color={COLORS.textLight} />
-            <Text style={styles.confirmationDetailText}>
-              Commande: {createdOrderId.substring(0, 8)}...
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.confirmationDetailRow}>
-          <Ionicons name="cube-outline" size={20} color={COLORS.textLight} />
-          <Text style={styles.confirmationDetailText}>
-            {cartItems.length} article{cartItems.length > 1 ? 's' : ''}
+      <View style={[styles.screen, styles.doneWrap, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
+        <Animated.View entering={ZoomIn.springify().damping(12)} style={styles.doneIcon}>
+          <Ionicons name="checkmark" size={56} color={colors.textInverse} />
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(200)} style={styles.doneText}>
+          <Text variant="h1" align="center">Commande confirmée !</Text>
+          <Text variant="body" color="textSecondary" align="center" style={styles.mt8}>
+            {done.method === 'paiement_assiste'
+              ? 'Un conseiller va vous appeler pour finaliser le paiement.'
+              : 'Vous paierez à la livraison. Le vendeur prépare votre colis.'}
           </Text>
+          <View style={styles.refPill}>
+            <Text variant="caption" color="textSecondary">Référence</Text>
+            <Text variant="title" selectable>{done.reference}</Text>
+          </View>
+        </Animated.View>
+        <View style={styles.doneActions}>
+          <Button
+            title="Suivre ma commande"
+            icon="cube-outline"
+            full
+            size="lg"
+            onPress={() => {
+              navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Orders' }] });
+            }}
+          />
+          <Button
+            title="Continuer mes achats"
+            variant="ghost"
+            full
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })}
+          />
         </View>
-
-        <View style={styles.confirmationDetailRow}>
-          <Ionicons name="cash-outline" size={20} color={COLORS.textLight} />
-          <Text style={styles.confirmationDetailText}>
-            Total payé: {formatPrice(total)}\u00a0CFA
-          </Text>
-        </View>
-
-        <View style={styles.confirmationDetailRow}>
-          <Ionicons name="location-outline" size={20} color={COLORS.textLight} />
-          <Text style={styles.confirmationDetailText}>
-            {deliveryInfo.region}, {deliveryInfo.quartier}
-          </Text>
-        </View>
-
-        <View style={styles.confirmationDetailRow}>
-          <Ionicons name="time-outline" size={20} color={COLORS.textLight} />
-          <Text style={styles.confirmationDetailText}>
-            Livraison sous 2-5 jours
-          </Text>
-        </View>
-
-        <View style={styles.confirmationDetailRow}>
-          <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.success} />
-          <Text style={[styles.confirmationDetailText, { color: COLORS.success, fontWeight: '600' }]}>
-            Paiement sécurisé par Stripe
-          </Text>
-        </View>
-      </View>
-
-      <ActivityIndicator size="small" color={COLORS.primary} style={styles.confirmationLoader} />
-      <Text style={styles.confirmationRedirect}>
-        Redirection en cours...
-      </Text>
-    </View>
-  );
-
-  // Step indicator
-  const renderStepIndicator = () => (
-    <View style={styles.stepIndicator}>
-      <View style={styles.stepItem}>
-        <View style={[styles.stepCircle, step >= 1 && styles.stepCircleActive]}>
-          {step > 1 ? (
-            <Ionicons name="checkmark" size={20} color={COLORS.white} />
-          ) : (
-            <Text style={styles.stepNumber}>1</Text>
-          )}
-        </View>
-        <Text style={styles.stepLabel}>Livraison</Text>
-      </View>
-
-      <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
-
-      <View style={styles.stepItem}>
-        <View style={[styles.stepCircle, step >= 2 && styles.stepCircleActive]}>
-          {step > 2 ? (
-            <Ionicons name="checkmark" size={20} color={COLORS.white} />
-          ) : (
-            <Text style={styles.stepNumber}>2</Text>
-          )}
-        </View>
-        <Text style={styles.stepLabel}>Paiement</Text>
-      </View>
-
-      <View style={[styles.stepLine, step >= 3 && styles.stepLineActive]} />
-
-      <View style={styles.stepItem}>
-        <View style={[styles.stepCircle, step >= 3 && styles.stepCircleActive]}>
-          <Text style={styles.stepNumber}>3</Text>
-        </View>
-        <Text style={styles.stepLabel}>Confirmation</Text>
-      </View>
-    </View>
-  );
-
-  // Render logic based on step
-  if (step === 3) {
-    return (
-      <View style={styles.container}>
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.tertiary]}
-          style={styles.header}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.headerTitle}>Commande confirmée</Text>
-        </LinearGradient>
-        {renderConfirmation()}
       </View>
     );
   }
 
+  const phoneDisplay = applyPhoneInputChange(country, phoneDigits).display;
+  const offline = isOfflinePayment(method);
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-    >
-      {/* Header */}
-      <LinearGradient
-        colors={[COLORS.primary, COLORS.tertiary]}
-        style={styles.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            if (step > 1) {
-              setStep(step - 1);
-            } else {
-              navigation.goBack();
-            }
-          }}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Commander</Text>
-        <View style={styles.backButton} />
-      </LinearGradient>
-
-      {/* Step indicator */}
-      {renderStepIndicator()}
-
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {step === 1 && renderDeliveryForm()}
-        {step === 2 && renderPaymentMethods()}
-        {renderOrderSummary()}
-      </ScrollView>
-
-      {/* Bottom Button */}
-      <View style={styles.bottomContainer}>
-        <TouchableOpacity
-          style={styles.nextButton}
-          onPress={handleNextStep}
-          disabled={loading || (step === 2 && paymentMethod === 'stripe' && !cardDetails?.complete)}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={
-              loading || (step === 2 && paymentMethod === 'stripe' && !cardDetails?.complete)
-                ? [COLORS.textLight, COLORS.textLight]
-                : [COLORS.primary, COLORS.tertiary]
-            }
-            style={styles.nextButtonGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-              <>
-                <Text style={styles.nextButtonText}>
-                  {step === 1 ? 'Continuer' : 'Confirmer le paiement'}
-                </Text>
-                <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-              </>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
+        <View style={styles.flex}>
+          <Text variant="h2">Finaliser la commande</Text>
+          <View style={styles.secure}>
+            <Ionicons name="lock-closed" size={11} color={colors.success} />
+            <Text variant="caption" color="success">Paiement sécurisé</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Modal pour le code de sécurité Zeyna */}
-      <SecurityCodeModal
-        isOpen={securityCodeModal.isOpen}
-        onClose={() => {
-          setSecurityCodeModal({ isOpen: false, code: '', error: '' });
-          setHandleSecuritySubmit(null);
-          setLoading(false);
-        }}
-        onSubmit={handleSecuritySubmit}
-        error={securityCodeModal.error}
-      />
+      <ScrollView contentContainerStyle={{ paddingBottom: 140 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        {/* Adresse */}
+        <Section
+          title="Livraison"
+          icon="location"
+          right={!editingAddress ? (
+            <PressableScale onPress={() => setEditingAddress(true)} hitSlop={10}>
+              <Text variant="smallMedium" color="primary">Modifier</Text>
+            </PressableScale>
+          ) : null}
+        >
+          {!editingAddress ? (
+            <View>
+              <Text variant="title">{delivery.name}</Text>
+              <Text variant="body" color="textSecondary">{country.dialCode} {phoneDisplay}</Text>
+              <Text variant="body" color="textSecondary">{[delivery.quartier, delivery.region].filter(Boolean).join(', ')}</Text>
+              {delivery.description ? <Text variant="small" color="textMuted" style={styles.mt4}>{delivery.description}</Text> : null}
+            </View>
+          ) : (
+            <View>
+              <TextField label="Nom complet" icon="person-outline" value={delivery.name} onChangeText={(t) => setField('name', t)} error={errors.name} autoComplete="name" textContentType="name" />
+              <TextField
+                label="Téléphone"
+                value={phoneDisplay}
+                onChangeText={(t) => { setPhoneDigits(applyPhoneInputChange(country, t).digits); setErrors((e) => ({ ...e, phone: undefined })); }}
+                placeholder={getPhonePlaceholder(country)}
+                keyboardType="phone-pad"
+                error={errors.phone}
+                hint="Le livreur vous appellera sur ce numéro"
+                prefix={
+                  <PressableScale onPress={() => setCountryPicker((v) => !v)} style={styles.dial} hitSlop={6}>
+                    <Text variant="bodyMedium">{country.flag} {country.dialCode}</Text>
+                    <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+                  </PressableScale>
+                }
+              />
+              {countryPicker ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.countries}>
+                  {PHONE_COUNTRIES.map((c) => (
+                    <Chip
+                      key={c.iso}
+                      label={`${c.flag} ${c.dialCode}`}
+                      active={c.iso === country.iso}
+                      onPress={() => { setCountry(c); setPhoneDigits(''); setCountryPicker(false); }}
+                    />
+                  ))}
+                </ScrollView>
+              ) : null}
+              <View style={styles.twoCols}>
+                <TextField label="Région / ville" value={delivery.region} onChangeText={(t) => setField('region', t)} error={errors.region} style={styles.flex} />
+                <TextField label="Quartier" value={delivery.quartier} onChangeText={(t) => setField('quartier', t)} error={errors.quartier} style={styles.flex} />
+              </View>
+              <TextField label="Repère pour le livreur" optional icon="navigate-outline" value={delivery.description} onChangeText={(t) => setField('description', t)} placeholder="Ex. près de la grande mosquée, portail bleu" multiline />
+              <TextField label="Email" optional icon="mail-outline" value={delivery.email} onChangeText={(t) => setField('email', t)} error={errors.email} keyboardType="email-address" autoCapitalize="none" placeholder="Pour recevoir votre reçu" />
+            </View>
+          )}
+        </Section>
+
+        {/* Paiement */}
+        <Section title="Paiement" icon="wallet">
+          <PaymentOptions value={method} onChange={setMethod} />
+          {method && !offline ? (
+            <View style={styles.note}>
+              <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
+              <Text variant="small" color="textSecondary" style={styles.flex}>
+                Vous allez être redirigé vers la page sécurisée iPay pour saisir vos informations de paiement.
+              </Text>
+            </View>
+          ) : null}
+        </Section>
+
+        {/* Baobab Points */}
+        {pointsInfo ? (
+          <Section title="Baobab Points" icon="gift" right={<Text variant="smallMedium" color="primaryDark">{pointsInfo.balance} BP</Text>}>
+            <View style={styles.pointsRow}>
+              {[0, Math.floor(pointsInfo.maxPoints / 2), pointsInfo.maxPoints]
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .map((v) => (
+                  <Chip key={v} label={v === 0 ? 'Aucun' : `${v} BP`} active={points === v} onPress={() => setPoints(v)} style={styles.flex} />
+                ))}
+            </View>
+            <Text variant="caption" color="textMuted" style={styles.mt8}>
+              1 BP = {pointsInfo.rate} FCFA · jusqu'à {pointsInfo.maxPct} % de la commande
+            </Text>
+          </Section>
+        ) : null}
+
+        {/* Récapitulatif */}
+        <Section title="Récapitulatif" icon="receipt">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
+            {cartItems.map((it) => (
+              <View key={`${it.id}-${it.color}-${it.taille}`}>
+                <SmartImage uri={it.colorImage || productImage(it)} width={56} style={styles.thumb} />
+                <View style={styles.qtyBadge}><Text variant="caption" color="textInverse">{it.quantite}</Text></View>
+              </View>
+            ))}
+          </ScrollView>
+          <Row label="Sous-total" value={F(subtotal)} />
+          {reduction > 0 ? <Row label={`Code ${appliedPromo?.code || 'promo'}`} value={`-${F(reduction)}`} tone="success" /> : null}
+          <Row label="Livraison" value={shippingFee > 0 ? F(shippingFee) : 'Offerte'} />
+          {pointsDiscount > 0 ? <Row label="Baobab Points" value={`-${F(pointsDiscount)}`} tone="success" /> : null}
+          <View style={styles.divider} />
+          <Row label="Total à payer" value={F(payable)} bold />
+        </Section>
+      </ScrollView>
+
+      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <Button
+          title={offline ? 'Confirmer la commande' : `Payer ${formatPrice(payable)} FCFA`}
+          icon={offline ? 'checkmark-circle-outline' : 'lock-closed'}
+          size="lg"
+          full
+          loading={submitting}
+          disabled={!method}
+          onPress={placeOrder}
+        />
+        {!method ? <Text variant="caption" color="textMuted" align="center" style={styles.mt6}>Choisissez un mode de paiement pour continuer</Text> : null}
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  mt4: { marginTop: 4 },
+  mt6: { marginTop: 6 },
+  mt8: { marginTop: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 12 },
+  secure: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+
+  section: { marginHorizontal: GUTTER, marginTop: 14, padding: 16, backgroundColor: colors.surface, borderRadius: radius.lg, ...shadows.sm },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  sectionIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+
+  dial: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingRight: 10, borderRightWidth: 1, borderRightColor: colors.border },
+  countries: { gap: 8, paddingBottom: 14 },
+  twoCols: { flexDirection: 'row', gap: 10 },
+  note: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 6, padding: 12, borderRadius: radius.md, backgroundColor: colors.primarySoft },
+  pointsRow: { flexDirection: 'row', gap: 8 },
+
+  thumbs: { gap: 10, paddingBottom: 12 },
+  thumb: { width: 56, height: 56, borderRadius: radius.sm },
+  qtyBadge: {
+    position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 4,
+    backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface,
   },
-  header: {
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 8 },
+
+  bar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: GUTTER, paddingTop: 12,
+    backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.white,
-  },
-  stepIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    backgroundColor: COLORS.white,
-  },
-  stepItem: {
-    alignItems: 'center',
-  },
-  stepCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  stepCircleActive: {
-    backgroundColor: COLORS.primary,
-  },
-  stepNumber: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textLight,
-  },
-  stepLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 4,
-  },
-  stepLine: {
-    width: 60,
-    height: 2,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 8,
-  },
-  stepLineActive: {
-    backgroundColor: COLORS.primary,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 16,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  input: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 15,
-    color: COLORS.text,
-  },
-  textAreaContainer: {
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-  },
-  textArea: {
-    minHeight: 80,
-    marginLeft: 0,
-  },
-  paymentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-  },
-  paymentCardSelected: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary + '10',
-  },
-  paymentIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  paymentInfo: {
-    flex: 1,
-  },
-  paymentTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  paymentDescription: {
-    fontSize: 13,
-    color: COLORS.textLight,
-  },
-  paymentNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.primary + '10',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  paymentNoteText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.primary,
-  },
-  stripeCardContainer: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  summaryCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  summaryLabel: {
-    fontSize: 15,
-    color: COLORS.textLight,
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    letterSpacing: 0.3,
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 8,
-  },
-  totalLabel: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  totalValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.primary,
-    letterSpacing: 0.5,
-    flexShrink: 0,
-  },
-  bottomContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  nextButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  nextButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-  },
-  nextButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  confirmationContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  confirmationIconContainer: {
-    marginBottom: 24,
-  },
-  confirmationIconGradient: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmationTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-  confirmationText: {
-    fontSize: 16,
-    color: COLORS.textLight,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  confirmationDetails: {
-    width: '100%',
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 20,
-    gap: 16,
-  },
-  confirmationDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  confirmationDetailText: {
-    fontSize: 15,
-    color: COLORS.text,
-  },
-  confirmationLoader: {
-    marginTop: 32,
-  },
-  confirmationRedirect: {
-    fontSize: 14,
-    color: COLORS.textLight,
-    marginTop: 12,
-  },
+
+  doneWrap: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  doneIcon: { width: 110, height: 110, borderRadius: 55, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
+  doneText: { marginTop: 28, alignItems: 'center' },
+  refPill: { marginTop: 20, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  doneActions: { alignSelf: 'stretch', gap: 8, marginTop: 36 },
 });
