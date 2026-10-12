@@ -1,137 +1,141 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { LayoutAnimation, Linking, Platform, ScrollView, StyleSheet, TextInput, UIManager, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
-import { COLORS } from '../config/constants';
+import { IconButton, PressableScale, Text } from '../ui';
+import { SUPPORT } from '../config/env';
+import { colors, fonts, GUTTER, radius, shadows } from '../theme';
 
-const FAQ_DATA = [
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const FAQ = [
   {
-    question: '1. Quels sont les modes de paiement acceptés sur votre site ?',
-    answer:
-      "Nous acceptons les paiements par carte de crédit/débit (Visa, MasterCard), Mobile Money (Airtel, Orange, Moov).",
+    q: 'Quels sont les moyens de paiement acceptés ?',
+    a: 'Mobile Money (Airtel, Moov, Zamani…), les portefeuilles MyNita, Amana et Zeyna, les cartes Visa et Mastercard, le paiement à la livraison et le paiement assisté par un conseiller. Le paiement en ligne passe par la page sécurisée iPay.',
   },
   {
-    question: '2. Quelle est la politique de livraison et combien de temps cela prendra-t-il ?',
-    answer:
-      "Nous proposons une livraison standard et express. Le délai de livraison dépend de votre emplacement, mais en général, cela prend entre 3 à 7 jours ouvrables pour la livraison standard et 1 à 3 jours ouvrables pour la livraison express.",
+    q: 'Quels sont les délais de livraison ?',
+    a: 'Nous proposons une livraison standard et express. Le délai dépend de votre emplacement : en général 3 à 7 jours ouvrables en standard et 1 à 3 jours ouvrables en express. Les frais sont calculés dans le panier selon votre zone.',
   },
   {
-    question: '3. Puis-je suivre ma commande en ligne ?',
-    answer:
-      "Oui, une fois que votre commande a été expédiée, vous recevrez un numéro de suivi par e-mail, qui vous permettra de suivre l'état de votre commande en ligne.",
+    q: 'Comment suivre ma commande ?',
+    a: 'Ouvrez Profil › Mes commandes : chaque commande affiche son étape (préparation, livraison, livrée). Vous pouvez aussi contacter le support depuis la commande, la référence est jointe automatiquement.',
   },
   {
-    question: '4. Proposez-vous des remises pour les achats en gros ?',
-    answer:
-      "Oui, nous offrons des remises pour les achats en gros. Veuillez nous contacter pour plus de détails sur nos offres spéciales pour les grossistes.",
+    q: 'Ma commande n’est pas payée, que faire ?',
+    a: 'Dans Mes commandes, touchez « Payer maintenant » sur la commande concernée : vos articles sont remis dans le panier et vous reprenez le paiement là où vous l’aviez laissé.',
+  },
+  {
+    q: 'Comment fonctionnent les Baobab Points ?',
+    a: 'Vous gagnez des points en achetant, en pointant chaque jour, en donnant votre avis et en parrainant vos proches. À la commande, vos points se transforment en réduction. Le détail est dans Profil › Baobab Points.',
+  },
+  {
+    q: 'Proposez-vous des remises pour les achats en gros ?',
+    a: 'Oui, nous offrons des remises pour les achats en gros. Contactez-nous pour connaître nos offres spéciales pour les grossistes.',
+  },
+  {
+    q: 'Comment vendre sur Ihambaobab ?',
+    a: 'Téléchargez l’application Ihambaobab Pro sur le Play Store pour ouvrir votre boutique, gérer vos produits, vos commandes et votre caisse.',
   },
 ];
 
+function Item({ item, open, onToggle }) {
+  return (
+    <PressableScale onPress={onToggle} scaleTo={0.99} style={[styles.item, open && styles.itemOpen]} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+      <View style={styles.qRow}>
+        <Text variant="title" style={styles.flex}>{item.q}</Text>
+        <Ionicons name={open ? 'remove-circle' : 'add-circle-outline'} size={22} color={open ? colors.primary : colors.textMuted} />
+      </View>
+      {open ? <Text variant="body" color="textSecondary" style={styles.answer}>{item.a}</Text> : null}
+    </PressableScale>
+  );
+}
+
+/** Centre d'aide : recherche dans la FAQ et contact direct */
 export default function FaqScreen({ navigation }) {
-  const [openIndex, setOpenIndex] = useState(null);
+  const insets = useSafeAreaInsets();
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(0);
+
+  const list = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? FAQ.filter((f) => `${f.q} ${f.a}`.toLowerCase().includes(t)) : FAQ;
+  }, [q]);
 
   const toggle = (i) => {
-    setOpenIndex(openIndex === i ? null : i);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen((o) => (o === i ? -1 : i));
   };
 
   return (
-    // avoid SafeArea top inset here because we draw our own statusBarBackground
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
-      {/* ensure top safe-area has green background on iOS */}
-      <View style={styles.statusBarBackground} />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Questions fréquentes</Text>
-        <View style={{ width: 36 }} />
+    <View style={styles.screen}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
+        <Text variant="h2" style={styles.flex}>Centre d'aide</Text>
       </View>
 
-      <View style={styles.pageTitleContainer}>
-        <Text style={styles.pageTitle}>Questions fréquemment posées :</Text>
-      </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} keyboardShouldPersistTaps="handled">
+        <View style={styles.search}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TextInput value={q} onChangeText={setQ} placeholder="Rechercher une question…" placeholderTextColor={colors.textMuted} style={styles.input} />
+        </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {FAQ_DATA.map((item, idx) => (
-          <View key={idx} style={[styles.card, idx % 2 === 0 ? styles.cardLeftAccent : styles.cardRightAccent]}>
-            <TouchableOpacity onPress={() => toggle(idx)} style={styles.row} activeOpacity={0.8}>
-              <Text style={styles.question}>{item.question}</Text>
-              <Ionicons name={openIndex === idx ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textLight} />
-            </TouchableOpacity>
+        <View style={styles.listWrap}>
+          {list.map((item) => {
+            const i = FAQ.indexOf(item);
+            return <Item key={item.q} item={item} open={open === i || !!q.trim()} onToggle={() => toggle(i)} />;
+          })}
+          {!list.length ? (
+            <Text variant="body" color="textSecondary" align="center" style={styles.none}>Aucune réponse trouvée. Écrivez-nous, on vous aide !</Text>
+          ) : null}
+        </View>
 
-            {openIndex === idx && (
-              <View style={styles.answerContainer}>
-                <Text style={styles.answer}>{item.answer}</Text>
-              </View>
-            )}
+        <View style={styles.contact}>
+          <Text variant="h3">Besoin d'aide ?</Text>
+          <Text variant="small" color="textSecondary" style={styles.mt4}>Notre équipe au Niger vous répond.</Text>
+          <View style={styles.contactRow}>
+            <PressableScale onPress={() => navigation.navigate('Messages')} style={styles.contactBtn} scaleTo={0.96}>
+              <Ionicons name="chatbubbles-outline" size={22} color={colors.primary} />
+              <Text variant="caption">Messages</Text>
+            </PressableScale>
+            <PressableScale onPress={() => Linking.openURL(`https://wa.me/${SUPPORT.whatsapp}`).catch(() => {})} style={styles.contactBtn} scaleTo={0.96}>
+              <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
+              <Text variant="caption">WhatsApp</Text>
+            </PressableScale>
+            <PressableScale onPress={() => Linking.openURL(`tel:${SUPPORT.phone}`).catch(() => {})} style={styles.contactBtn} scaleTo={0.96}>
+              <Ionicons name="call-outline" size={22} color={colors.wood} />
+              <Text variant="caption">Appeler</Text>
+            </PressableScale>
+            <PressableScale onPress={() => Linking.openURL(`mailto:${SUPPORT.email}`).catch(() => {})} style={styles.contactBtn} scaleTo={0.96}>
+              <Ionicons name="mail-outline" size={22} color={colors.sand} />
+              <Text variant="caption">Email</Text>
+            </PressableScale>
           </View>
-        ))}
-
-        <View style={styles.contactCard}>
-          <Text style={styles.contactTitle}>Nos informations</Text>
-          <Text style={styles.contactText}>Email: support@ihambaobab.com</Text>
-          <Text style={styles.contactText}>WhatsApp: +32465965436</Text>
-          <Text style={styles.contactText}>Adresse: 3053 Haasrode, Belgique</Text>
-
-          <TouchableOpacity style={styles.contactButton} onPress={() => Linking.openURL('mailto:support@ihambaobab.com')}>
-            <Text style={styles.contactButtonText}>Contacter le support</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    backgroundColor: '#30A08B',
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  mt4: { marginTop: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 10 },
+  search: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, marginHorizontal: GUTTER, marginTop: 4, paddingHorizontal: 14,
+    borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
-  statusBarBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: Platform.OS === 'ios' ? 44 : 0,
-    backgroundColor: '#30A08B',
-    zIndex: 1000,
-  },
-  backBtn: { padding: 8 },
-  headerTitle: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
-  content: { padding: 16 },
-  pageTitleContainer: { paddingHorizontal: 16, paddingVertical: 12 },
-  pageTitle: { fontSize: 22, fontWeight: 'bold', color: '#30A08B', marginBottom: 6 },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#CCEDE0',
-    // subtle shadow
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 },
-      android: { elevation: 2 },
-    }),
-  },
-  cardLeftAccent: { borderLeftWidth: 6, borderLeftColor: '#30A08B' },
-  cardRightAccent: { borderLeftWidth: 6, borderLeftColor: '#30A08B' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  question: { fontSize: 15, fontWeight: '700', color: '#30A08B' },
-  answerContainer: { marginTop: 12, paddingLeft: 6, borderLeftWidth: 2, borderLeftColor: COLORS.border },
-  answer: { color: COLORS.textLight, lineHeight: 20 },
-  contactCard: { backgroundColor: COLORS.white, borderRadius: 12, padding: 16, marginTop: 8 },
-  contactTitle: { fontSize: 16, fontWeight: '700', color: '#30A08B', marginBottom: 8 },
-  contactText: { color: COLORS.textLight, marginBottom: 6 },
-  contactButton: { marginTop: 8, backgroundColor: '#30A08B', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  contactButtonText: { color: COLORS.white, fontWeight: '700' },
+  input: { flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.text, paddingVertical: 0 },
+  listWrap: { marginHorizontal: GUTTER, marginTop: 16, gap: 10 },
+  item: { padding: 16, borderRadius: radius.lg, backgroundColor: colors.surface, ...shadows.sm },
+  itemOpen: { borderWidth: 1.5, borderColor: colors.primarySoft },
+  qRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  answer: { marginTop: 10 },
+  none: { marginVertical: 24 },
+  contact: { marginHorizontal: GUTTER, marginTop: 24, padding: 18, borderRadius: radius.lg, backgroundColor: colors.surface, ...shadows.sm },
+  contactRow: { flexDirection: 'row', marginTop: 16, gap: 8 },
+  contactBtn: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: radius.md, backgroundColor: colors.bg },
 });

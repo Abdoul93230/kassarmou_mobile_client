@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './RootNavigation';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
@@ -149,6 +149,11 @@ function AppNavigator() {
     >
       <Stack.Navigator
         screenOptions={{
+          // Chaque écran a son propre en-tête (design system) ; transition latérale + retour par glissement
+          headerShown: false,
+          ...TransitionPresets.SlideFromRightIOS,
+          gestureEnabled: true,
+          cardStyle: { backgroundColor: '#FAFAF8' },
           headerStyle: {
             backgroundColor: '#30A08B',        // Primary - Teal
             elevation: 0,

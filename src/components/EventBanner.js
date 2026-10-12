@@ -76,7 +76,7 @@ export default function EventBanner() {
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 12, gap: 8 },
+  container: { paddingHorizontal: 16, gap: 8 },
   card: {
     flexDirection: "row",
     alignItems: "center",

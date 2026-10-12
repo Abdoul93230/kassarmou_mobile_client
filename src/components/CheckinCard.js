@@ -1,174 +1,78 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import Toast from 'react-native-toast-message';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useDispatch, useSelector } from "react-redux";
-import {
-  fetchWallet,
-  fetchPublicConfig,
   dailyCheckin,
-  selectWallet,
+  fetchPublicConfig,
+  fetchWallet,
   selectConfig,
   selectIsLoadingCheckin,
-  clearCheckinResult,
-  selectCheckinResult,
-} from "../redux/gamificationSlice";
-import { COLORS } from "../config/constants";
+  selectWallet,
+} from '../redux/gamificationSlice';
+import { Button, PressableScale, Text } from '../ui';
+import { colors, GUTTER, radius } from '../theme';
 
+/** Points gagnés par un pointage (jour + éventuel bonus de série) */
+export const checkinPoints = (payload) =>
+  (payload?.checkin?.transaction?.delta || 0) + (payload?.bonus?.transaction?.[0]?.delta || 0);
+
+/** Carte « Pointez aujourd'hui » de l'accueil — disparaît une fois le pointage fait */
 export default function CheckinCard({ navigation }) {
   const dispatch = useDispatch();
-  const user = useSelector((state) => state.auth.user);
+  const user = useSelector((s) => s.auth.user);
+  const userId = user?.id || user?._id;
   const wallet = useSelector(selectWallet);
   const config = useSelector(selectConfig);
-  const isLoadingCheckin = useSelector(selectIsLoadingCheckin);
-  const checkinResult = useSelector(selectCheckinResult);
-
-  const [toast, setToast] = useState(null);
-  const [dismissed, setDismissed] = useState(false);
+  const loading = useSelector(selectIsLoadingCheckin);
+  const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    if (!user?.id) return;
-    if (!wallet) dispatch(fetchWallet(user.id));
+    if (!userId) return;
+    if (!wallet) dispatch(fetchWallet(userId));
     if (!config) dispatch(fetchPublicConfig());
-  }, [user?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
-  useEffect(() => {
-    if (checkinResult) {
-      setToast(`+${checkinResult.pointsEarned} BP crédités !`);
-      const t = setTimeout(() => {
-        setToast(null);
-        dispatch(clearCheckinResult());
-      }, 3000);
-      return () => clearTimeout(t);
-    }
-  }, [checkinResult]);
+  if (!config?.enabled || !userId || hidden) return null;
+  const done = wallet?.lastCheckinDate && new Date(wallet.lastCheckinDate).toDateString() === new Date().toDateString();
+  if (done) return null;
 
-  if (!config?.enabled || !user?.id || dismissed) return null;
+  const perDay = config?.modules?.DAILY_CHECKIN?.pointsPerDay ?? 1;
+  const streak = wallet?.checkinStreak ?? 0;
 
-  const alreadyDone = wallet?.lastCheckinDate
-    ? new Date(wallet.lastCheckinDate).toDateString() === new Date().toDateString()
-    : false;
-
-  if (alreadyDone) return null;
-
-  const handleCheckin = async () => {
+  const checkin = async () => {
     try {
-      await dispatch(dailyCheckin(user.id)).unwrap();
+      const r = await dispatch(dailyCheckin(userId)).unwrap();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Toast.show({ type: 'success', text1: `+${checkinPoints(r) || perDay} Baobab Points`, text2: `Série de ${r?.streak ?? streak + 1} jour(s) 🔥` });
     } catch {
-      // already checked in — card will disappear on next fetch
+      setHidden(true);
     }
   };
 
-  const basePoints = config?.modules?.DAILY_CHECKIN?.pointsPerDay ?? 1;
-  const streak = wallet?.checkinStreak ?? 0;
-
   return (
-    <>
-      <LinearGradient
-        colors={["#30A08B", "#1d7a6a"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.card}
-      >
-        <View style={styles.iconWrap}>
-          <Ionicons name="leaf" size={22} color="#fff" />
-        </View>
-        <View style={styles.content}>
-          <Text style={styles.title}>Pointage du jour</Text>
-          <Text style={styles.sub}>
-            +{basePoints} BP
-            {streak > 1 ? ` · Série ${streak}j 🔥` : ""}
+    <PressableScale onPress={() => navigation?.navigate('Wallet')} scaleTo={0.99} style={styles.wrap}>
+      <LinearGradient colors={[colors.warningSoft, colors.sandSoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
+        <View style={styles.icon}><Ionicons name="flame" size={22} color={colors.warning} /></View>
+        <View style={styles.flex}>
+          <Text variant="title">Pointez aujourd'hui</Text>
+          <Text variant="caption" color="textSecondary">
+            +{perDay} BP{streak ? ` · série de ${streak} jour${streak > 1 ? 's' : ''}` : ' · commencez votre série'}
           </Text>
         </View>
-        <TouchableOpacity
-          onPress={handleCheckin}
-          disabled={isLoadingCheckin}
-          style={styles.btn}
-        >
-          {isLoadingCheckin ? (
-            <ActivityIndicator size="small" color={COLORS.primary} />
-          ) : (
-            <Text style={styles.btnText}>Pointer</Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setDismissed(true)} style={styles.closeBtn}>
-          <Ionicons name="close" size={14} color="rgba(255,255,255,0.7)" />
-        </TouchableOpacity>
+        <Button title="Pointer" size="sm" loading={loading} onPress={checkin} />
       </LinearGradient>
-
-      {toast && (
-        <View style={styles.toast}>
-          <Ionicons name="leaf" size={14} color="#fff" />
-          <Text style={styles.toastText}>{toast}</Text>
-        </View>
-      )}
-    </>
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginHorizontal: 14,
-    marginTop: 10,
-    gap: 10,
-  },
-  iconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  content: { flex: 1 },
-  title: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  sub: { color: "rgba(255,255,255,0.8)", fontSize: 11, marginTop: 1 },
-  btn: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    minWidth: 70,
-    alignItems: "center",
-  },
-  btnText: { color: COLORS.primary, fontWeight: "800", fontSize: 13 },
-  closeBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toast: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    right: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    zIndex: 999,
-  },
-  toastText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  wrap: { marginHorizontal: GUTTER, marginTop: 12 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radius.lg },
+  icon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  flex: { flex: 1 },
 });
