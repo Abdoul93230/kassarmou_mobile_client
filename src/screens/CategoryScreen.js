@@ -1,613 +1,180 @@
-
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-  Dimensions,
-  Animated,
-  RefreshControl,
-  StatusBar,
-  Platform,
-  Image,
-} from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDispatch, useSelector } from 'react-redux';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { fetchCategories } from '../redux/categoriesSlice';
-import { getProducts, getTypes } from '../redux/productsSlice';
+import { getCategories, getTypes } from '../redux/productsSlice';
+import { PressableScale, Skeleton, SmartImage, Text } from '../ui';
+import { capitalize } from '../utils/text';
+import { colors, gradients, GUTTER, radius } from '../theme';
 
-const { width } = Dimensions.get('window');
-const CARD_MARGIN = 10;
-const NUM_COLUMNS = 2;
-const CARD_WIDTH = (width - (NUM_COLUMNS + 1) * CARD_MARGIN * 1.5) / NUM_COLUMNS;
-const CARD_HEIGHT = CARD_WIDTH * 1.15;
-const HEADER_MAX_HEIGHT = Platform.OS === 'ios' ? 175 : 160;
-const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 120 : 108;
+const RAIL_W = 96;
+const EMPTY = [];
 
-// ─── Skeleton animé ────────────────────────────────────────────────────────────
-function SkeletonCard() {
-  const shimmer = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [shimmer]);
-
-  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
-
-  return (
-    <Animated.View style={[styles.skeletonCard, { opacity }]}>
-      <View style={styles.skeletonInner} />
-      <View style={styles.skeletonLabel} />
-      <View style={styles.skeletonSub} />
-    </Animated.View>
-  );
-}
-
-// ─── Palette de couleurs pour les overlays ────────────────────────────────────
-const OVERLAYS = [
-  ['rgba(48,160,139,0.55)', 'rgba(48,160,139,0.82)'],
-  ['rgba(178,144,95,0.55)', 'rgba(178,144,95,0.82)'],
-  ['rgba(99,102,241,0.55)', 'rgba(99,102,241,0.82)'],
-  ['rgba(236,72,153,0.55)', 'rgba(236,72,153,0.82)'],
-  ['rgba(16,185,129,0.55)', 'rgba(16,185,129,0.82)'],
-  ['rgba(245,158,11,0.55)', 'rgba(245,158,11,0.82)'],
-  ['rgba(239,68,68,0.55)',  'rgba(239,68,68,0.82)'],
-  ['rgba(59,130,246,0.55)', 'rgba(59,130,246,0.82)'],
-];
-
-// ─── Composant carte catégorie ─────────────────────────────────────────────────
-const CategoryCard = React.memo(({ item, index, onPress }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-  const overlay = OVERLAYS[index % OVERLAYS.length];
-
-  const handlePressIn = () =>
-    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 30 }).start();
-  const handlePressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
-
-  return (
-    <Animated.View style={[styles.cardWrapper, { transform: [{ scale }] }]}>
-      <TouchableOpacity
-        style={styles.categoryCard}
-        onPress={() => onPress(item)}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-      >
-        {/* Image de fond */}
-        <Image
-          source={{ uri: item.image }}
-          style={StyleSheet.absoluteFillObject}
-          resizeMode="cover"
-        />
-
-        {/* Overlay dégradé du bas vers le haut */}
-        <LinearGradient
-          colors={['transparent', overlay[0], overlay[1]]}
-          locations={[0.0, 0.45, 1.0]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-
-        {/* Badge count en haut à droite */}
-        <View style={styles.countBadge}>
-          <Text style={styles.countText}>{item._productCount ?? 0}</Text>
-        </View>
-
-        {/* Infos en bas */}
-        <View style={styles.cardFooter}>
-          <Text style={styles.categoryName} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <View style={styles.countRow}>
-            <Ionicons name="pricetag" size={11} color="rgba(255,255,255,0.85)" />
-            <Text style={styles.productCountText}>
-              {' '}{item._productCount ?? 0} {(item._productCount ?? 0) === 1 ? 'produit' : 'produits'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Flèche */}
-        <View style={styles.arrowBadge}>
-          <Ionicons name="chevron-forward" size={14} color="#FFF" />
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-});
-
-// ─── Screen principal ──────────────────────────────────────────────────────────
-export default function CategoryScreen() {
-  const navigation = useNavigation();
+/** Onglet Catégories : rail vertical à gauche, sous-catégories à droite */
+export default function CategoryScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
-
-  const { categories, loading } = useSelector(
-    (state) => state.categories || { categories: [], loading: false }
-  );
-  const products = useSelector((state) => state.products?.data || []);
-  const types    = useSelector((state) => state.products?.types || []);
-
-  const [searchQuery, setSearchQuery]           = useState('');
-  const [filteredCategories, setFilteredCategories] = useState([]);
-  const [refreshing, setRefreshing]             = useState(false);
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const searchInputRef = useRef(null);
-
-  // ── Logique métier originale ──────────────────────────────────────────────
-  const typeToCategory = useMemo(() => {
-    const mapping = {};
-    types.forEach(type => { mapping[type._id] = type.clefCategories; });
-    return mapping;
-  }, [types]);
+  const allCategories = useSelector((s) => s.products.categories || EMPTY);
+  const types = useSelector((s) => s.products.types || EMPTY);
+  const categories = useMemo(() => allCategories.filter((c) => c?.name && c.name.trim().toLowerCase() !== 'all'), [allCategories]);
+  const [selectedId, setSelectedId] = useState(null);
 
   useEffect(() => {
-    console.log('📂 [CategoryScreen] Loading categories...');
-    dispatch(fetchCategories());
-    dispatch(getProducts());
+    dispatch(getCategories());
     dispatch(getTypes());
   }, [dispatch]);
 
-  const getCategoryProductCount = useCallback(
-    (categoryId) =>
-      products.filter(product => typeToCategory[product.ClefType] === categoryId).length,
-    [products, typeToCategory]
+  const selected = categories.find((c) => c._id === selectedId) || categories[0];
+  const subTypes = useMemo(
+    () => (selected ? types.filter((t) => String(t.clefCategories) === String(selected._id)) : EMPTY),
+    [selected, types],
   );
 
-  useEffect(() => {
-    if (categories.length > 0) {
-      console.log('📂 [CategoryScreen] Categories loaded:', categories.length);
-      console.log('📦 [CategoryScreen] Products loaded:', products.length);
-      console.log('🏷️ [CategoryScreen] Types loaded:', types.length);
-      filterCategories(searchQuery);
-    }
-  }, [categories, searchQuery, products, types]);
+  const openList = useCallback(
+    (params) => navigation.navigate('ProductListScreen', params),
+    [navigation],
+  );
 
-  const filterCategories = (query) => {
-    const base = categories.map(cat => ({
-      ...cat,
-      _productCount: getCategoryProductCount(cat._id),
-    }));
-    if (!query.trim()) {
-      setFilteredCategories(base);
-    } else {
-      setFilteredCategories(
-        base.filter(cat => cat.name?.toLowerCase().includes(query.toLowerCase()))
+  const renderRailItem = useCallback(
+    ({ item }) => {
+      const active = selected?._id === item._id;
+      return (
+        <PressableScale onPress={() => setSelectedId(item._id)} haptic="selection" scaleTo={0.97} style={[styles.railItem, active && styles.railItemActive]}>
+          {active ? <View style={styles.railMarker} /> : null}
+          <View style={[styles.railImg, active && styles.railImgActive]}>
+            {item.image ? <SmartImage uri={item.image} width={44} style={styles.fill} /> : <Ionicons name="pricetag-outline" size={18} color={colors.primary} />}
+          </View>
+          <Text variant="caption" align="center" numberOfLines={2} color={active ? 'primaryDark' : 'textSecondary'} style={active && styles.bold}>
+            {capitalize(item.name)}
+          </Text>
+        </PressableScale>
       );
-    }
-  };
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([
-      dispatch(fetchCategories()),
-      dispatch(getProducts()),
-      dispatch(getTypes()),
-    ]);
-    setRefreshing(false);
-  }, [dispatch]);
-
-  const handleCategoryPress = (category) => {
-    navigation.navigate('ProductListScreen', {
-      categoryId: category._id,
-      categoryName: category.name,
-    });
-  };
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // ── Animations du header ──────────────────────────────────────────────────
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-  const titleScale = scrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [1, 0.82],
-    extrapolate: 'clamp',
-  });
-  const subtitleOpacity = scrollY.interpolate({
-    inputRange: [0, 40],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  // ── Rendus ────────────────────────────────────────────────────────────────
-  const renderCategoryCard = ({ item, index }) => (
-    <CategoryCard item={item} index={index} onPress={handleCategoryPress} />
-  );
-
-  const renderSkeletonLoader = () => (
-    <View style={styles.skeletonGrid}>
-      {[0, 1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
-    </View>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconCircle}>
-        <MaterialCommunityIcons name="package-variant-closed" size={56} color="#30A08B" />
-      </View>
-      <Text style={styles.emptyTitle}>Aucune catégorie trouvée</Text>
-      <Text style={styles.emptySubtitle}>
-        {searchQuery
-          ? 'Essayez une autre recherche'
-          : 'Les catégories seront bientôt disponibles'}
-      </Text>
-      {searchQuery.length > 0 && (
-        <TouchableOpacity style={styles.emptyResetBtn} onPress={() => setSearchQuery('')}>
-          <Text style={styles.emptyResetText}>Effacer la recherche</Text>
-        </TouchableOpacity>
-      )}
-    </View>
+    },
+    [selected?._id],
   );
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#30A08B" />
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <Text variant="h1" style={styles.flex}>Catégories</Text>
+        <PressableScale onPress={() => navigation.navigate('Search')} style={styles.searchBtn} accessibilityLabel="Rechercher">
+          <Ionicons name="search" size={18} color={colors.textSecondary} />
+          <Text variant="small" color="textMuted">Rechercher</Text>
+        </PressableScale>
+      </View>
 
-      {/* ── Header animé ── */}
-      <Animated.View style={[styles.headerContainer, { height: headerHeight }]}>
-        <LinearGradient
-          colors={['#30A08B', '#27897A', '#1E6B5F']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-
-        {/* Cercles décoratifs */}
-        <View style={styles.headerDecorCircle1} />
-        <View style={styles.headerDecorCircle2} />
-
-        <View style={styles.headerContent}>
-          {/* Ligne titre */}
-          <Animated.View
-            style={[styles.headerTop, { transform: [{ scale: titleScale }] }]}
-          >
-            <View style={styles.headerLeft}>
-              <View style={styles.iconBadge}>
-                <Ionicons name="grid" size={22} color="#FFF" />
-              </View>
-              <View>
-                <Text style={styles.headerTitle}>Catégories</Text>
-                <Animated.Text style={[styles.headerSubtitle, { opacity: subtitleOpacity }]}>
-                  {filteredCategories.length}{' '}
-                  {filteredCategories.length === 1 ? 'catégorie' : 'catégories'}
-                </Animated.Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.headerActionBtn} onPress={onRefresh}>
-              <Ionicons name="refresh" size={20} color="#FFF" />
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Barre de recherche */}
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color="#30A08B" />
-            <TextInput
-              ref={searchInputRef}
-              style={styles.searchInput}
-              placeholder="Rechercher une catégorie..."
-              placeholderTextColor="#AAA"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={18} color="#CCC" />
-              </TouchableOpacity>
-            )}
-          </View>
+      {!categories.length ? (
+        <View style={styles.loading}>
+          {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} height={64} radius={radius.md} style={styles.mb10} />)}
         </View>
-      </Animated.View>
-
-      {/* ── Contenu ── */}
-      {loading && !refreshing ? (
-        renderSkeletonLoader()
       ) : (
-        <Animated.FlatList
-          data={filteredCategories}
-          renderItem={renderCategoryCard}
-          keyExtractor={(item) => item._id}
-          numColumns={NUM_COLUMNS}
-          contentContainerStyle={styles.listContent}
-          columnWrapperStyle={styles.columnWrapper}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={renderEmptyState}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#30A08B']}
-              tintColor="#30A08B"
-              progressBackgroundColor="#FFF"
-            />
-          }
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }
-          )}
-          scrollEventThrottle={16}
-        />
+        <View style={styles.body}>
+          <FlatList
+            data={categories}
+            keyExtractor={(c) => c._id}
+            renderItem={renderRailItem}
+            style={styles.rail}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.railContent}
+          />
+
+          <ScrollView style={styles.flex} contentContainerStyle={styles.panel} showsVerticalScrollIndicator={false}>
+            {selected ? (
+              <>
+                <PressableScale onPress={() => openList({ categoryId: selected._id, categoryName: selected.name })} scaleTo={0.98} style={styles.hero}>
+                  {selected.image ? <SmartImage uri={selected.image} width={260} style={StyleSheet.absoluteFill} /> : null}
+                  <LinearGradient colors={['rgba(15,61,52,0.15)', 'rgba(15,61,52,0.85)']} style={StyleSheet.absoluteFill} />
+                  <View style={styles.heroText}>
+                    <Text variant="h2" color="textInverse" numberOfLines={2}>{capitalize(selected.name)}</Text>
+                    <View style={styles.heroCta}>
+                      <Text variant="smallMedium" color="textInverse">Tout voir</Text>
+                      <Ionicons name="arrow-forward" size={14} color={colors.textInverse} />
+                    </View>
+                  </View>
+                </PressableScale>
+
+                {subTypes.length ? (
+                  <>
+                    <Text variant="title" style={styles.subTitle}>Sous-catégories</Text>
+                    <View style={styles.typeGrid}>
+                      {subTypes.map((t) => (
+                        <PressableScale
+                          key={t._id}
+                          onPress={() => openList({ categoryId: selected._id, categoryName: t.name, title: capitalize(t.name), typeId: t._id })}
+                          style={styles.typeCell}
+                          scaleTo={0.95}
+                        >
+                          <View style={styles.typeIcon}>
+                            <Text variant="h3" color="primaryDark">{capitalize(t.name).charAt(0)}</Text>
+                          </View>
+                          <Text variant="caption" align="center" numberOfLines={2}>{capitalize(t.name)}</Text>
+                        </PressableScale>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+
+                <View style={styles.shortcuts}>
+                  <PressableScale onPress={() => openList({ filter: 'promo', categoryName: 'Promotions' })} style={styles.shortcut} scaleTo={0.97}>
+                    <LinearGradient colors={gradients.promo} style={styles.shortcutIcon}>
+                      <Ionicons name="flame" size={16} color={colors.textInverse} />
+                    </LinearGradient>
+                    <Text variant="smallMedium" style={styles.flex}>Promotions</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  </PressableScale>
+                  <PressableScale onPress={() => openList({ filter: 'new', categoryName: 'Nouveautés' })} style={styles.shortcut} scaleTo={0.97}>
+                    <LinearGradient colors={gradients.brand} style={styles.shortcutIcon}>
+                      <Ionicons name="sparkles" size={16} color={colors.textInverse} />
+                    </LinearGradient>
+                    <Text variant="smallMedium" style={styles.flex}>Nouveautés</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  </PressableScale>
+                </View>
+              </>
+            ) : null}
+          </ScrollView>
+        </View>
       )}
     </View>
   );
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F4F6',
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  bold: { fontFamily: 'Inter_600SemiBold' },
+  mb10: { marginBottom: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 12 },
+  searchBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, height: 38, paddingHorizontal: 14,
+    borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
+  loading: { padding: GUTTER },
+  body: { flex: 1, flexDirection: 'row' },
 
-  // ─ Header ─
-  headerContainer: {
-    overflow: 'hidden',
-    zIndex: 100,
-    elevation: 10,
-    shadowColor: '#30A08B',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-  },
-  headerDecorCircle1: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    top: -60,
-    right: -40,
-  },
-  headerDecorCircle2: {
-    position: 'absolute',
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    bottom: 10,
-    left: -25,
-  },
-  headerContent: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 54 : 38,
-    paddingHorizontal: 18,
-    paddingBottom: 14,
-    justifyContent: 'space-between',
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-    transformOrigin: 'left center',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFF',
-    letterSpacing: 0.3,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  headerActionBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 46,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-  },
+  rail: { width: RAIL_W, flexGrow: 0, backgroundColor: colors.surfaceAlt },
+  railContent: { paddingVertical: 6 },
+  railItem: { alignItems: 'center', paddingVertical: 12, paddingHorizontal: 6, gap: 6 },
+  railItemActive: { backgroundColor: colors.bg },
+  railMarker: { position: 'absolute', left: 0, top: 14, bottom: 14, width: 3, borderRadius: 2, backgroundColor: colors.primary },
+  railImg: { width: 44, height: 44, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  railImgActive: { borderWidth: 2, borderColor: colors.primary },
+  fill: { width: '100%', height: '100%' },
 
-  // ─ Grille ─
-  listContent: {
-    paddingHorizontal: CARD_MARGIN,
-    paddingTop: 14,
-    paddingBottom: 24,
+  panel: { padding: 14, paddingBottom: 32 },
+  hero: { height: 130, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.primaryDeep, justifyContent: 'flex-end' },
+  heroText: { padding: 14, gap: 6 },
+  heroCta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  subTitle: { marginTop: 20, marginBottom: 12 },
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 },
+  typeCell: { width: '33.33%', alignItems: 'center', paddingHorizontal: 4, gap: 6 },
+  typeIcon: { width: 54, height: 54, borderRadius: radius.lg, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  shortcuts: { marginTop: 24, gap: 10 },
+  shortcut: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: radius.md,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: CARD_MARGIN,
-  },
-  cardWrapper: {
-    width: CARD_WIDTH,
-  },
-  categoryCard: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: '#E8E8E8',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-  },
-  countBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  countText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#30A08B',
-  },
-  cardFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 12,
-    paddingBottom: 14,
-  },
-  categoryName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFF',
-    letterSpacing: 0.2,
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  countRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  productCountText: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.88)',
-    fontWeight: '600',
-  },
-  arrowBadge: {
-    position: 'absolute',
-    bottom: 12,
-    right: 10,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-
-  // ─ Skeleton ─
-  skeletonGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: CARD_MARGIN,
-    paddingTop: 14,
-    gap: CARD_MARGIN,
-  },
-  skeletonCard: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    borderRadius: 18,
-    backgroundColor: '#E0E0E0',
-    overflow: 'hidden',
-    padding: 12,
-    justifyContent: 'flex-end',
-  },
-  skeletonInner: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#EBEBEB',
-  },
-  skeletonLabel: {
-    height: 14,
-    width: '70%',
-    borderRadius: 7,
-    backgroundColor: '#D0D0D0',
-    marginBottom: 8,
-  },
-  skeletonSub: {
-    height: 10,
-    width: '45%',
-    borderRadius: 5,
-    backgroundColor: '#D8D8D8',
-  },
-
-  // ─ Empty ─
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 72,
-    paddingHorizontal: 40,
-  },
-  emptyIconCircle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#E8F7F4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#222',
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 8,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  emptyResetBtn: {
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: '#30A08B',
-  },
-  emptyResetText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  shortcutIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });
