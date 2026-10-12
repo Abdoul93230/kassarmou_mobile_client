@@ -1,530 +1,225 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Image, Alert, StatusBar, Platform,
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import React from 'react';
+import { Linking, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
-import { useSelector } from 'react-redux';
-import { API_URL } from '../config/api';
-import { COLORS } from '../config/constants';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useOrderQuery } from '../redux/catalogApi';
+import useReorder from '../hooks/useReorder';
+import StageBadge from '../components/orders/StageBadge';
+import { Button, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
+import { SUPPORT } from '../config/env';
+import { formatPrice } from '../utils/formatPrice';
+import { formatDate, orderDate, orderPreview, orderStage } from '../utils/orders';
+import { colors, GUTTER, radius, shadows } from '../theme';
 
-const BRAND = '#30A08B';
-const BRAND_LIGHT = '#E8F5F1';
+const F = (n) => `${formatPrice(n || 0)} FCFA`;
+const STEPS = [
+  { label: 'Commande passée', icon: 'receipt-outline' },
+  { label: 'En préparation', icon: 'cube-outline' },
+  { label: 'En livraison', icon: 'car-outline' },
+  { label: 'Livrée', icon: 'checkmark-done' },
+];
 
-export default function OrderDetailScreen({ route, navigation }) {
-  const { orderId } = route.params;
-  const user = useSelector(state => state.auth.user);
-  const [order, setOrder] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const insets = useSafeAreaInsets();
-
-  useEffect(() => { fetchOrderDetails(); }, [orderId]);
-
-  const fetchOrderDetails = async () => {
-    try {
-      setLoading(true); setError(null);
-      const response = await axios.get(`${API_URL}/getCommandesById/${orderId}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      setOrder(response.data.commande);
-    } catch (err) {
-      console.error('Error fetching order details:', err);
-      setError(err.response?.data?.message || 'Erreur lors du chargement de la commande');
-    } finally { setLoading(false); }
-  };
-
-  const fmtPrice = (price) => {
-    if (!price && price !== 0) return '0';
-    return Math.round(price).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  };
-
-  const fmtDate = (d) => {
-    try { return new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
-    catch { return d; }
-  };
-
-  const fmtDateTime = (d) => {
-    try { return new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-    catch { return d; }
-  };
-
-  const getStatusColor = (status) => {
-    const s = (status || '').toLowerCase();
-    if (['payé', 'recu', 'livré', 'payé à la livraison', 'validée'].includes(s)) return '#16a34a';
-    if (['en cours', 'en_attente', 'en attente', 'en traitement', 'payée'].includes(s)) return '#f59e0b';
-    if (['annulé', 'annulée', 'échec'].includes(s)) return '#ef4444';
-    return '#6b7280';
-  };
-
-  const isCancelled = (order?.statusLivraison || '').toLowerCase() === 'annulé' || (order?.etatTraitement || '').toLowerCase() === 'annulé';
-
-  // Logique identique au web (CommandeSuivi.tsx lignes 319-321)
-  const shouldShowPaymentButton = () => {
-    if (!order) return false;
-    // "payé à la livraison" garde le bouton : l'acheteur peut toujours payer en ligne
-    const finalPaidStatuses = ['payé', 'recu', 'payé par téléphone'];
-    return order.statusPayment === 'échec' || !finalPaidStatuses.includes(order.statusPayment || '');
-  };
-
-  const handlePaymentRetry = async () => {
-    try {
-      if (order?.prod) {
-        await AsyncStorage.setItem('panier', JSON.stringify(order.prod));
-        if (order?.reference && order?._id) {
-          await AsyncStorage.setItem('pendingOrder', JSON.stringify({ commandeId: order._id, transactionId: order.reference, timestamp: Date.now() }));
-        }
-
-        // Avoid stale auto-check redirect loops on retry flow.
-        await AsyncStorage.removeItem('paymentInitiated');
-        
-        // Sauvegarder le code promo s'il y en a un pour l'auto-appliquer dans le panier (Cles identiques au WEB)
-        if (order?.idCodePro) {
-          await AsyncStorage.setItem('idCodePro', order.idCodePro);
-          if (order?.codePromo) {
-            await AsyncStorage.setItem('appliedPromoCode', order.codePromo);
-          }
-        } else {
-          await AsyncStorage.removeItem('idCodePro');
-          await AsyncStorage.removeItem('appliedPromoCode');
-        }
-
-        Alert.alert('Reprendre le paiement', 'Vous allez être redirigé vers le panier pour finaliser le paiement.', [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Continuer', onPress: () => navigation.navigate('Cart') },
-        ]);
-      }
-    } catch { Alert.alert('Erreur', 'Impossible de préparer le paiement.'); }
-  };
-
-  // ─── Loading ──────────
-  if (loading) {
+function Timeline({ stage }) {
+  if (stage.key === 'cancelled') {
     return (
-      <SafeAreaView style={st.container}>
-        <View style={st.center}>
-          <ActivityIndicator size="large" color={BRAND} />
-          <Text style={st.loadingText}>Chargement de la commande…</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.cancelled}>
+        <Ionicons name="close-circle" size={20} color={colors.danger} />
+        <Text variant="bodyMedium" color="danger">Cette commande a été annulée</Text>
+      </View>
     );
   }
-
-  // ─── Error ──────────
-  if (error || !order) {
-    return (
-      <SafeAreaView style={st.container}>
-        <View style={st.center}>
-          <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
-          <Text style={st.errorText}>{error || 'Commande non trouvée'}</Text>
-          <TouchableOpacity style={st.retryBtn} onPress={fetchOrderDetails}><Text style={st.retryText}>Réessayer</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 12 }}><Text style={{ color: BRAND, fontWeight: '600' }}>Retour</Text></TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ─── Main Render ──────────
+  const current = stage.key === 'unpaid' ? 0 : stage.step;
   return (
-    <>
-      <StatusBar barStyle="light-content" backgroundColor={BRAND} />
-      <View style={st.statusBar} />
-      <SafeAreaView style={st.container} edges={['bottom']}>
-        {/* Header */}
-        <View style={st.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="arrow-back" size={22} color="#fff" />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={st.headerTitle}>Commande #{order._id?.slice(0, 7)}…</Text>
-            <Text style={st.headerSub}>Commandé le {fmtDate(order.date)}</Text>
-          </View>
-          <View style={[st.headerBadge, { backgroundColor: getStatusColor(order.etatTraitement) }]}>
-            <Text style={st.headerBadgeText}>{order.etatTraitement || 'En attente'}</Text>
-          </View>
-        </View>
-
-        <ScrollView style={st.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
-
-          {/* ── Cancellation Alert ── */}
-          {isCancelled && (
-            <View style={st.alertCard}>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Ionicons name="alert-circle" size={22} color="#ef4444" />
-                <View style={{ flex: 1 }}>
-                  <Text style={st.alertTitle}>Commande annulée</Text>
-                  <Text style={st.alertBody}>Cette commande a été annulée. Raisons possibles :</Text>
-                  {['Produit non disponible en stock', 'Problème de livraison', 'Annulation demandée', 'Problème de paiement'].map((r, i) => (
-                    <Text key={i} style={st.alertBullet}>  •  {r}</Text>
-                  ))}
-                  <Text style={st.alertHint}>💡 Vous pouvez relancer cette commande depuis le bouton ci-dessous.</Text>
-                </View>
+    <View>
+      {STEPS.map((s, i) => {
+        const done = i <= current;
+        const last = i === STEPS.length - 1;
+        return (
+          <View key={s.label} style={styles.step}>
+            <View style={styles.stepRail}>
+              <View style={[styles.stepDot, done && styles.stepDotDone]}>
+                <Ionicons name={s.icon} size={14} color={done ? colors.textInverse : colors.textMuted} />
               </View>
+              {!last ? <View style={[styles.stepLine, i < current && styles.stepLineDone]} /> : null}
             </View>
-          )}
-
-          {/* ── Payment Retry ── */}
-          {shouldShowPaymentButton() && (
-            <TouchableOpacity style={st.payBtn} onPress={handlePaymentRetry} activeOpacity={0.8}>
-              <Ionicons name="card" size={20} color="#fff" />
-              <Text style={st.payBtnText}>{isCancelled ? 'Relancer la commande' : 'Faire le paiement'}</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
-            </TouchableOpacity>
-          )}
-
-          {/* ── Status Grid ── */}
-          <View style={st.section}>
-            <View style={st.sectionHeader}>
-              <Ionicons name="pulse" size={20} color={BRAND} />
-              <Text style={st.sectionTitle}>Statut de la commande</Text>
-            </View>
-            <View style={st.statusGrid}>
-              {[
-                { label: 'Paiement', value: order.statusPayment === 'payé par téléphone' ? 'Paiement assisté' : (order.statusPayment || 'En attente'), icon: 'card-outline' },
-                { label: 'Livraison', value: order.statusLivraison || 'En cours', icon: 'bicycle-outline' },
-                { label: 'Traitement', value: order.etatTraitement || 'En attente', icon: 'settings-outline' },
-                { label: 'Référence', value: order.reference || '—', icon: 'barcode-outline', noColor: true },
-              ].map((item, i) => (
-                <View key={i} style={st.statusTile}>
-                  <Ionicons name={item.icon} size={20} color={BRAND} />
-                  <Text style={st.statusTileLabel}>{item.label}</Text>
-                  <Text style={[st.statusTileValue, !item.noColor && { color: getStatusColor(item.value) }]} numberOfLines={2}>
-                    {item.value}
-                  </Text>
-                </View>
-              ))}
+            <View style={styles.stepText}>
+              <Text variant={i === current ? 'title' : 'body'} color={done ? 'text' : 'textMuted'}>{s.label}</Text>
+              {i === current && stage.key === 'unpaid' ? <Text variant="caption" color="wood">Paiement en attente</Text> : null}
             </View>
           </View>
-
-          {/* ── Delivery Info ── */}
-          {order.livraisonDetails && (
-            <View style={st.section}>
-              <View style={st.sectionHeader}>
-                <Ionicons name="location" size={20} color={BRAND} />
-                <Text style={st.sectionTitle}>Détails de livraison</Text>
-              </View>
-              <View style={st.deliveryGrid}>
-                {[
-                  { icon: 'person', label: 'Client', value: order.livraisonDetails.customerName || order.livraisonDetails.name },
-                  { icon: 'mail', label: 'Email', value: order.livraisonDetails.email },
-                  { icon: 'map', label: 'Région', value: order.livraisonDetails.region },
-                  { icon: 'home', label: 'Quartier', value: order.livraisonDetails.quartier },
-                  { icon: 'call', label: 'Téléphone', value: order.livraisonDetails.numero },
-                  { icon: 'navigate', label: 'Frais', value: `${fmtPrice(order.fraisLivraison || 0)} CFA` },
-                ].filter(d => d.value).map((d, i) => (
-                  <View key={i} style={st.deliveryTile}>
-                    <View style={st.deliveryIcon}><Ionicons name={d.icon} size={18} color={BRAND} /></View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.deliveryLabel}>{d.label}</Text>
-                      <Text style={st.deliveryValue}>{d.value}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-              {order.livraisonDetails.description && (
-                <View style={{ marginTop: 10, padding: 12, backgroundColor: '#f9fafb', borderRadius: 10 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>📝 {order.livraisonDetails.description}</Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* ── Products ── */}
-          <View style={st.section}>
-            <View style={st.sectionHeader}>
-              <Ionicons name="cube" size={20} color={BRAND} />
-              <Text style={st.sectionTitle}>Articles commandés ({order.prod?.length || 0})</Text>
-            </View>
-            {(() => {
-              // Gestion robuste du format prod (peut être [[Obj]] ou [Obj])
-              const rawProd = order.prod || [];
-              const products = (Array.isArray(rawProd[0]) && rawProd.length === 1) 
-                ? rawProd[0] 
-                : rawProd;
-              
-              if (!products || products.length === 0) {
-                return (
-                  <View style={{ alignItems: 'center', paddingVertical: 30 }}>
-                    <Ionicons name="cube-outline" size={48} color="#d1d5db" />
-                    <Text style={{ color: '#9ca3af', marginTop: 8 }}>Aucun article trouvé</Text>
-                  </View>
-                );
-              }
-
-              return products.map((product, index) => {
-                const imgUri = product.imageUrl || product.image || product.image1 || (product.images && product.images[0]) || null;
-                const price = product.prix || product.price || 0;
-                
-                return (
-                  <View key={index} style={[st.productCard, index === products.length - 1 && { borderBottomWidth: 0 }]}>
-                    <View style={st.productImgContainer}>
-                      {imgUri ? (
-                        <Image source={{ uri: imgUri }} style={st.productImage} resizeMode="cover" />
-                      ) : (
-                        <View style={[st.productImage, { backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }]}>
-                          <Ionicons name="image-outline" size={24} color="#d1d5db" />
-                        </View>
-                      )}
-                    </View>
-                    
-                    <View style={st.productInfo}>
-                      <Text style={st.productName} numberOfLines={2}>{product.name || 'Produit'}</Text>
-                      <View style={st.productMeta}>
-                        {product.size && <Text style={st.metaTag}>📏 {product.size}</Text>}
-                        {product.color && <Text style={st.metaTag}>🎨 {product.color}</Text>}
-                      </View>
-                      <View style={st.productBottom}>
-                        <View style={st.qtyBadge}>
-                          <Text style={st.qtyText}>×{product.quantity || 1}</Text>
-                        </View>
-                        <Text style={st.productPrice}>{fmtPrice(price)} CFA</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              });
-            })()}
-          </View>
-
-          {/* ── Financial Summary ── */}
-          <View style={st.section}>
-            <View style={st.sectionHeader}>
-              <Ionicons name="receipt" size={20} color={BRAND} />
-              <Text style={st.sectionTitle}>Résumé financier</Text>
-            </View>
-
-            {/* Promo badge */}
-            {order.codePromo && (
-              <View style={st.promoBanner}>
-                <Ionicons name="pricetag" size={16} color="#16a34a" />
-                <Text style={st.promoBannerText}>Code promo : {order.codePromo}</Text>
-                <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
-              </View>
-            )}
-
-            <View style={st.financeCard}>
-              {/* Sous-total */}
-              <View style={st.finRow}>
-                <Text style={st.finLabel}>Sous-total (articles)</Text>
-                <Text style={st.finValue}>{fmtPrice(order.prixTotal || order.fraisSousTotalArticles || (order.prix - (order.fraisLivraison || 0) + (order.reduction || 0)))} CFA</Text>
-              </View>
-
-              {/* Shipping */}
-              <View style={st.finRow}>
-                <Text style={st.finLabel}>Frais d'expédition</Text>
-                <Text style={st.finValue}>
-                  {(order.fraisLivraison && order.fraisLivraison > 0) ? `+ ${fmtPrice(order.fraisLivraison)} CFA` : 'Gratuit'}
-                </Text>
-              </View>
-
-              {/* Reduction */}
-              {order.reduction > 0 && (
-                <View style={st.promoFinRow}>
-                  <Text style={st.promoFinLabel}>Réduction appliquée</Text>
-                  <Text style={st.promoFinValue}>-{fmtPrice(order.reduction)} CFA</Text>
-                </View>
-              )}
-
-              {/* Total */}
-              <View style={st.finDivider} />
-              <View style={st.finTotalRow}>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={st.finTotalLabel}>Total à payer</Text>
-                  <Text style={st.finTotalSub}>TVA incluse le cas échéant</Text>
-                </View>
-                <Text style={st.finTotalValue}>{fmtPrice(order.prix)} CFA</Text>
-              </View>
-            </View>
-
-            {/* Payment mode footer */}
-            <View style={st.paymentFooter}>
-              <View style={{ flex: 1, paddingRight: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Ionicons name="card-outline" size={16} color={BRAND} />
-                  <Text style={st.payFooterLabel}>Mode de paiement</Text>
-                </View>
-                <Text style={st.payFooterValue}>
-                  {order.statusPayment === 'payé par téléphone' ? 'Paiement assisté' : order.statusPayment || 'Non spécifié'}
-                </Text>
-              </View>
-              <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                <Text style={[st.payFooterLabel, { marginBottom: 4 }]}>Référence</Text>
-                <Text style={st.payFooterRef}>{order.reference || '—'}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* ── Order History Timeline ── */}
-          <View style={st.section}>
-            <View style={st.sectionHeader}>
-              <Ionicons name="time" size={20} color={BRAND} />
-              <Text style={st.sectionTitle}>Suivi de la commande</Text>
-            </View>
-            <View style={st.timeline}>
-              {[
-                {
-                  title: 'Commande passée',
-                  sub: fmtDateTime(order.date),
-                  done: true,
-                  color: BRAND,
-                },
-                {
-                  title: 'Paiement',
-                  sub: order.statusPayment === 'payé par téléphone' ? 'Paiement assisté'
-                    : order.statusPayment === 'payé à la livraison' ? 'Payé à la livraison'
-                    : order.statusPayment === 'payé' || order.statusPayment === 'recu' ? 'Paiement confirmé'
-                    : order.statusPayment === 'échec' ? 'Échec du paiement'
-                    : 'En attente de paiement',
-                  done: ['payé', 'recu', 'payé à la livraison', 'payé par téléphone'].includes(order.statusPayment || ''),
-                  error: order.statusPayment === 'échec',
-                  color: order.statusPayment === 'échec' ? '#ef4444' : '#3b82f6',
-                },
-                {
-                  title: 'Traitement',
-                  sub: { traitement: 'En traitement', 'reçu par le livreur': 'Remis au livreur',
-                    'en cours de livraison': 'En livraison', 'livraison reçu': 'Livraison confirmée',
-                    livré: 'Livré', Traité: 'Traité', annulé: 'Annulée' }[order.etatTraitement] || order.etatTraitement || 'En attente',
-                  done: ['livraison reçu', 'livré', 'Traité'].includes(order.etatTraitement || ''),
-                  error: order.etatTraitement === 'annulé',
-                  color: order.etatTraitement === 'annulé' ? '#ef4444'
-                    : ['livraison reçu', 'livré', 'Traité'].includes(order.etatTraitement || '') ? '#16a34a' : '#f59e0b',
-                },
-                {
-                  title: 'Livraison',
-                  sub: isCancelled ? 'Annulée'
-                    : order.statusLivraison === 'livré' || order.etatTraitement === 'livré' ? 'Livrée'
-                    : order.etatTraitement === 'en cours de livraison' ? 'En cours de livraison'
-                    : order.etatTraitement === 'reçu par le livreur' ? 'Remis au livreur'
-                    : 'En attente',
-                  done: order.statusLivraison === 'livré' || order.etatTraitement === 'livré'
-                    || order.etatTraitement === 'livraison reçu' || order.etatTraitement === 'Traité',
-                  error: isCancelled,
-                  color: isCancelled ? '#ef4444'
-                    : (order.statusLivraison === 'livré' || order.etatTraitement === 'livré') ? '#16a34a' : '#9ca3af',
-                },
-              ].map((step, i, arr) => (
-                <View key={i} style={st.timelineItem}>
-                  <View style={[st.dot, { backgroundColor: step.error ? '#ef4444' : step.done ? step.color : '#d1d5db' }]} />
-                  {i < arr.length - 1 && <View style={st.timelineLine} />}
-                  <View style={st.timelineContent}>
-                    <Text style={[st.timelineTitle, step.error && { color: '#ef4444' }, step.done && !step.error && { color: step.color }]}>
-                      {step.title}
-                    </Text>
-                    <Text style={st.timelineDate}>{step.sub}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* ── Help ── */}
-          <TouchableOpacity style={st.helpBtn} onPress={() => Alert.alert('Aide', 'Contactez le support pour toute question concernant votre commande.')} activeOpacity={0.8}>
-            <Ionicons name="help-circle" size={20} color="#fff" />
-            <Text style={st.helpBtnText}>Besoin d'aide ?</Text>
-          </TouchableOpacity>
-
-        </ScrollView>
-      </SafeAreaView>
-    </>
+        );
+      })}
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────
-const st = StyleSheet.create({
-  statusBar: { position: 'absolute', top: 0, left: 0, right: 0, height: Platform.OS === 'ios' ? 50 : 0, backgroundColor: BRAND, zIndex: 1000 },
-  container: { flex: 1, backgroundColor: '#f5f6fa' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  loadingText: { marginTop: 14, fontSize: 15, color: '#6b7280' },
-  errorText: { fontSize: 15, color: '#ef4444', textAlign: 'center', marginTop: 16, marginBottom: 20, lineHeight: 22 },
-  retryBtn: { backgroundColor: BRAND, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12 },
-  retryText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+function Line({ label, value, tone, bold }) {
+  return (
+    <View style={styles.line}>
+      <Text variant={bold ? 'h3' : 'body'} color={bold ? 'text' : 'textSecondary'}>{label}</Text>
+      <Text variant={bold ? 'price' : 'bodyMedium'} color={tone || 'text'}>{value}</Text>
+    </View>
+  );
+}
 
-  // Header
-  header: { backgroundColor: BRAND, paddingTop: Platform.OS === 'ios' ? 72 : 24, paddingBottom: 18, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#fff' },
-  headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2, textTransform: 'capitalize' },
-  headerBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  headerBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff', textTransform: 'capitalize' },
+/** Suivi détaillé d'une commande */
+export default function OrderDetailScreen({ route, navigation }) {
+  const { orderId, order: initial } = route.params || {};
+  const insets = useSafeAreaInsets();
+  const { data, isLoading, isFetching, isError, refetch } = useOrderQuery(orderId, { skip: !orderId });
+  const order = data || initial;
+  const reorder = useReorder(navigation);
 
-  scroll: { flex: 1 },
+  if (!order) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.header}>
+          <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
+        </View>
+        {isLoading ? (
+          <View style={styles.pad}><Skeleton height={220} radius={radius.lg} /><Skeleton height={140} radius={radius.lg} style={styles.mt12} /></View>
+        ) : (
+          <EmptyState icon="alert-circle-outline" title="Commande introuvable" message={isError ? 'Vérifiez votre connexion puis réessayez.' : undefined} actionLabel="Réessayer" onAction={refetch} />
+        )}
+      </View>
+    );
+  }
 
-  // Cancellation alert
-  alertCard: { margin: 16, marginBottom: 0, padding: 16, backgroundColor: '#fef2f2', borderRadius: 16, borderWidth: 1, borderColor: '#fecaca' },
-  alertTitle: { fontSize: 15, fontWeight: '700', color: '#991b1b', marginBottom: 4 },
-  alertBody: { fontSize: 13, color: '#b91c1c', lineHeight: 20 },
-  alertBullet: { fontSize: 12, color: '#b91c1c', marginTop: 2 },
-  alertHint: { fontSize: 12, color: '#991b1b', fontWeight: '600', marginTop: 10, backgroundColor: '#fff', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#fecaca' },
+  const stage = orderStage(order);
+  const items = orderPreview(order);
+  const d = order.livraisonDetails || {};
+  const ref = String(order.reference || order._id);
 
-  // Payment CTA
-  payBtn: { marginHorizontal: 16, marginTop: 16, backgroundColor: BRAND, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, borderRadius: 14, elevation: 3, shadowColor: BRAND, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
-  payBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  const contactSupport = () => {
+    const text = encodeURIComponent(`Bonjour, j'ai une question sur ma commande n° ${ref}.`);
+    Linking.openURL(`https://wa.me/${SUPPORT.whatsapp}?text=${text}`).catch(() => {});
+  };
 
-  // Sections
-  section: { margin: 16, marginBottom: 0, backgroundColor: '#fff', borderRadius: 16, padding: 18, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  return (
+    <View style={styles.screen}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
+        <View style={styles.flex}>
+          <Text variant="h2">Commande n° {ref.slice(-8)}</Text>
+          <Text variant="caption" color="textMuted">Passée le {formatDate(orderDate(order))}</Text>
+        </View>
+        <IconButton name="share-outline" onPress={() => Share.share({ message: `Ma commande Ihambaobab n° ${ref}` }).catch(() => {})} bg={colors.surfaceAlt} accessibilityLabel="Partager la référence" />
+      </View>
 
-  // Status Grid
-  statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statusTile: { width: '47%', backgroundColor: '#f9fafb', borderRadius: 12, padding: 14, gap: 6 },
-  statusTileLabel: { fontSize: 11, color: '#9ca3af', fontWeight: '600' },
-  statusTileValue: { fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'capitalize' },
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
+        refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.card}>
+          <View style={styles.cardHead}>
+            <Text variant="h3">Suivi</Text>
+            <StageBadge stage={stage} />
+          </View>
+          <Timeline stage={stage} />
+        </View>
 
-  // Delivery Grid
-  deliveryGrid: { gap: 10 },
-  deliveryTile: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f9fafb', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12 },
-  deliveryIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: BRAND_LIGHT, justifyContent: 'center', alignItems: 'center' },
-  deliveryLabel: { fontSize: 11, color: '#9ca3af', marginBottom: 1 },
-  deliveryValue: { fontSize: 14, fontWeight: '600', color: '#374151' },
+        <View style={styles.card}>
+          <Text variant="h3" style={styles.mb10}>Livraison</Text>
+          <View style={styles.addr}>
+            <Ionicons name="location" size={18} color={colors.primary} />
+            <View style={styles.flex}>
+              <Text variant="title">{d.customerName || '—'}</Text>
+              {d.numero ? <Text variant="body" color="textSecondary">{d.numero}</Text> : null}
+              <Text variant="body" color="textSecondary">{[d.quartier, d.region].filter(Boolean).join(', ')}</Text>
+              {d.description ? <Text variant="small" color="textMuted" style={styles.mt4}>{d.description}</Text> : null}
+            </View>
+          </View>
+        </View>
 
-  // Product Cards
-  productCard: { flexDirection: 'row', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  productImg: { width: 72, height: 72, borderRadius: 12 },
-  productImgPlaceholder: { backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
-  productInfo: { flex: 1, justifyContent: 'space-between' },
-  productName: { fontSize: 14, fontWeight: '600', color: '#111827', lineHeight: 20 },
-  productMeta: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  metaTag: { fontSize: 11, color: '#6b7280', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  productBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  qtyBadge: { backgroundColor: BRAND_LIGHT, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
-  qtyText: { fontSize: 12, fontWeight: '700', color: BRAND },
-  productPrice: { fontSize: 15, fontWeight: '800', color: BRAND },
+        <View style={styles.card}>
+          <Text variant="h3" style={styles.mb10}>Articles ({items.length})</Text>
+          {items.map((p, i) => {
+            const qty = Number(p.quantite || p.quantity) || 1;
+            const variant = [p.color || p.colors?.[0], p.taille || p.sizes?.[0]].filter(Boolean).join(' · ');
+            return (
+              <PressableScale
+                key={`${p._id || i}-${i}`}
+                onPress={() => p._id && navigation.navigate('ProductDetail', { productId: p._id })}
+                style={styles.item}
+                scaleTo={0.99}
+              >
+                <SmartImage uri={p.colorImage || p.imageUrl || p.image1 || p.image} width={60} style={styles.itemImg} />
+                <View style={styles.flex}>
+                  <Text variant="smallMedium" numberOfLines={2}>{p.name}</Text>
+                  {variant ? <Text variant="caption" color="textMuted">{variant}</Text> : null}
+                  <Text variant="caption" color="textSecondary" style={styles.mt4}>Qté {qty}</Text>
+                </View>
+                <Text variant="title">{formatPrice((Number(p.prix || p.price) || 0) * qty)} F</Text>
+              </PressableScale>
+            );
+          })}
+        </View>
 
-  // Financial Summary
-  promoBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#f0fdf4', padding: 12, borderRadius: 12, marginBottom: 14, borderWidth: 1, borderColor: '#bbf7d0' },
-  promoBannerText: { fontSize: 13, fontWeight: '700', color: '#16a34a', flex: 1 },
-  financeCard: { backgroundColor: '#f9fafb', borderRadius: 14, padding: 16 },
-  finRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
-  finLabel: { fontSize: 13, color: '#6b7280', fontWeight: '500', flex: 1, paddingRight: 10 },
-  finValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  promoFinRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: BRAND_LIGHT, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginVertical: 4 },
-  promoFinLabel: { fontSize: 13, color: BRAND, fontWeight: '600', flex: 1, paddingRight: 10 },
-  promoFinValue: { fontSize: 14, fontWeight: '800', color: BRAND },
-  finDivider: { height: 1, backgroundColor: '#e5e7eb', marginVertical: 8 },
-  finTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 },
-  finTotalLabel: { fontSize: 16, fontWeight: '800', color: '#111827' },
-  finTotalSub: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
-  finTotalValue: { fontSize: 22, fontWeight: '800', color: BRAND },
+        <View style={styles.card}>
+          <Text variant="h3" style={styles.mb10}>Paiement</Text>
+          <Line label="Sous-total" value={F(order.prixTotal ?? order.fraisSousTotalArticles)} />
+          {Number(order.reduction) > 0 ? <Line label={`Code ${order.codePromo || 'promo'}`} value={`-${F(order.reduction)}`} tone="success" /> : null}
+          {Number(order.pointsDiscount) > 0 ? <Line label="Baobab Points" value={`-${F(order.pointsDiscount)}`} tone="success" /> : null}
+          <Line label="Livraison" value={Number(order.fraisLivraison) > 0 ? F(order.fraisLivraison) : 'Offerte'} />
+          <View style={styles.divider} />
+          <Line label="Total" value={F(order.prix)} bold />
+          <Text variant="caption" color="textMuted" style={styles.mt8}>Statut du paiement : {order.statusPayment || '—'}</Text>
+        </View>
 
-  // Payment footer
-  paymentFooter: { marginTop: 14, backgroundColor: '#f9fafb', borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  payFooterLabel: { fontSize: 11, color: '#6b7280' },
-  payFooterValue: { fontSize: 13, fontWeight: '700', color: '#111827', textTransform: 'capitalize' },
-  payFooterRef: { fontSize: 13, fontWeight: '700', color: '#111827' },
+        <PressableScale onPress={contactSupport} style={styles.help} scaleTo={0.99}>
+          <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+          <View style={styles.flex}>
+            <Text variant="title">Un souci avec cette commande ?</Text>
+            <Text variant="caption" color="textSecondary">Écrivez au support, la référence est jointe</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </PressableScale>
+      </ScrollView>
 
-  // Timeline
-  timeline: { gap: 0 },
-  timelineItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 50 },
-  dot: { width: 12, height: 12, borderRadius: 6, marginTop: 3 },
-  timelineLine: { position: 'absolute', left: 5, top: 16, width: 2, height: 36, backgroundColor: '#e5e7eb' },
-  timelineContent: { flex: 1, paddingBottom: 16 },
-  timelineTitle: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  timelineDate: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        {stage.key === 'unpaid' ? (
+          <Button title={`Payer ${formatPrice(order.prix)} FCFA`} icon="lock-closed" size="lg" full onPress={() => reorder(order, 'pay')} />
+        ) : (
+          <Button title="Commander à nouveau" icon="refresh" variant="secondary" size="lg" full onPress={() => reorder(order, 'again')} />
+        )}
+      </View>
+    </View>
+  );
+}
 
-  // Help
-  helpBtn: { margin: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BRAND, paddingVertical: 14, borderRadius: 14, elevation: 2 },
-  helpBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  pad: { padding: GUTTER },
+  mt4: { marginTop: 4 },
+  mt8: { marginTop: 8 },
+  mt12: { marginTop: 12 },
+  mb10: { marginBottom: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 10 },
+  card: { marginHorizontal: GUTTER, marginTop: 12, padding: 16, borderRadius: radius.lg, backgroundColor: colors.surface, ...shadows.sm },
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+
+  step: { flexDirection: 'row', gap: 12 },
+  stepRail: { alignItems: 'center', width: 28 },
+  stepDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  stepDotDone: { backgroundColor: colors.primary },
+  stepLine: { width: 2, flex: 1, minHeight: 18, backgroundColor: colors.border, marginVertical: 2 },
+  stepLineDone: { backgroundColor: colors.primary },
+  stepText: { paddingTop: 4, paddingBottom: 14, flex: 1 },
+  cancelled: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
+
+  addr: { flexDirection: 'row', gap: 10 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  itemImg: { width: 60, height: 60, borderRadius: radius.sm },
+  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 8 },
+  help: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: GUTTER, marginTop: 12, padding: 14,
+    borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  },
+  bar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: GUTTER, paddingTop: 12,
+    backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
+  },
 });

@@ -33,3 +33,14 @@ export const IPAY = {
 
 /** Image de profil par défaut historique du backend (à ignorer à l'affichage) */
 export const LEGACY_DEFAULT_AVATAR = 'https://chagona.onrender.com/images/image-1688253105925-0.jpeg';
+
+/** Contacts officiels (identiques au site web) */
+export const SUPPORT = {
+  phone: '+22787727501',
+  phoneDisplay: '+227 87 72 75 01',
+  whatsapp: '22787727501',
+  email: 'support@ihambaobab.com',
+};
+
+/** App vendeur sur le Play Store */
+export const SELLER_APP_ID = 'com.ihambaobab.seller';

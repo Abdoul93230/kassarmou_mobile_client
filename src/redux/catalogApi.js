@@ -22,11 +22,21 @@ const axiosBaseQuery = async ({ url, method = 'get', data, params }) => {
 
 export const PAGE_SIZE = 20;
 
+/**
+ * Règle d'or côté client : seuls les produits PUBLIÉS et non supprimés sont affichés,
+ * quelle que soit la réponse du serveur. (Le fil d'accueil ne renvoie pas isPublished :
+ * il est déjà filtré côté serveur, d'où la tolérance pour un champ absent.)
+ */
+export const isVisibleProduct = (p) =>
+  !!p && !p.isDeleted && (p.isPublished === undefined || p.isPublished === 'Published');
+
+const visibleOnly = (list) => (Array.isArray(list) ? list.filter(isVisibleProduct) : []);
+
 /** Normalise toutes les réponses paginées du backend : { items, page, pages, total } */
 const toPage = (res, fallbackPage = 1) => {
   const items = res?.data ?? res?.products ?? (Array.isArray(res) ? res : []);
   return {
-    items: Array.isArray(items) ? items : [],
+    items: visibleOnly(items),
     page: Number(res?.page) || fallbackPage,
     pages: Number(res?.pages) || 1,
     total: Number(res?.total) || (Array.isArray(items) ? items.length : 0),
@@ -44,7 +54,7 @@ export const catalogApi = createApi({
   baseQuery: axiosBaseQuery,
   keepUnusedDataFor: 300, // 5 min : retour instantané sur un écran déjà visité
   refetchOnReconnect: true,
-  tagTypes: ['Reviews'],
+  tagTypes: ['Reviews', 'Orders'],
   endpoints: (build) => ({
     /** Liste de produits (une page) — rails de l'accueil. args : { sort, promo, category, type, limit } */
     products: build.query({
@@ -81,7 +91,7 @@ export const catalogApi = createApi({
     /** Produit seul (liens partagés, deep links) */
     product: build.query({
       query: (id) => ({ url: `/ProductClient/${id}` }),
-      transformResponse: (res) => res?.data || null,
+      transformResponse: (res) => (isVisibleProduct(res?.data) ? res.data : null),
     }),
 
     /** Avis d'un produit (plus récents d'abord) */
@@ -152,6 +162,33 @@ export const catalogApi = createApi({
       transformResponse: (res) => res?.stats || null,
     }),
 
+    /** Produits aimés par l'utilisateur (plus récents d'abord, produits retirés exclus) */
+    likedProducts: build.query({
+      query: (userId) => ({ url: `/likesClient/user/${userId}` }),
+      transformResponse: (res) =>
+        (Array.isArray(res?.data) ? res.data : [])
+          .filter((l) => l?.produit?._id && isVisibleProduct(l.produit) && l.produit.isPublished === 'Published')
+          .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+          .map((l) => l.produit),
+    }),
+
+    /** Commandes du client connecté (jeton requis), plus récentes d'abord */
+    myOrders: build.query({
+      query: (userId) => ({ url: `/getCommandesByClefUser/${userId}` }),
+      transformResponse: (res) =>
+        (Array.isArray(res?.commandes) ? res.commandes : []).sort(
+          (a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0),
+        ),
+      providesTags: ['Orders'],
+    }),
+
+    /** Détail d'une commande */
+    order: build.query({
+      query: (id) => ({ url: `/getCommandesById/${id}` }),
+      transformResponse: (res) => res?.commande || res?.data || null,
+      providesTags: ['Orders'],
+    }),
+
     /** Produits d'une boutique */
     storeProducts: build.query({
       query: (sellerId) => ({ url: `/searchProductBySupplierClients/${sellerId}`, params: { limit: 100 } }),
@@ -171,6 +208,9 @@ export const {
   useProductsByTypeQuery,
   useStoresQuery,
   useStoreProductsQuery,
+  useLikedProductsQuery,
+  useMyOrdersQuery,
+  useOrderQuery,
   useStoreQuery,
   useStoreByNameQuery,
   useStoreBannersQuery,
