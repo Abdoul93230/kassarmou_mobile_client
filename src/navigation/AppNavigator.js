@@ -13,12 +13,8 @@ import { selectPanierCount } from '../redux/cartSlice';
 import SplashScreen from '../screens/SplashScreen';
 import TabBar from './TabBar';
 import HomeScreen from '../screens/HomeScreen';
-import LoginScreen from '../screens/LoginScreen';
-import RegisterScreen from '../screens/RegisterScreen';
 import QuickAuthScreen from '../screens/QuickAuthScreen';
 import VerifyOTPScreen from '../screens/VerifyOTPScreen';
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import ProductDetailScreen from '../screens/ProductDetailScreen';
 import CartScreen from '../screens/CartScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -214,12 +210,12 @@ function AppNavigator() {
         {/* Écrans d'authentification */}
         <Stack.Screen 
           name="Login" 
-          component={LoginScreen}
+          component={QuickAuthScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen 
           name="Register" 
-          component={RegisterScreen}
+          component={QuickAuthScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen
@@ -234,12 +230,12 @@ function AppNavigator() {
         />
         <Stack.Screen 
           name="ForgotPassword" 
-          component={ForgotPasswordScreen}
+          component={QuickAuthScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen 
           name="ResetPassword" 
-          component={ResetPasswordScreen}
+          component={QuickAuthScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen

@@ -219,10 +219,12 @@ export const verifyAuth = createAsyncThunk(
         
         return userData;
       } catch (verifyError) {
-        console.log(verifyError);
-        
-        console.log("❌ Token invalide côté serveur:", verifyError.response?.data?.message || verifyError.message);
-        // Token invalide, supprimer les données locales
+        const status = verifyError.response?.status;
+        // Hors ligne / serveur injoignable : on garde la session locale (pas de déconnexion intempestive)
+        if (!status || status >= 500) {
+          return userData;
+        }
+        // Jeton réellement refusé par le serveur : on efface la session
         await removeUserFromStorage();
         return rejectWithValue("Token invalide ou expiré");
       }

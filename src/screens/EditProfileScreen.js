@@ -1,882 +1,229 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-  Alert,
-  Platform,
-  KeyboardAvoidingView,
-  StatusBar,
-} from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useSelector } from 'react-redux';
-import apiClient from '../config/api';
-import { LEGACY_DEFAULT_AVATAR } from '../config/env';
-import ImageEditorModal from '../components/ImageEditorModal';
+import * as ImageManipulator from 'expo-image-manipulator';
 import Toast from 'react-native-toast-message';
-import {
-  DEFAULT_PHONE_COUNTRY,
-  PHONE_COUNTRIES,
-  applyPhoneInputChange,
-  getPhonePlaceholder,
-  parseStoredPhone,
-  toBackendPhone,
-  validatePhone,
-} from '../utils/phoneRules';
 
-const COLORS = {
-  primary: '#30A08B',
-  primaryLight: '#E0F7F4',
-  secondary: '#B2905F',
-  white: '#FFFFFF',
-  text: '#2C3E50',
-  textLight: '#718096',
-  textMuted: '#BDC3C7',
-  background: '#F5F5F5',
-  error: '#E74C3C',
-  success: '#27AE60',
-  border: '#E2E8F0',
-};
+import apiClient from '../config/api';
+import { LEGACY_DEFAULT_AVATAR, SUPPORT } from '../config/env';
+import { requestPasswordResetOtp, updateUserProfile } from '../redux/authSlice';
+import { authErrorMessage } from '../hooks/useAuthReturn';
+import { Button, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
+import TextField from '../ui/TextField';
+import { colors, GUTTER, radius, shadows } from '../theme';
 
-const EditProfileScreen = ({ navigation }) => {
-  const user = useSelector((state) => state.auth.user);
+/** Modification du profil : photo, nom, email, préférence WhatsApp, mot de passe */
+export default function EditProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
+  const user = useSelector((s) => s.auth.user);
+  const userId = user?.id || user?._id;
+
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCountryPicker, setShowCountryPicker] = useState(false);
-  const [showImageEditor, setShowImageEditor] = useState(false);
-  const [selectedImageUri, setSelectedImageUri] = useState(null);
-
-  const [userData, setUserData] = useState({
-    nom: '',
-    email: '',
-    telephone: '',
-    photo: null,
-  });
-  const [selectedCountryCode, setSelectedCountryCode] = useState(DEFAULT_PHONE_COUNTRY);
-  const [phoneNumberOnly, setPhoneNumberOnly] = useState('');
-  const [phoneError, setPhoneError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [initial, setInitial] = useState(null);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState(true);
+  const [photo, setPhoto] = useState(null); // URL actuelle
+  const [newPhoto, setNewPhoto] = useState(null); // fichier local choisi
+  const [errors, setErrors] = useState({});
 
-  const buildFullPhoneNumber = () => toBackendPhone(selectedCountryCode, phoneNumberOnly);
-
-  // Fetch user data
   useEffect(() => {
-    fetchUserData();
-  }, [user]);
+    if (!userId) return;
+    Promise.all([
+      apiClient.get('/user', { params: { id: userId } }),
+      apiClient.get('/getUserProfile', { params: { id: userId } }).catch(() => ({ data: { data: null } })),
+    ])
+      .then(([u, p]) => {
+        const pr = p.data?.data;
+        const data = {
+          name: u.data?.user?.name || user?.name || '',
+          email: u.data?.user?.email || '',
+          phone: pr?.numero || u.data?.user?.phoneNumber || '',
+          whatsapp: pr?.whatsapp !== false,
+          photo: pr?.image && pr.image !== LEGACY_DEFAULT_AVATAR ? pr.image : null,
+        };
+        setInitial(data);
+        setName(data.name);
+        setEmail(data.email);
+        setPhone(data.phone);
+        setWhatsapp(data.whatsapp);
+        setPhoto(data.photo);
+      })
+      .catch(() => Toast.show({ type: 'error', text1: 'Profil indisponible', text2: 'Vérifiez votre connexion.' }))
+      .finally(() => setLoading(false));
+  }, [user?.name, userId]);
 
-  const fetchUserData = async () => {
-    if (!user || !user.id) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: 'Veuillez vous connecter',
-      });
-      navigation.navigate('QuickAuth');
+  const dirty =
+    !!initial &&
+    (name.trim() !== initial.name || email.trim() !== initial.email || whatsapp !== initial.whatsapp || !!newPhoto);
+
+  const pickPhoto = useCallback(async (fromCamera) => {
+    const perm = fromCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Autorisation requise', fromCamera ? "Autorisez l'appareil photo dans les réglages." : 'Autorisez l’accès à vos photos dans les réglages.');
       return;
     }
+    const opts = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 };
+    const r = fromCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+    if (r.canceled || !r.assets?.[0]) return;
+    const small = await ImageManipulator.manipulateAsync(r.assets[0].uri, [{ resize: { width: 512 } }], { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG });
+    setNewPhoto(small.uri);
+  }, []);
 
+  const choosePhoto = () =>
+    Alert.alert('Photo de profil', undefined, [
+      { text: 'Prendre une photo', onPress: () => pickPhoto(true) },
+      { text: 'Choisir dans la galerie', onPress: () => pickPhoto(false) },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+
+  const save = async () => {
+    const e = {};
+    if (name.trim().length < 2) e.name = 'Indiquez votre prénom et votre nom.';
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) e.email = 'Adresse email invalide.';
+    setErrors(e);
+    if (Object.keys(e).length) return;
+
+    setSaving(true);
     try {
-      setLoading(true);
-
-      // Utiliser EXACTEMENT les mêmes endpoints que la version web
-      const [userResponse, profileResponse] = await Promise.all([
-        apiClient.get('/user', {
-          params: { id: user.id },
-        }),
-        apiClient.get('/getUserProfile', {
-          params: { id: user.id },
-        }).catch(error => {
-          // Si le profil n'existe pas (404), ce n'est pas une erreur
-          if (error.response?.status === 404) {
-            console.log('No profile yet, will create on save');
-            return { data: { data: null } };
-          }
-          throw error;
-        })
-      ]);
-
-      if (!userResponse.data || !userResponse.data.user) {
-        throw new Error('Données utilisateur non trouvées');
-      }
-
-      // Initialize with user data
-      setUserData({
-        nom: userResponse.data.user.name || '',
-        email: userResponse.data.user.email || '',
-        telephone: '',
-        photo: null,
-      });
-
-      // Traiter les données du profil si elles existent
-      const profileData = profileResponse.data?.data;
-
-      if (profileData) {
-        const fullPhoneNumber = profileData?.numero || userResponse.data.user.phoneNumber || '';
-        const { country, display } = parseStoredPhone(fullPhoneNumber);
-
-        setSelectedCountryCode(country);
-        setPhoneNumberOnly(display);
-
-        setUserData(prev => ({
-          ...prev,
-          telephone: display,
-          photo: profileData?.image && 
-                 profileData.image !== LEGACY_DEFAULT_AVATAR
-            ? profileData.image
-            : null,
-        }));
-        
-        setWhatsapp(profileData?.whatsapp !== false);
-      }
-
-      Toast.show({
-        type: 'success',
-        text1: 'Profil chargé',
-      });
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      
-      let errorMessage = 'Impossible de charger les données du profil';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.code === 'ECONNABORTED') {
-        errorMessage = 'Le serveur met trop de temps à répondre';
-      } else if (error.request) {
-        errorMessage = 'Aucune réponse du serveur';
-      }
-      
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: errorMessage,
-      });
+      const form = new FormData();
+      form.append('name', name.trim());
+      form.append('email', email.trim());
+      form.append('phone', phone);
+      form.append('whatsapp', String(whatsapp));
+      form.append('id', userId);
+      if (newPhoto) form.append('image', { uri: newPhoto, type: 'image/jpeg', name: `avatar-${userId}.jpg` });
+      await apiClient.post('/createProfile', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
+      dispatch(updateUserProfile({ name: name.trim(), email: email.trim() }));
+      Toast.show({ type: 'success', text1: 'Profil enregistré' });
+      navigation.goBack();
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'Enregistrement impossible', text2: err.response?.data?.message || 'Réessayez dans un instant.' });
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  // Validate form
-  const validateForm = () => {
-    if (!userData.nom || userData.nom.trim().length < 3) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: 'Le nom doit contenir au moins 3 caractères',
-      });
-      return false;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!userData.email || !emailRegex.test(userData.email)) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: 'Veuillez entrer une adresse email valide',
-      });
-      return false;
-    }
-
-    const phoneValidation = validatePhone(selectedCountryCode, phoneNumberOnly, true);
-    setPhoneError(phoneValidation.message);
-    if (!phoneValidation.isValid) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: phoneValidation.message,
-      });
-      return false;
-    }
-
-    return true;
-  };
-
-  // Handle photo selection
-  const handleSelectPhoto = async () => {
+  const changePassword = async () => {
     try {
-      Alert.alert(
-        'Photo de profil',
-        'Choisissez une option',
-        [
-          {
-            text: 'Annuler',
-            style: 'cancel',
-          },
-          {
-            text: 'Prendre une photo',
-            onPress: () => handleTakePhoto(),
-          },
-          {
-            text: 'Choisir dans la galerie',
-            onPress: () => handlePickFromGallery(),
-          },
-        ],
-        { cancelable: true }
-      );
-    } catch (error) {
-      console.error('Error selecting photo option:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: 'Une erreur est survenue',
+      const r = await dispatch(requestPasswordResetOtp(phone.replace(/\s/g, ''))).unwrap();
+      navigation.navigate('VerifyOTP', {
+        type: 'password-reset',
+        attemptsRemaining: r.attemptsRemaining,
+        cooldownSeconds: r.cooldownSeconds,
+        expiresInSeconds: r.expiresInSeconds,
+        channel: r.channel,
+        returnScreen: 'EditProfile',
+        formData: { phoneNumber: phone, name: null },
       });
+    } catch (e) {
+      Toast.show({ type: 'error', text1: 'Envoi du code impossible', text2: authErrorMessage(e, 'Réessayez plus tard.') });
     }
   };
 
-  // Handle take photo with camera
-  const handleTakePhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission refusée',
-          'Veuillez autoriser l\'accès à la caméra pour prendre une photo'
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setSelectedImageUri(result.assets[0].uri);
-        setShowImageEditor(true);
-      }
-    } catch (error) {
-      console.error('Error taking photo:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: 'Impossible de prendre une photo',
-      });
-    }
-  };
-
-  // Handle pick from gallery
-  const handlePickFromGallery = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission refusée',
-          'Veuillez autoriser l\'accès à la galerie pour sélectionner une photo'
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setSelectedImageUri(result.assets[0].uri);
-        setShowImageEditor(true);
-      }
-    } catch (error) {
-      console.error('Error selecting photo:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: 'Impossible de sélectionner la photo',
-      });
-    }
-  };
-
-  // Handle save edited image
-  const handleSaveEditedImage = (editedUri) => {
-    setUserData({ ...userData, photo: editedUri });
-    setShowImageEditor(false);
-    setSelectedImageUri(null);
-  };
-
-  // Handle cancel image editing
-  const handleCancelImageEditing = () => {
-    setShowImageEditor(false);
-    setSelectedImageUri(null);
-  };
-
-  // Handle save profile
-  const handleSaveProfile = async () => {
-    if (!validateForm()) {
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-
-      const fullPhoneNumber = buildFullPhoneNumber();
-      const formData = new FormData();
-      formData.append('name', userData.nom);
-      formData.append('email', userData.email);
-      formData.append('phone', fullPhoneNumber);
-      formData.append('whatsapp', whatsapp);
-      formData.append('id', user.id);
-
-      // Add photo if it's a local URI (new photo selected)
-      if (userData.photo && userData.photo.startsWith('file://')) {
-        const photoUri = userData.photo;
-        const filename = photoUri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-        formData.append('image', {
-          uri: photoUri,
-          type: type,
-          name: filename || 'profile.jpg',
-        });
-      }
-
-      // Utiliser EXACTEMENT le même endpoint que la version web
-      const response = await apiClient.post(
-        '/createProfile',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-
-      if (response.data) {
-        Toast.show({
-          type: 'success',
-          text1: 'Succès',
-          text2: 'Profil mis à jour avec succès',
-        });
-        
-        // Attendre un peu pour que le toast soit visible
-        setTimeout(() => {
-          navigation.goBack();
-        }, 1500);
-      }
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      
-      let errorMessage = 'Impossible de sauvegarder le profil';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      }
-      
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: errorMessage,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Chargement du profil...</Text>
-      </View>
-    );
-  }
+  const avatarUri = newPhoto || photo;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Modifier le profil</Text>
-        <View style={styles.backButton} />
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
+        <Text variant="h2" style={styles.flex}>Mon profil</Text>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Photo Section */}
-        <View style={styles.photoSection}>
-          <TouchableOpacity
-            style={styles.photoContainer}
-            onPress={handleSelectPhoto}
-            disabled={isSubmitting}
-          >
-            {userData.photo ? (
-              <Image source={{ uri: userData.photo }} style={styles.photo} />
+      {loading ? (
+        <View style={styles.pad}>
+          <Skeleton width={96} height={96} radius={48} style={styles.center} />
+          {[0, 1, 2].map((i) => <Skeleton key={i} height={50} radius={radius.md} style={styles.mt16} />)}
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={[styles.pad, { paddingBottom: insets.bottom + 110 }]} keyboardShouldPersistTaps="handled">
+          <PressableScale onPress={choosePhoto} style={styles.avatarWrap} scaleTo={0.96} accessibilityLabel="Changer la photo de profil">
+            {avatarUri ? (
+              <SmartImage uri={avatarUri} width={96} style={styles.avatar} />
             ) : (
-              <View style={styles.photoPlaceholder}>
-                <Ionicons name="person" size={60} color={COLORS.textLight} />
-              </View>
+              <View style={[styles.avatar, styles.initial]}><Text variant="hero" color="primaryDark">{(name || '?').charAt(0).toUpperCase()}</Text></View>
             )}
-            <View style={styles.cameraButton}>
-              <Ionicons name="camera" size={20} color={COLORS.white} />
+            <View style={styles.camera}><Ionicons name="camera" size={16} color={colors.textInverse} /></View>
+          </PressableScale>
+          <Text variant="small" color="primary" align="center" style={styles.mt8} onPress={choosePhoto}>Changer la photo</Text>
+
+          <View style={styles.card}>
+            <TextField label="Prénom et nom" icon="person-outline" value={name} onChangeText={(t) => { setName(t); setErrors((x) => ({ ...x, name: undefined })); }} error={errors.name} autoCapitalize="words" autoComplete="name" />
+            <TextField label="Email" optional icon="mail-outline" value={email} onChangeText={(t) => { setEmail(t); setErrors((x) => ({ ...x, email: undefined })); }} error={errors.email} keyboardType="email-address" autoCapitalize="none" autoComplete="email" placeholder="Pour recevoir vos reçus" />
+            <TextField
+              label="Téléphone"
+              icon="call-outline"
+              value={phone}
+              editable={false}
+              hint="C'est votre identifiant de connexion."
+              suffix={<Ionicons name="lock-closed" size={16} color={colors.textMuted} />}
+            />
+            <PressableScale onPress={() => Linking.openURL(`https://wa.me/${SUPPORT.whatsapp}?text=${encodeURIComponent('Bonjour, je souhaite changer le numéro de mon compte Ihambaobab.')}`)} hitSlop={6} style={styles.inlineLink}>
+              <Text variant="caption" color="primary">Changer de numéro ? Contactez le support</Text>
+            </PressableScale>
+
+            <View style={styles.switchRow}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+              <View style={styles.flex}>
+                <Text variant="bodyMedium">Contact par WhatsApp</Text>
+                <Text variant="caption" color="textMuted">Les vendeurs et livreurs peuvent vous écrire sur WhatsApp</Text>
+              </View>
+              <Switch value={whatsapp} onValueChange={setWhatsapp} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} />
             </View>
-          </TouchableOpacity>
-          <Text style={styles.photoLabel}>Toucher pour changer la photo</Text>
+          </View>
+
+          <View style={styles.card}>
+            <PressableScale onPress={changePassword} style={styles.row} scaleTo={0.99}>
+              <View style={styles.rowIcon}><Ionicons name="key-outline" size={18} color={colors.primary} /></View>
+              <View style={styles.flex}>
+                <Text variant="bodyMedium">Changer mon mot de passe</Text>
+                <Text variant="caption" color="textMuted">Un code de sécurité vous sera envoyé par SMS</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </PressableScale>
+          </View>
+        </ScrollView>
+      )}
+
+      {!loading ? (
+        <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          {saving ? <ActivityIndicator color={colors.primary} style={styles.mb8} /> : null}
+          <Button title="Enregistrer" icon="checkmark" size="lg" full loading={saving} disabled={!dirty} onPress={save} />
         </View>
-
-        {/* Form Section */}
-        <View style={styles.formSection}>
-          {/* Name Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Nom complet</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons
-                name="person-outline"
-                size={20}
-                color={COLORS.textLight}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                value={userData.nom}
-                onChangeText={(text) => setUserData({ ...userData, nom: text })}
-                placeholder="Entrez votre nom complet"
-                placeholderTextColor={COLORS.textMuted}
-                editable={!isSubmitting}
-              />
-            </View>
-          </View>
-
-          {/* Email Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons
-                name="mail-outline"
-                size={20}
-                color={COLORS.textLight}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                value={userData.email}
-                onChangeText={(text) => setUserData({ ...userData, email: text })}
-                placeholder="votre@email.com"
-                placeholderTextColor={COLORS.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                editable={!isSubmitting}
-              />
-            </View>
-          </View>
-
-          {/* Phone Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Numéro de téléphone</Text>
-            <View style={styles.phoneRow}>
-              <TouchableOpacity
-                style={styles.countryCodeButton}
-                onPress={() => setShowCountryPicker(!showCountryPicker)}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.countryCodeText}>
-                  {selectedCountryCode.flag} {selectedCountryCode.dialCode}
-                </Text>
-                <Ionicons
-                  name={showCountryPicker ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={COLORS.textLight}
-                />
-              </TouchableOpacity>
-
-              <View style={[styles.inputContainer, styles.phoneInput]}>
-                <Ionicons
-                  name="call-outline"
-                  size={20}
-                  color={COLORS.textLight}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  value={phoneNumberOnly}
-                  onChangeText={(text) => {
-                    const next = applyPhoneInputChange(selectedCountryCode, text);
-                    setPhoneNumberOnly(next.display);
-                    const validation = validatePhone(selectedCountryCode, next.digits, true);
-                    setPhoneError(next.display ? validation.message : '');
-                  }}
-                  placeholder={getPhonePlaceholder(selectedCountryCode)}
-                  placeholderTextColor={COLORS.textMuted}
-                  keyboardType="phone-pad"
-                  maxLength={selectedCountryCode.nationalLength + selectedCountryCode.groups.length - 1}
-                  editable={!isSubmitting}
-                />
-              </View>
-            </View>
-            {phoneError ? <Text style={styles.errorTextInline}>{phoneError}</Text> : null}
-
-            {/* Country Code Picker */}
-            {showCountryPicker && (
-              <View style={styles.countryPickerContainer}>
-                <ScrollView style={styles.countryList} nestedScrollEnabled>
-                  {PHONE_COUNTRIES.map((country) => (
-                    <TouchableOpacity
-                      key={country.dialCode}
-                      style={[
-                        styles.countryItem,
-                        selectedCountryCode.dialCode === country.dialCode && styles.countryItemSelected,
-                      ]}
-                      onPress={() => {
-                        setSelectedCountryCode(country);
-                        const next = applyPhoneInputChange(country, phoneNumberOnly);
-                        setPhoneNumberOnly(next.display);
-                        const validation = validatePhone(country, next.digits, true);
-                        setPhoneError(next.display ? validation.message : '');
-                        setShowCountryPicker(false);
-                      }}
-                    >
-                      <Text style={styles.countryFlag}>{country.flag}</Text>
-                      <Text style={styles.countryName}>{country.name}</Text>
-                      <Text style={styles.countryCodeInList}>{country.dialCode}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-          </View>
-
-          {/* WhatsApp Toggle */}
-          <View style={styles.inputGroup}>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleInfo}>
-                <View style={styles.toggleLabelRow}>
-                  <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
-                  <Text style={styles.toggleLabel}>Numéro WhatsApp</Text>
-                </View>
-                <Text style={styles.toggleDescription}>
-                  Ce numéro peut être utilisé pour WhatsApp
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  whatsapp && styles.toggleButtonActive,
-                ]}
-                onPress={() => setWhatsapp(!whatsapp)}
-                disabled={isSubmitting}
-              >
-                <View
-                  style={[
-                    styles.toggleCircle,
-                    whatsapp && styles.toggleCircleActive,
-                  ]}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
-          onPress={handleSaveProfile}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
-              <Text style={styles.saveButtonText}>Enregistrer</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Image Editor Modal */}
-      <ImageEditorModal
-        visible={showImageEditor}
-        imageUri={selectedImageUri}
-        onSave={handleSaveEditedImage}
-        onCancel={handleCancelImageEditing}
-      />
+      ) : null}
     </KeyboardAvoidingView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  pad: { padding: GUTTER },
+  center: { alignSelf: 'center' },
+  mt8: { marginTop: 8 },
+  mt16: { marginTop: 16 },
+  mb8: { marginBottom: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 8 },
+  avatarWrap: { alignSelf: 'center', width: 100, height: 100 },
+  avatar: { width: 96, height: 96, borderRadius: 48 },
+  initial: { backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  camera: {
+    position: 'absolute', right: 0, bottom: 2, width: 32, height: 32, borderRadius: 16, backgroundColor: colors.primary,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: colors.bg,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-  loadingText: {
-    marginTop: 12,
-    color: COLORS.textLight,
-    fontSize: 14,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#30A08B',
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.white,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  photoSection: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    backgroundColor: COLORS.white,
-    marginBottom: 16,
-  },
-  photoContainer: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  photo: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 3,
-    borderColor: COLORS.primary,
-  },
-  photoPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: COLORS.primary,
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: COLORS.white,
-  },
-  photoLabel: {
-    fontSize: 14,
-    color: COLORS.textLight,
-  },
-  formSection: {
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    marginBottom: 16,
-  },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 12,
-    height: 50,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: COLORS.text,
-  },
-  phoneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  countryCodeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 12,
-    height: 50,
-    marginRight: 8,
-  },
-  countryCodeText: {
-    fontSize: 15,
-    color: COLORS.text,
-    marginRight: 4,
-  },
-  phoneInput: {
-    flex: 1,
-  },
-  errorTextInline: {
-    fontSize: 12,
-    color: COLORS.error,
-    marginTop: 6,
-  },
-  countryPickerContainer: {
-    marginTop: 8,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    maxHeight: 200,
-    overflow: 'hidden',
-  },
-  countryList: {
-    maxHeight: 200,
-  },
-  countryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.background,
-  },
-  countryItemSelected: {
-    backgroundColor: COLORS.primaryLight,
-  },
-  countryFlag: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  countryName: {
-    flex: 1,
-    fontSize: 15,
-    color: COLORS.text,
-  },
-  countryCodeInList: {
-    fontSize: 14,
-    color: COLORS.textLight,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  toggleInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  toggleLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  toggleLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginLeft: 8,
-  },
-  toggleDescription: {
-    fontSize: 13,
-    color: COLORS.textLight,
-  },
-  toggleButton: {
-    width: 50,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.border,
-    justifyContent: 'center',
-    padding: 2,
-  },
-  toggleButtonActive: {
-    backgroundColor: '#25D366',
-  },
-  toggleCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  toggleCircleActive: {
-    alignSelf: 'flex-end',
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    marginHorizontal: 20,
-    marginTop: 16,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginLeft: 8,
+  card: { marginTop: 20, padding: 16, borderRadius: radius.lg, backgroundColor: colors.surface, ...shadows.sm },
+  inlineLink: { alignSelf: 'flex-start', marginTop: -6, marginBottom: 14 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  bar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: GUTTER, paddingTop: 12,
+    backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
   },
 });
-
-export default EditProfileScreen;

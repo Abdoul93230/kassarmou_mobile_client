@@ -5,9 +5,9 @@ import Text from './Text';
 import { colors, fonts, radius } from '../theme';
 
 /**
- * Champ de saisie du design system : libellé, icône, préfixe, message d'erreur.
+ * Champ de saisie du design system : libellé, icône, préfixe/suffixe, message d'erreur.
  */
-function TextField({ label, icon, prefix, error, hint, optional, style, multiline, ...inputProps }, ref) {
+function TextField({ label, icon, prefix, suffix, error, hint, optional, style, multiline, ...inputProps }, ref) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={[styles.wrap, style]}>
@@ -36,6 +36,7 @@ function TextField({ label, icon, prefix, error, hint, optional, style, multilin
           onBlur={(e) => { setFocused(false); inputProps.onBlur?.(e); }}
           {...inputProps}
         />
+        {suffix || null}
       </View>
       {error ? (
         <Text variant="small" color="danger" style={styles.msg}>{error}</Text>

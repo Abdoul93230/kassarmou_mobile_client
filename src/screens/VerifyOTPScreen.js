@@ -1,514 +1,204 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Alert,
-  TouchableOpacity,
-  ScrollView,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import Toast from 'react-native-toast-message';
 
-import LoadingButton from '../components/LoadingButton';
-import CustomInput from '../components/CustomInput';
-import {
-  login,
-  registerWithOtp,
-  requestPasswordResetOtp,
-  resetPasswordWithPhoneOtp,
-  sendOtp,
-  verifyOtp,
-  setQuickAuthContext,
-} from '../redux/authSlice';
-import { COLORS } from '../config/constants';
-import { getPasswordChecks, getPasswordStrength, validatePassword } from '../utils/passwordRules';
+import { login, registerWithOtp, requestPasswordResetOtp, resetPasswordWithPhoneOtp, sendOtp, verifyOtp } from '../redux/authSlice';
+import AuthLayout from '../components/auth/AuthLayout';
+import OtpBoxes from '../components/auth/OtpBoxes';
+import PasswordField from '../components/auth/PasswordField';
+import useAuthReturn, { authErrorMessage } from '../hooks/useAuthReturn';
+import { Button, PressableScale, Text } from '../ui';
+import { validatePassword } from '../utils/passwordRules';
+import { colors, radius } from '../theme';
 
 const OTP_LENGTH = 6;
-const STEP_VERIFY_OTP = 'verify-otp';
-const STEP_SET_PASSWORD = 'set-password';
-const FLOW_QUICK_REGISTER = 'quick-register';
-const FLOW_PASSWORD_RESET = 'password-reset';
-const getErrorMessage = (value) => {
-  if (typeof value === 'string') return value;
-  return value?.message || value?.error || 'Une erreur est survenue';
-};
-const formatDuration = (seconds = 0) => {
-  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
-  const minutes = Math.floor(safeSeconds / 60);
-  const remainingSeconds = safeSeconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-};
+const RESET = 'password-reset';
+const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
 
+/**
+ * Vérification du code reçu (SMS/WhatsApp) puis choix du mot de passe.
+ * Sert à l'inscription (quick-register) et au mot de passe oublié (password-reset).
+ */
 export default function VerifyOTPScreen({ navigation, route }) {
   const dispatch = useDispatch();
-  const { loading } = useSelector((state) => state.auth);
+  const params = route?.params || {};
+  const { formData = {}, type = 'quick-register' } = params;
+  const finish = useAuthReturn(navigation, params);
+  const isReset = type === RESET;
 
-  const [step, setStep] = useState(STEP_VERIFY_OTP);
-  const [otp, setOtp] = useState('');
-  const [attemptsRemaining, setAttemptsRemaining] = useState(route?.params?.attemptsRemaining ?? null);
-  const [resendCooldown, setResendCooldown] = useState(route?.params?.cooldownSeconds ?? 0);
-  const [expiresIn, setExpiresIn] = useState(route?.params?.expiresInSeconds ?? 0);
+  const [step, setStep] = useState('code');
+  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  const formData = route?.params?.formData || {};
-  const flowType = route?.params?.type || FLOW_QUICK_REGISTER;
-  const pendingAction = route?.params?.pendingAction || null;
-  const returnScreen = route?.params?.returnScreen || null;
-  const returnParams = route?.params?.returnParams || null;
-
-  const canSubmitOtp = useMemo(() => otp.length === OTP_LENGTH, [otp.length]);
-  const passwordChecks = useMemo(() => getPasswordChecks(password), [password]);
-  const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(params.cooldownSeconds ?? 60);
+  const [expiresIn, setExpiresIn] = useState(params.expiresInSeconds ?? 0);
+  const [attempts, setAttempts] = useState(params.attemptsRemaining ?? null);
+  const [channel, setChannel] = useState(params.channel || 'sms');
 
   useEffect(() => {
-    if (resendCooldown <= 0 && expiresIn <= 0) return;
-
-    const timer = setInterval(() => {
-      setResendCooldown((current) => (current > 0 ? current - 1 : 0));
-      setExpiresIn((current) => (current > 0 ? current - 1 : 0));
+    const t = setInterval(() => {
+      setCooldown((c) => (c > 0 ? c - 1 : 0));
+      setExpiresIn((c) => (c > 0 ? c - 1 : 0));
     }, 1000);
+    return () => clearInterval(t);
+  }, []);
 
-    return () => clearInterval(timer);
-  }, [resendCooldown, expiresIn]);
-
-  const navigateAfterAuth = () => {
-    dispatch(
-      setQuickAuthContext({
-        pendingAction,
-        returnScreen,
-        returnParams,
-      })
-    );
-
-    if (returnScreen) {
-      // Toujours garder l'accueil sous l'écran de retour (sinon « retour » quitte l'app)
-      navigation.reset(
-        returnScreen === 'MainTabs'
-          ? { index: 0, routes: [{ name: 'MainTabs', params: returnParams || {} }] }
-          : { index: 1, routes: [{ name: 'MainTabs' }, { name: returnScreen, params: returnParams || {} }] }
-      );
-      return;
-    }
-
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-    });
+  const fail = (e, fallback) => {
+    setError(authErrorMessage(e, fallback));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
   };
 
-  const handleVerifyOtp = async () => {
-    if (!canSubmitOtp) {
-      Alert.alert('OTP', 'Veuillez saisir les 6 chiffres du code OTP.');
-      return;
-    }
+  const submitCode = useCallback(
+    async (value = code) => {
+      if (value.length !== OTP_LENGTH || busy) return;
+      setBusy(true);
+      setError(null);
+      try {
+        await dispatch(verifyOtp({ phoneNumber: formData.phoneNumber, otp: value })).unwrap();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        setStep('password');
+      } catch (e) {
+        if (Number.isFinite(Number(e?.attemptsRemaining))) setAttempts(Number(e.attemptsRemaining));
+        fail(e, 'Code incorrect. Vérifiez le SMS reçu.');
+        setCode('');
+      } finally {
+        setBusy(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [busy, code, dispatch, formData.phoneNumber],
+  );
 
+  const resend = async () => {
+    if (cooldown > 0) return;
+    setBusy(true);
+    setError(null);
     try {
-      const verifyResult = await dispatch(
-        verifyOtp({
-          phoneNumber: formData.phoneNumber,
-          otp,
-        })
-      ).unwrap();
-
-      if (typeof verifyResult.attemptsRemaining === 'number') {
-        setAttemptsRemaining(verifyResult.attemptsRemaining);
-      }
-
-      if (typeof verifyResult.cooldownSeconds === 'number') {
-        setResendCooldown(verifyResult.cooldownSeconds);
-      }
-
-      if (typeof verifyResult.expiresInSeconds === 'number') {
-        setExpiresIn(verifyResult.expiresInSeconds);
-      }
-
-      setStep(STEP_SET_PASSWORD);
-    } catch (error) {
-      const remaining = Number(error?.attemptsRemaining);
-      if (!Number.isNaN(remaining)) {
-        setAttemptsRemaining(remaining);
-      }
-      Alert.alert('Verification echouee', getErrorMessage(error) || 'Code OTP invalide');
+      const r = isReset
+        ? await dispatch(requestPasswordResetOtp(formData.phoneNumber)).unwrap()
+        : await dispatch(sendOtp({ phoneNumber: formData.phoneNumber, name: formData.name })).unwrap();
+      setCooldown(r.cooldownSeconds ?? 60);
+      setExpiresIn(r.expiresInSeconds ?? 0);
+      setAttempts(r.attemptsRemaining ?? null);
+      if (r.channel) setChannel(r.channel);
+      setCode('');
+      Toast.show({ type: 'success', text1: 'Nouveau code envoyé' });
+    } catch (e) {
+      fail(e, "Impossible de renvoyer le code pour l'instant.");
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleFinalizeRegister = async () => {
-    const validation = validatePassword(password);
-    if (!validation.valid) {
-      Alert.alert('Mot de passe', validation.message);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Confirmation', 'Les mots de passe ne correspondent pas.');
-      return;
-    }
-
+  const submitPassword = async () => {
+    const v = validatePassword(password);
+    if (!v.valid) return fail(v.message);
+    setBusy(true);
+    setError(null);
     try {
-      if (flowType === FLOW_PASSWORD_RESET) {
-        await dispatch(
-          resetPasswordWithPhoneOtp({
-            phone: formData.phoneNumber,
-            code: otp,
-            newPassword: password,
-          })
-        ).unwrap();
-
-        await dispatch(
-          login({
-            identifier: formData.phoneNumber,
-            phoneNumber: formData.phoneNumber,
-            password,
-          })
-        ).unwrap();
-
-        navigateAfterAuth();
+      if (isReset) {
+        await dispatch(resetPasswordWithPhoneOtp({ phone: formData.phoneNumber, code, newPassword: password })).unwrap();
       } else {
         await dispatch(
           registerWithOtp({
             phoneNumber: formData.phoneNumber,
             name: formData.name,
             password,
-            code: otp,
+            code,
             ...(formData.refCode ? { refCode: formData.refCode } : {}),
-          })
+          }),
         ).unwrap();
-
-        await dispatch(
-          login({
-            identifier: formData.phoneNumber,
-            phoneNumber: formData.phoneNumber,
-            password,
-          })
-        ).unwrap();
-
-        navigateAfterAuth();
       }
-    } catch (error) {
-      Alert.alert('Operation echouee', getErrorMessage(error) || 'Echec de finalisation');
+      await dispatch(login({ identifier: formData.phoneNumber, phoneNumber: formData.phoneNumber, password })).unwrap();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Toast.show({ type: 'success', text1: isReset ? 'Mot de passe mis à jour' : `Bienvenue ${String(formData.name || '').split(' ')[0]} 🎉` });
+      finish();
+    } catch (e) {
+      fail(e, isReset ? 'Réinitialisation impossible.' : 'Création du compte impossible.');
+    } finally {
+      setBusy(false);
     }
+    return undefined;
   };
 
-  const handleResend = async () => {
-    try {
-      const resendResult = flowType === FLOW_PASSWORD_RESET
-        ? await dispatch(requestPasswordResetOtp(formData.phoneNumber)).unwrap()
-        : await dispatch(
-            sendOtp({
-              phoneNumber: formData.phoneNumber,
-              name: formData.name,
-            })
-          ).unwrap();
+  const errorBox = error ? (
+    <View style={styles.error}>
+      <Ionicons name="alert-circle" size={18} color={colors.danger} />
+      <Text variant="small" color="danger" style={styles.flex}>{error}</Text>
+    </View>
+  ) : null;
 
-      setAttemptsRemaining(resendResult.attemptsRemaining ?? null);
-      setResendCooldown(resendResult.cooldownSeconds ?? 0);
-      setExpiresIn(resendResult.expiresInSeconds ?? 0);
-      setOtp('');
-      setStep(STEP_VERIFY_OTP);
-      Alert.alert('OTP', 'Un nouveau code a ete envoye.');
-    } catch (error) {
-      Alert.alert('OTP', getErrorMessage(error) || 'Impossible de renvoyer le code');
-    }
-  };
+  if (step === 'password') {
+    return (
+      <AuthLayout
+        stepKey="password"
+        onBack={() => setStep('code')}
+        title={isReset ? 'Nouveau mot de passe' : 'Sécurisez votre compte'}
+        subtitle={isReset ? 'Choisissez un nouveau mot de passe facile à retenir pour vous.' : 'Dernière étape : choisissez un mot de passe. Vous l’utiliserez pour vous reconnecter.'}
+      >
+        <PasswordField
+          value={password}
+          onChangeText={(t) => { setPassword(t); setError(null); }}
+          showStrength
+          autoFocus
+          label={isReset ? 'Nouveau mot de passe' : 'Mot de passe'}
+          returnKeyType="done"
+          onSubmitEditing={submitPassword}
+        />
+        {errorBox}
+        <Button
+          title={isReset ? 'Enregistrer et me connecter' : 'Créer mon compte'}
+          icon={isReset ? 'checkmark-circle-outline' : 'sparkles'}
+          size="lg"
+          full
+          loading={busy}
+          disabled={!validatePassword(password).valid}
+          onPress={submitPassword}
+        />
+      </AuthLayout>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#30A08B', '#2D9175', '#1F6E58']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
-      >
-        <View style={styles.headerIconWrap}>
-          <Ionicons name="key-outline" size={30} color="#FFFFFF" />
-        </View>
-        <Text style={styles.title}>Verification OTP</Text>
-        <Text style={styles.subtitle}>Code envoye a {formData.phoneNumber}</Text>
-      </LinearGradient>
+    <AuthLayout
+      stepKey="code"
+      onBack={() => navigation.goBack()}
+      title="Entrez le code"
+      subtitle={`Nous avons envoyé un code à 6 chiffres par ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} au ${formData.phoneNumber || 'numéro indiqué'}.`}
+    >
+      <OtpBoxes value={code} onChange={(v) => { setCode(v); setError(null); }} onComplete={submitCode} error={!!error} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.card}>
-
-        {typeof attemptsRemaining === 'number' ? (
-          <Text style={styles.attemptsText}>Tentatives restantes: {attemptsRemaining}</Text>
-        ) : null}
-
-        <View style={styles.timerBox}>
-          <Text style={styles.timerLabel}>Expiration du code</Text>
-          <Text style={styles.timerValue}>{formatDuration(expiresIn)}</Text>
-          <Text style={styles.timerHint}>
-            {expiresIn > 0 ? 'Le code OTP est encore valide.' : 'Le code OTP a expiré.'}
-          </Text>
-        </View>
-
-        {step === STEP_VERIFY_OTP && (
-          <>
-            <TextInput
-              value={otp}
-              onChangeText={(value) => setOtp(value.replace(/\D/g, '').slice(0, OTP_LENGTH))}
-              keyboardType="number-pad"
-              style={styles.otpInput}
-              placeholder="123456"
-              placeholderTextColor="#9CA3AF"
-              maxLength={OTP_LENGTH}
-            />
-
-            <LoadingButton
-              title="Verifier le code"
-              onPress={handleVerifyOtp}
-              loading={loading}
-              disabled={!canSubmitOtp}
-              style={styles.primaryButton}
-            />
-
-            <TouchableOpacity
-              style={[styles.resendButton, resendCooldown > 0 && styles.resendButtonDisabled]}
-              onPress={handleResend}
-              disabled={resendCooldown > 0}
-            >
-              <Text style={[styles.resendText, resendCooldown > 0 && styles.resendTextDisabled]}>
-                {resendCooldown > 0 ? `Renvoyer dans ${formatDuration(resendCooldown)}` : 'Renvoyer le code'}
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {step === STEP_SET_PASSWORD && (
-          <>
-            <Text style={styles.stepInfo}>
-              {flowType === FLOW_PASSWORD_RESET
-                ? 'Code valide. Definissez votre nouveau mot de passe.'
-                : 'Code valide. Definissez maintenant votre mot de passe.'}
-            </Text>
-            <CustomInput
-              label="Mot de passe"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Choisissez un mot de passe"
-              secureTextEntry
-              icon="lock-closed-outline"
-            />
-            <View style={styles.passwordChecklistBox}>
-              <View style={styles.passwordStrengthRow}>
-                <Text style={styles.passwordStrengthLabel}>Force</Text>
-                <Text style={[styles.passwordStrengthValue, { color: passwordStrength.color }]}>{passwordStrength.label}</Text>
-              </View>
-              <View style={styles.passwordStrengthTrack}>
-                <View
-                  style={[
-                    styles.passwordStrengthFill,
-                    {
-                      width: `${Math.max(8, (passwordStrength.score / 6) * 100)}%`,
-                      backgroundColor: passwordStrength.color,
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.passwordRuleItem, passwordChecks.minLength && styles.passwordRuleOk]}>• 8 caracteres minimum</Text>
-              <Text style={[styles.passwordRuleItem, passwordChecks.upper && styles.passwordRuleOk]}>• Au moins une majuscule</Text>
-              <Text style={[styles.passwordRuleItem, passwordChecks.lower && styles.passwordRuleOk]}>• Au moins une minuscule</Text>
-              <Text style={[styles.passwordRuleItem, passwordChecks.number && styles.passwordRuleOk]}>• Au moins un chiffre</Text>
-              <Text style={[styles.passwordRuleItem, passwordChecks.special && styles.passwordRuleOk]}>• Au moins un caractere special</Text>
-              <Text style={[styles.passwordRuleItem, passwordChecks.noSpaces && styles.passwordRuleOk]}>• Sans espace</Text>
-            </View>
-            <CustomInput
-              label="Confirmer le mot de passe"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Retapez le mot de passe"
-              secureTextEntry
-              icon="lock-closed-outline"
-            />
-            <LoadingButton
-              title={flowType === FLOW_PASSWORD_RESET ? 'Reinitialiser le mot de passe' : "Terminer l'inscription"}
-              onPress={handleFinalizeRegister}
-              loading={loading}
-              style={styles.primaryButton}
-            />
-          </>
-        )}
+      <View style={styles.meta}>
+        {expiresIn > 0 ? <Text variant="caption" color="textMuted">Code valable {fmt(expiresIn)}</Text> : <View />}
+        {attempts !== null ? <Text variant="caption" color="textMuted">{attempts} renvoi{attempts > 1 ? 's' : ''} restant{attempts > 1 ? 's' : ''}</Text> : null}
       </View>
-      </ScrollView>
-    </SafeAreaView>
+
+      {errorBox}
+
+      <Button title="Vérifier" size="lg" full loading={busy} disabled={code.length !== OTP_LENGTH} onPress={() => submitCode()} />
+
+      <PressableScale onPress={resend} disabled={cooldown > 0 || busy} style={styles.resend} hitSlop={8}>
+        <Ionicons name="refresh" size={16} color={cooldown > 0 ? colors.textMuted : colors.primary} />
+        <Text variant="smallMedium" color={cooldown > 0 ? 'textMuted' : 'primary'}>
+          {cooldown > 0 ? `Renvoyer le code dans ${fmt(cooldown)}` : 'Renvoyer le code'}
+        </Text>
+      </PressableScale>
+
+      <PressableScale onPress={() => navigation.goBack()} style={styles.change} hitSlop={8}>
+        <Text variant="small" color="textSecondary">Mauvais numéro ? <Text variant="smallMedium" color="primary">Le modifier</Text></Text>
+      </PressableScale>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ECF1F7',
-  },
-  headerGradient: {
-    paddingTop: 24,
-    paddingBottom: 26,
-    paddingHorizontal: 18,
-    borderBottomLeftRadius: 26,
-    borderBottomRightRadius: 26,
-  },
-  headerIconWrap: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingTop: 18,
-    paddingBottom: 28,
-  },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  subtitle: {
-    marginTop: 8,
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: 14,
-  },
-  devBadge: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#10B981',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-  },
-  devTitle: {
-    color: '#047857',
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  devCode: {
-    color: '#065F46',
-    fontSize: 14,
-  },
-  attemptsText: {
-    color: COLORS.textLight,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  timerBox: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 14,
-    alignItems: 'center',
-  },
-  timerLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  timerValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  timerHint: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  otpInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    paddingVertical: 12,
-    textAlign: 'center',
-    fontSize: 24,
-    letterSpacing: 8,
-    marginBottom: 14,
-    color: COLORS.text,
-  },
-  resendButton: {
-    marginTop: 12,
-  },
-  resendButtonDisabled: {
-    opacity: 0.55,
-  },
-  resendText: {
-    color: COLORS.primary,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  resendTextDisabled: {
-    color: COLORS.textLight,
-  },
-  stepInfo: {
-    color: COLORS.textLight,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  passwordChecklistBox: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-  },
-  passwordStrengthRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  passwordStrengthLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    fontWeight: '600',
-  },
-  passwordStrengthValue: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  passwordStrengthTrack: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: '#E5E7EB',
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  passwordStrengthFill: {
-    height: 6,
-    borderRadius: 999,
-  },
-  passwordRuleItem: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  passwordRuleOk: {
-    color: '#15803D',
-    fontWeight: '600',
-  },
-  primaryButton: {
-    borderRadius: 10,
-  },
+  flex: { flex: 1 },
+  meta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, marginBottom: 18 },
+  error: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginBottom: 14, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
+  resend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 20, paddingVertical: 6 },
+  change: { alignSelf: 'center', marginTop: 10, paddingVertical: 6 },
 });

@@ -15,6 +15,8 @@ export const optimizeImage = (src, displayWidth = 320) => {
   if (!src || typeof src !== 'string') return null;
 
   let url = src.trim();
+  // Fichiers locaux (photo choisie, cache) : jamais réécrits
+  if (/^(file|content|data|asset|ph):/i.test(url)) return url;
   if (!/^https?:\/\//i.test(url)) {
     url = `${API_URL}/${url.replace(/^\/+/, '')}`;
   }

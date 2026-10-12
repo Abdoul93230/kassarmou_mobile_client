@@ -1,460 +1,268 @@
-import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  ScrollView,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useMemo, useRef, useState } from 'react';
+import { Linking, StyleSheet, View } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 
-import CustomInput from '../components/CustomInput';
-import LoadingButton from '../components/LoadingButton';
-import CountryCodePicker from '../components/CountryCodePicker';
-import {
-  checkPhoneAvailability,
-  login,
-  sendOtp,
-  requestPasswordResetOtp,
-  clearError,
-  setQuickAuthContext,
-} from '../redux/authSlice';
-import { COLORS } from '../config/constants';
-import useNetworkStatus from '../hooks/useNetworkStatus';
-import {
-  DEFAULT_PHONE_COUNTRY,
-  PHONE_COUNTRIES,
-  applyPhoneInputChange,
-  getPhonePlaceholder,
-  toBackendPhone,
-  validatePhone,
-} from '../utils/phoneRules';
+import { checkPhoneAvailability, clearError, login, requestPasswordResetOtp, sendOtp } from '../redux/authSlice';
+import AuthLayout from '../components/auth/AuthLayout';
+import PhoneField from '../components/auth/PhoneField';
+import PasswordField from '../components/auth/PasswordField';
+import useAuthReturn, { authErrorMessage } from '../hooks/useAuthReturn';
+import { Button, PressableScale, Text } from '../ui';
+import TextField from '../ui/TextField';
+import { siteUrl } from '../config/env';
+import { DEFAULT_PHONE_COUNTRY, applyPhoneInputChange, toBackendPhone, validatePhone } from '../utils/phoneRules';
+import { colors, radius } from '../theme';
 
-const STEP_PHONE = 'phone';
-const STEP_LOGIN = 'login';
-const STEP_REGISTER = 'register';
+const STEP = { PHONE: 'phone', LOGIN: 'login', REGISTER: 'register' };
 
-const getErrorMessage = (value) => {
-  if (typeof value === 'string') return value;
-  return value?.message || value?.error || 'Une erreur est survenue';
-};
-
+/**
+ * Connexion / inscription unifiées, par numéro de téléphone :
+ * 1. numéro → on sait si le compte existe
+ * 2a. compte existant → mot de passe
+ * 2b. nouveau client → prénom et nom → code SMS (écran VerifyOTP) → mot de passe
+ */
 export default function QuickAuthScreen({ navigation, route }) {
   const dispatch = useDispatch();
-  const { loading } = useSelector((state) => state.auth);
-  const { isConnected } = useNetworkStatus();
+  const loading = useSelector((s) => s.auth.loading);
+  const params = route?.params || {};
+  const finish = useAuthReturn(navigation, params);
 
-  const [step, setStep] = useState(STEP_PHONE);
+  const [step, setStep] = useState(STEP.PHONE);
   const [country, setCountry] = useState(DEFAULT_PHONE_COUNTRY);
-  const [phoneDigits, setPhoneDigits] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [digits, setDigits] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [refCode, setRefCode] = useState('');
+  const [showRef, setShowRef] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const passwordRef = useRef(null);
 
-  const pendingAction = route?.params?.pendingAction || null;
-  const returnScreen = route?.params?.returnScreen || null;
-  const returnParams = route?.params?.returnParams || null;
+  const fullPhone = useMemo(() => toBackendPhone(country, digits), [country, digits]);
+  const phoneDisplay = `${country.dialCode} ${applyPhoneInputChange(country, digits).display}`;
 
-  const fullPhone = useMemo(() => {
-    return toBackendPhone(country, phoneDigits);
-  }, [country, phoneDigits]);
-
-  const formattedPhone = useMemo(() => applyPhoneInputChange(country, phoneDigits).display, [country, phoneDigits]);
-
-  const navigateAfterAuth = () => {
-    dispatch(
-      setQuickAuthContext({
-        pendingAction,
-        returnScreen,
-        returnParams,
-      })
-    );
-
-    if (returnScreen) {
-      // Toujours garder l'accueil sous l'écran de retour (sinon « retour » quitte l'app)
-      navigation.reset(
-        returnScreen === 'MainTabs'
-          ? { index: 0, routes: [{ name: 'MainTabs', params: returnParams || {} }] }
-          : { index: 1, routes: [{ name: 'MainTabs' }, { name: returnScreen, params: returnParams || {} }] }
-      );
-      return;
-    }
-
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-    });
+  const fail = (e, fallback) => {
+    setError(authErrorMessage(e, fallback));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
   };
 
-  const validatePhoneField = () => {
-    const validation = validatePhone(country, phoneDigits, true);
-    setPhoneError(validation.message);
-    if (!validation.isValid) {
-      Alert.alert('Numero invalide', validation.message);
-      return false;
-    }
-
-    return true;
-  };
-
-  const handlePhoneChange = (rawValue) => {
-    const next = applyPhoneInputChange(country, rawValue);
-    setPhoneDigits(next.digits);
-    if (!next.digits) {
-      setPhoneError('');
-      return;
-    }
-    const validation = validatePhone(country, next.digits, true);
-    setPhoneError(validation.message);
-  };
-
-  const handleCountryChange = (dialCode) => {
-    const nextCountry = PHONE_COUNTRIES.find((entry) => entry.dialCode === dialCode) || DEFAULT_PHONE_COUNTRY;
-    setCountry(nextCountry);
-    setShowCountryPicker(false);
-
-    const next = applyPhoneInputChange(nextCountry, phoneDigits);
-    setPhoneDigits(next.digits);
-    if (!next.digits) {
-      setPhoneError('');
-      return;
-    }
-    const validation = validatePhone(nextCountry, next.digits, true);
-    setPhoneError(validation.message);
-  };
-
-  const handleCheckPhone = async () => {
-    if (!isConnected) {
-      Alert.alert('Hors ligne', 'Verifiez votre connexion internet.');
-      return;
-    }
-
-    if (!validatePhoneField()) return;
-
+  const run = async (fn) => {
+    setBusy(true);
+    setError(null);
     try {
-      dispatch(clearError());
-      const result = await dispatch(checkPhoneAvailability(fullPhone)).unwrap();
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  };
 
-      if (result.exists) {
-        setStep(STEP_LOGIN);
-      } else {
-        setStep(STEP_REGISTER);
+  const submitPhone = () =>
+    run(async () => {
+      const v = validatePhone(country, digits, true);
+      if (!v.isValid) return fail(v.message);
+      try {
+        dispatch(clearError());
+        const r = await dispatch(checkPhoneAvailability(fullPhone)).unwrap();
+        setStep(r.exists ? STEP.LOGIN : STEP.REGISTER);
+        if (r.exists) setTimeout(() => passwordRef.current?.focus(), 350);
+      } catch (e) {
+        fail(e, 'Impossible de vérifier ce numéro. Vérifiez votre connexion.');
       }
-    } catch (error) {
-      Alert.alert('Erreur', getErrorMessage(error) || 'Impossible de verifier ce numero');
-    }
+      return undefined;
+    });
+
+  const submitLogin = () =>
+    run(async () => {
+      if (password.length < 6) return fail('Saisissez votre mot de passe.');
+      try {
+        await dispatch(login({ identifier: fullPhone, phoneNumber: fullPhone, password })).unwrap();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        finish();
+      } catch (e) {
+        fail(e, 'Mot de passe incorrect.');
+      }
+      return undefined;
+    });
+
+  const forgot = () =>
+    run(async () => {
+      try {
+        const r = await dispatch(requestPasswordResetOtp(fullPhone)).unwrap();
+        navigation.navigate('VerifyOTP', {
+          ...params,
+          type: 'password-reset',
+          attemptsRemaining: r.attemptsRemaining,
+          cooldownSeconds: r.cooldownSeconds,
+          expiresInSeconds: r.expiresInSeconds,
+          channel: r.channel,
+          formData: { phoneNumber: fullPhone, name: null },
+        });
+      } catch (e) {
+        fail(e, "Impossible d'envoyer le code de réinitialisation.");
+      }
+    });
+
+  const submitRegister = () =>
+    run(async () => {
+      if (name.trim().length < 2) return fail('Indiquez votre prénom et votre nom.');
+      try {
+        const r = await dispatch(sendOtp({ phoneNumber: fullPhone, name: name.trim() })).unwrap();
+        navigation.navigate('VerifyOTP', {
+          ...params,
+          type: 'quick-register',
+          attemptsRemaining: r.attemptsRemaining,
+          cooldownSeconds: r.cooldownSeconds,
+          expiresInSeconds: r.expiresInSeconds,
+          channel: r.channel,
+          formData: { phoneNumber: fullPhone, name: name.trim(), refCode: refCode.trim().toUpperCase() || undefined },
+        });
+      } catch (e) {
+        fail(e, "Impossible d'envoyer le code. Réessayez dans un instant.");
+      }
+      return undefined;
+    });
+
+  const back = () => {
+    setError(null);
+    if (step !== STEP.PHONE) {
+      setStep(STEP.PHONE);
+      setPassword('');
+    } else if (navigation.canGoBack()) navigation.goBack();
+    else navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
   };
 
-  const handleLogin = async () => {
-    if (!password || password.length < 6) {
-      Alert.alert('Mot de passe', 'Veuillez saisir votre mot de passe (6 caracteres min).');
-      return;
-    }
+  const phoneChip = (
+    <PressableScale onPress={back} style={styles.phoneChip} scaleTo={0.98} accessibilityLabel="Modifier le numéro">
+      <Ionicons name="call-outline" size={16} color={colors.primaryDark} />
+      <Text variant="bodyMedium" style={styles.flex}>{phoneDisplay}</Text>
+      <Text variant="smallMedium" color="primary">Modifier</Text>
+    </PressableScale>
+  );
 
-    try {
-      await dispatch(
-        login({
-          identifier: fullPhone,
-          phoneNumber: fullPhone,
-          password,
-        })
-      ).unwrap();
+  const legal = (
+    <Text variant="caption" color="textMuted" align="center">
+      En continuant, vous acceptez nos{' '}
+      <Text variant="caption" color="primary" onPress={() => Linking.openURL(siteUrl('/informations-legales'))}>conditions</Text>
+      {' '}et notre{' '}
+      <Text variant="caption" color="primary" onPress={() => Linking.openURL(siteUrl('/confidentialite'))}>politique de confidentialité</Text>.
+    </Text>
+  );
 
-      navigateAfterAuth();
-    } catch (error) {
-      Alert.alert('Connexion echouee', getErrorMessage(error) || 'Impossible de se connecter');
-    }
-  };
+  const errorBox = error ? (
+    <View style={styles.error} accessibilityLiveRegion="polite">
+      <Ionicons name="alert-circle" size={18} color={colors.danger} />
+      <Text variant="small" color="danger" style={styles.flex}>{error}</Text>
+    </View>
+  ) : null;
 
-  const handleForgotPassword = async () => {
-    if (!validatePhoneField()) return;
+  if (step === STEP.LOGIN) {
+    return (
+      <AuthLayout stepKey={step} onBack={back} title="Bon retour 👋" subtitle="Saisissez votre mot de passe pour vous connecter.">
+        {phoneChip}
+        <PasswordField
+          ref={passwordRef}
+          value={password}
+          onChangeText={(t) => { setPassword(t); setError(null); }}
+          onSubmitEditing={submitLogin}
+          returnKeyType="go"
+        />
+        {errorBox}
+        <Button title="Se connecter" size="lg" full loading={busy || loading} onPress={submitLogin} />
+        <PressableScale onPress={forgot} style={styles.link} hitSlop={8} disabled={busy}>
+          <Text variant="smallMedium" color="primary">Mot de passe oublié ? Recevoir un code par SMS</Text>
+        </PressableScale>
+      </AuthLayout>
+    );
+  }
 
-    try {
-      const resetOtp = await dispatch(requestPasswordResetOtp(fullPhone)).unwrap();
-
-      navigation.navigate('VerifyOTP', {
-        type: 'password-reset',
-        attemptsRemaining: resetOtp.attemptsRemaining,
-        cooldownSeconds: resetOtp.cooldownSeconds,
-        expiresInSeconds: resetOtp.expiresInSeconds,
-        pendingAction,
-        returnScreen,
-        returnParams,
-        formData: {
-          phoneNumber: fullPhone,
-          name: null,
-        },
-      });
-    } catch (error) {
-      Alert.alert('Mot de passe oublie', getErrorMessage(error) || 'Impossible de lancer la reinitialisation');
-    }
-  };
-
-  const handleSendOtp = async () => {
-    if (!name || name.trim().length < 2) {
-      Alert.alert('Nom requis', 'Veuillez saisir votre nom complet.');
-      return;
-    }
-
-    try {
-      const otpResult = await dispatch(
-        sendOtp({
-          phoneNumber: fullPhone,
-          name: name.trim(),
-        })
-      ).unwrap();
-
-      navigation.navigate('VerifyOTP', {
-        type: 'quick-register',
-        attemptsRemaining: otpResult.attemptsRemaining,
-        cooldownSeconds: otpResult.cooldownSeconds,
-        expiresInSeconds: otpResult.expiresInSeconds,
-        pendingAction,
-        returnScreen,
-        returnParams,
-        formData: {
-          phoneNumber: fullPhone,
-          name: name.trim(),
-          refCode: refCode.trim().toUpperCase() || undefined,
-        },
-      });
-    } catch (error) {
-      Alert.alert('OTP', getErrorMessage(error) || 'Impossible d\'envoyer le code OTP');
-    }
-  };
+  if (step === STEP.REGISTER) {
+    return (
+      <AuthLayout stepKey={step} onBack={back} title="Créons votre compte" subtitle="Bienvenue ! Il ne manque que votre nom. Nous vous enverrons ensuite un code par SMS." footer={legal}>
+        {phoneChip}
+        <TextField
+          label="Prénom et nom"
+          icon="person-outline"
+          value={name}
+          onChangeText={(t) => { setName(t); setError(null); }}
+          placeholder="Ex. Aïcha Moussa"
+          autoCapitalize="words"
+          autoComplete="name"
+          textContentType="name"
+          autoFocus
+          returnKeyType="next"
+          onSubmitEditing={submitRegister}
+        />
+        {showRef ? (
+          <TextField
+            label="Code de parrainage"
+            optional
+            icon="gift-outline"
+            value={refCode}
+            onChangeText={(t) => setRefCode(t.toUpperCase())}
+            autoCapitalize="characters"
+            placeholder="Ex. BAOBAB123"
+          />
+        ) : (
+          <PressableScale onPress={() => setShowRef(true)} style={styles.refLink} hitSlop={8}>
+            <Ionicons name="gift-outline" size={16} color={colors.wood} />
+            <Text variant="smallMedium" color="wood">J'ai un code de parrainage</Text>
+          </PressableScale>
+        )}
+        {errorBox}
+        <Button title="Recevoir mon code" iconRight="arrow-forward" size="lg" full loading={busy} onPress={submitRegister} />
+      </AuthLayout>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#30A08B', '#2D9175', '#1F6E58']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
-      >
-        <View style={styles.headerIconWrap}>
-          <Ionicons name="shield-checkmark" size={34} color="#FFFFFF" />
-        </View>
-        <Text style={styles.title}>QuickAuth</Text>
-        <Text style={styles.subtitle}>Connexion simple, rapide et securisee</Text>
-      </LinearGradient>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.card}>
-        {step === STEP_PHONE && (
-          <>
-            <Text style={styles.stepTitle}>Etape 1: Votre numero</Text>
-            <Text style={styles.stepHint}>Entrez votre numero pour verifier si vous avez deja un compte.</Text>
-            <View style={styles.phoneRow}>
-              <TouchableOpacity style={styles.codeBox} onPress={() => setShowCountryPicker(true)} activeOpacity={0.8}>
-                <Text style={styles.codeText}>{country.flag} {country.dialCode}</Text>
-              </TouchableOpacity>
-              <View style={styles.phoneInputWrap}>
-                <CustomInput
-                  value={formattedPhone}
-                  onChangeText={handlePhoneChange}
-                  placeholder={getPhonePlaceholder(country)}
-                  keyboardType="phone-pad"
-                  icon="call-outline"
-                  error={phoneError}
-                  maxLength={country.nationalLength + country.groups.length - 1}
-                />
-              </View>
-            </View>
-            <CountryCodePicker
-              visible={showCountryPicker}
-              onClose={() => setShowCountryPicker(false)}
-              selectedCode={country.dialCode}
-              onSelectCode={handleCountryChange}
-            />
-            <LoadingButton
-              title="Continuer"
-              onPress={handleCheckPhone}
-              loading={loading}
-              style={styles.primaryButton}
-            />
-          </>
-        )}
-
-        {step === STEP_LOGIN && (
-          <>
-            <Text style={styles.stepTitle}>Etape 2: Connexion</Text>
-            <Text style={styles.infoText}>Numero detecte: {fullPhone}</Text>
-            <CustomInput
-              label="Mot de passe"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Votre mot de passe"
-              secureTextEntry
-              icon="lock-closed-outline"
-            />
-            <LoadingButton
-              title="Se connecter"
-              onPress={handleLogin}
-              loading={loading}
-              style={styles.primaryButton}
-            />
-            <TouchableOpacity onPress={handleForgotPassword}>
-              <Text style={styles.forgotLink}>Mot de passe oublie ?</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setStep(STEP_PHONE)}>
-              <Text style={styles.backLink}>Changer de numero</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {step === STEP_REGISTER && (
-          <>
-            <Text style={styles.stepTitle}>Etape 2: Inscription rapide</Text>
-            <Text style={styles.infoText}>Nouveau numero: {fullPhone}</Text>
-            <CustomInput
-              label="Nom complet"
-              value={name}
-              onChangeText={setName}
-              placeholder="Votre nom"
-              icon="person-outline"
-            />
-            <CustomInput
-              label="Code parrainage (optionnel)"
-              value={refCode}
-              onChangeText={(v) => setRefCode(v.toUpperCase())}
-              placeholder="Ex: MOUSSA-AB12"
-              icon="leaf-outline"
-              autoCapitalize="characters"
-            />
-            <Text style={styles.refCodeHint}>Entrez le code d'un ami pour gagner des Baobab Points a votre premiere commande.</Text>
-            <LoadingButton
-              title="Envoyer le code OTP"
-              onPress={handleSendOtp}
-              loading={loading}
-              style={styles.primaryButton}
-            />
-            <TouchableOpacity onPress={() => setStep(STEP_PHONE)}>
-              <Text style={styles.backLink}>Changer de numero</Text>
-            </TouchableOpacity>
-          </>
-        )}
+    <AuthLayout
+      stepKey={step}
+      onBack={back}
+      backIcon="close"
+      title="Connexion ou inscription"
+      subtitle="Entrez votre numéro de téléphone. Si vous êtes nouveau, nous créerons votre compte en 30 secondes."
+      footer={legal}
+    >
+      <PhoneField
+        country={country}
+        onCountryChange={setCountry}
+        digits={digits}
+        onDigitsChange={(d) => { setDigits(d); setError(null); }}
+        autoFocus
+        returnKeyType="next"
+        onSubmitEditing={submitPhone}
+      />
+      {errorBox}
+      <Button title="Continuer" iconRight="arrow-forward" size="lg" full loading={busy} onPress={submitPhone} disabled={!digits} />
+      <View style={styles.perks}>
+        {[
+          ['shield-checkmark-outline', 'Vos données restent privées'],
+          ['flash-outline', 'Pas besoin d’email'],
+        ].map(([icon, label]) => (
+          <View key={label} style={styles.perk}>
+            <Ionicons name={icon} size={16} color={colors.primary} />
+            <Text variant="small" color="textSecondary">{label}</Text>
+          </View>
+        ))}
       </View>
-      </ScrollView>
-    </SafeAreaView>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#EDF2F7',
+  flex: { flex: 1 },
+  phoneChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, marginBottom: 16,
+    borderRadius: radius.md, backgroundColor: colors.primarySoft,
   },
-  headerGradient: {
-    paddingTop: 24,
-    paddingBottom: 28,
-    paddingHorizontal: 18,
-    borderBottomLeftRadius: 26,
-    borderBottomRightRadius: 26,
+  error: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginBottom: 14,
+    borderRadius: radius.md, backgroundColor: colors.dangerSoft,
   },
-  headerIconWrap: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: 10,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingTop: 18,
-    paddingBottom: 26,
-  },
-  title: {
-    marginTop: 2,
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  subtitle: {
-    marginTop: 4,
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  stepTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  stepHint: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    marginBottom: 12,
-  },
-  infoText: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    marginBottom: 12,
-  },
-  phoneRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  codeBox: {
-    height: 48,
-    minWidth: 70,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-    backgroundColor: '#F8FAFC',
-  },
-  codeText: {
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  phoneInputWrap: {
-    flex: 1,
-  },
-  backLink: {
-    marginTop: 14,
-    textAlign: 'center',
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  forgotLink: {
-    marginTop: 12,
-    textAlign: 'center',
-    color: '#B17236',
-    fontWeight: '700',
-  },
-  primaryButton: {
-    marginTop: 4,
-    borderRadius: 10,
-  },
-  refCodeHint: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: -6,
-    marginBottom: 12,
-    lineHeight: 17,
-  },
+  link: { alignSelf: 'center', marginTop: 18, paddingVertical: 6 },
+  refLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 18 },
+  perks: { flexDirection: 'row', justifyContent: 'center', gap: 18, marginTop: 22, flexWrap: 'wrap' },
+  perk: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });
