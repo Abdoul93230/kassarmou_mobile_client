@@ -42,7 +42,7 @@ const ReviewItem = memo(function ReviewItem({ review }) {
 });
 
 /** Fenêtre « Donner mon avis » */
-const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmit, submitting }) {
+export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmit, submitting }) {
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
   const [text, setText] = useState('');

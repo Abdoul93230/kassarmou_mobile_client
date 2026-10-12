@@ -122,6 +122,36 @@ export const catalogApi = createApi({
       transformResponse: (res) => (Array.isArray(res?.data) ? res.data : []),
     }),
 
+    /** Vendeur public (par id) */
+    store: build.query({
+      query: (sellerId) => ({ url: `/getSellerClients/${sellerId}` }),
+      transformResponse: (res) => res?.data || null,
+    }),
+
+    /** Vendeur public (par nom de boutique — liens ihambaobab.com/boutique/<nom>) */
+    storeByName: build.query({
+      query: (name) => ({ url: `/getSellerByNameClients/${encodeURIComponent(name)}` }),
+      transformResponse: (res) => res?.data || null,
+    }),
+
+    /** Bannières marketing de la boutique */
+    storeBanners: build.query({
+      query: (sellerId) => ({ url: `/api/marketing/Bannerss/${sellerId}` }),
+      transformResponse: (res) => (Array.isArray(res?.data) ? res.data.filter((b) => b.active !== false && b.image) : []),
+    }),
+
+    /** Sous-catégories proposées par la boutique */
+    storeTypes: build.query({
+      query: (sellerId) => ({ url: `/getAllTypeBySeller/${sellerId}` }),
+      transformResponse: (res) => (Array.isArray(res?.data) ? res.data : []),
+    }),
+
+    /** Statistiques sociales (abonnés, j'aime, note) */
+    storeStats: build.query({
+      query: (sellerId) => ({ url: `/api/sellers/${sellerId}/stats` }),
+      transformResponse: (res) => res?.stats || null,
+    }),
+
     /** Produits d'une boutique */
     storeProducts: build.query({
       query: (sellerId) => ({ url: `/searchProductBySupplierClients/${sellerId}`, params: { limit: 100 } }),
@@ -141,6 +171,11 @@ export const {
   useProductsByTypeQuery,
   useStoresQuery,
   useStoreProductsQuery,
+  useStoreQuery,
+  useStoreByNameQuery,
+  useStoreBannersQuery,
+  useStoreTypesQuery,
+  useStoreStatsQuery,
 } = catalogApi;
 
 /** Aplatit les pages d'une infiniteQuery en une liste unique sans doublon */
