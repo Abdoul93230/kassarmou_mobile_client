@@ -6,6 +6,7 @@ import { useStoresQuery } from '../redux/catalogApi';
 import { Chip, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, Stars, Text } from '../ui';
 import { capitalize } from '../utils/text';
 import { colors, fonts, GUTTER, radius, shadows } from '../theme';
+import OriginBadge from '../components/OriginBadge';
 
 const SORTS = [
   { key: 'popular', label: 'Populaires' },
@@ -42,12 +43,12 @@ const StoreRow = React.memo(function StoreRow({ store, onPress }) {
             </>
           ) : null}
           <Text variant="caption" color="textMuted">{compact(store.followersCount)} abonnés</Text>
-          {store.city ? (
-            <>
-              <Text variant="caption" color="textMuted">·</Text>
-              <Text variant="caption" color="textMuted" numberOfLines={1}>{store.city.trim()}</Text>
-            </>
-          ) : null}
+          <Text variant="caption" color="textMuted">·</Text>
+          <OriginBadge
+            sellerId={store._id}
+            style={styles.shrink}
+            fallback={store.city ? <Text variant="caption" color="textMuted" numberOfLines={1}>{store.city.trim()}</Text> : null}
+          />
         </View>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />

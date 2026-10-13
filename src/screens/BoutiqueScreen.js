@@ -21,6 +21,7 @@ import { Button, Chip, EmptyState, IconButton, PressableScale, Skeleton, SmartIm
 import { siteUrl } from '../config/env';
 import { capitalize } from '../utils/text';
 import { colors, fonts, gradients, GUTTER, radius, shadows } from '../theme';
+import OriginBadge from '../components/OriginBadge';
 
 const EMPTY = [];
 const SORTS = [
@@ -143,6 +144,7 @@ export default function BoutiqueScreen({ route, navigation }) {
               <Text variant="h1" numberOfLines={2} align="center" style={styles.shrink}>{name}</Text>
               {store?.isvalid ? <Ionicons name="checkmark-circle" size={20} color={colors.primary} /> : null}
             </View>
+            <OriginBadge sellerId={store?._id || sellerId} detail variant="smallMedium" style={styles.originCenter} />
             {store?.storeDescription ? (
               <Text variant="body" color="textSecondary" align="center" numberOfLines={3} style={styles.mt6}>{store.storeDescription}</Text>
             ) : null}
@@ -295,6 +297,7 @@ export default function BoutiqueScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  originCenter: { alignSelf: 'center', marginTop: 4 },
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },

@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableScale, SectionHeader, SmartImage, Text } from '../../ui';
 import { colors, GUTTER, radius, shadows } from '../../theme';
+import OriginBadge from '../OriginBadge';
 
 const CARD_W = 128;
 
@@ -34,6 +35,7 @@ function StoreRail({ stores, onPressStore, onSeeAll }) {
             <Ionicons name="people-outline" size={12} color={colors.textMuted} />
             <Text variant="caption" color="textMuted">{compact(item.followersCount)} abonnés</Text>
           </View>
+          <OriginBadge sellerId={item._id} style={styles.origin} />
         </PressableScale>
       );
     },
@@ -70,6 +72,7 @@ const styles = StyleSheet.create({
   verified: { position: 'absolute', right: -4, bottom: -2, backgroundColor: colors.surface, borderRadius: 10 },
   name: { marginTop: 10, width: '100%' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  origin: { marginTop: 2, maxWidth: '100%' },
 });
 
 export default memo(StoreRail);

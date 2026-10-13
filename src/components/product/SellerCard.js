@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableScale, SmartImage, Text } from '../../ui';
 import { colors, GUTTER, radius } from '../../theme';
+import OriginBadge from '../OriginBadge';
 
 /** Carte vendeur : inspire confiance et mène à la boutique */
 function SellerCard({ seller, onPress }) {
@@ -22,7 +23,10 @@ function SellerCard({ seller, onPress }) {
           <Text variant="title" numberOfLines={1} style={styles.shrink}>{name}</Text>
           {seller.isvalid !== false ? <Ionicons name="checkmark-circle" size={16} color={colors.primary} /> : null}
         </View>
-        <Text variant="small" color="textSecondary">Vendeur vérifié · Niger</Text>
+        <View style={styles.sub}>
+          <Text variant="small" color="textSecondary">{seller.isvalid !== false ? 'Vendeur vérifié ·' : 'Vendeur ·'}</Text>
+          <OriginBadge sellerId={seller._id} variant="small" fallback={<Text variant="small" color="textSecondary">Niger</Text>} style={styles.originInline} />
+        </View>
       </View>
       <View style={styles.cta}>
         <Text variant="smallMedium" color="primaryDark">Boutique</Text>
@@ -33,6 +37,8 @@ function SellerCard({ seller, onPress }) {
 }
 
 const styles = StyleSheet.create({
+  sub: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  originInline: { flexShrink: 1 },
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: GUTTER, marginTop: 24,
     padding: 14, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
