@@ -110,6 +110,7 @@ export default function PaymentWebViewScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const { amount, transactionId } = route.params || {};
+  const user = useSelector((st) => st.auth.user);
   const payAmount = DEV_TEST_AMOUNT || Math.round(Number(amount) || 0);
 
   const [phase, setPhase] = useState('loading'); // loading | ready | verifying | success | failed
@@ -158,11 +159,13 @@ export default function PaymentWebViewScreen({ navigation, route }) {
       navigation.goBack();
       return;
     }
-    Alert.alert('Quitter le paiement ?', 'Votre commande reste enregistrée : vous pourrez la payer plus tard depuis « Mes commandes ».', [
+    Alert.alert('Quitter le paiement ?', !user
+      ? 'Votre commande reste enregistrée : retrouvez-la avec « Suivre une commande » et votre numéro de téléphone.'
+      : 'Votre commande reste enregistrée : vous pourrez la payer plus tard depuis « Mes commandes ».', [
       { text: 'Continuer le paiement', style: 'cancel' },
       { text: 'Quitter', style: 'destructive', onPress: () => navigation.goBack() },
     ]);
-  }, [navigation, phase]);
+  }, [navigation, phase, user]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -199,7 +202,6 @@ export default function PaymentWebViewScreen({ navigation, route }) {
   // (iPay n'accepte pas de rejouer une transaction échouée — même logique que le web)
   const retry = () => navigation.goBack();
 
-  const user = useSelector((st) => st.auth.user);
   // Sans compte : suivi par lien (la commande invité est mémorisée au checkout)
   const goOrders = async () => {
     if (!user) {
@@ -209,8 +211,10 @@ export default function PaymentWebViewScreen({ navigation, route }) {
         return;
       }
     }
-    navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Orders' }] });
+    // « Orders » n'existe que connecté : sinon, recherche de commande par numéro
+    navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: user ? 'Orders' : 'FindOrders' }] });
   };
+  const ordersLabel = user ? 'Voir mes commandes' : 'Suivre ma commande';
 
   return (
     <View style={styles.screen}>
@@ -280,7 +284,7 @@ export default function PaymentWebViewScreen({ navigation, route }) {
           </Text>
           <View style={styles.actions}>
             <Button title="Réessayer le paiement" icon="refresh" size="lg" full onPress={retry} />
-            <Button title="Voir mes commandes" variant="ghost" full onPress={goOrders} />
+            <Button title={ordersLabel} variant="ghost" full onPress={goOrders} />
           </View>
         </View>
       ) : null}
