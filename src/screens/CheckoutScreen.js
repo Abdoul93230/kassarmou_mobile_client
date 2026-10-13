@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
@@ -12,13 +12,16 @@ import apiClient from '../config/api';
 import { clearPanierData, selectPanierArticles } from '../redux/cartSlice';
 import { fetchPublicConfig, fetchWallet, selectConfig, selectWallet } from '../redux/gamificationSlice';
 import { generateUniqueID } from '../services/paymentHelpers';
-import { buildOrder, isOfflinePayment } from '../services/orderBuilder';
+import { buildOrder, isOfflinePayment, paymentStatusFor } from '../services/orderBuilder';
 import { Button, Chip, IconButton, PressableScale, SmartImage, Text } from '../ui';
 import TextField from '../ui/TextField';
 import PhoneField from '../components/auth/PhoneField';
 import PaymentOptions, { ONLINE } from '../components/checkout/PaymentOptions';
 import ZonePickerSheet from '../components/cart/ZonePickerSheet';
 import { getZones, quoteCart, rememberZone, zoneLabel } from '../services/shippingV3';
+import { ensureGuestSession, getGuestSession, OFFLINE_PAYMENTS } from '../services/guestSession';
+import GuestOtpSheet from '../components/guest/GuestOtpSheet';
+import GuestSuccess from '../components/guest/GuestSuccess';
 import {
   DEFAULT_PHONE_COUNTRY,
   formatPhoneInternational,
@@ -86,6 +89,11 @@ export default function CheckoutScreen({ navigation, route }) {
   const [location, setLocation] = useState(deliveryLocation);
   const [ship, setShip] = useState({ fee: shippingFee, calcs: shippingCalculations, loading: false, error: null });
   const [zoneSheet, setZoneSheet] = useState(false);
+  // Commande sans compte (choisie au panier)
+  const guest = !!route.params?.guest && !userId;
+  const [otp, setOtp] = useState({ open: false, reason: '' });
+  const [guestVerified, setGuestVerified] = useState(false);
+  const resumeAfterOtp = useRef(false);
   const [country, setCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [phoneDigits, setPhoneDigits] = useState('');
   const [editingAddress, setEditingAddress] = useState(true);
@@ -156,6 +164,21 @@ export default function CheckoutScreen({ navigation, route }) {
   const quoteRequired = parcels.some((c) => c.quoteRequired);
   const total = Math.max(0, subtotal - reduction) + (ship.fee || 0);
 
+  useEffect(() => {
+    if (!guest) return;
+    getGuestSession().then((g) => {
+      if (!g) return;
+      setGuestVerified(!!g.verified);
+      setDelivery((d) => ({ ...d, name: d.name || g.name || '' }));
+      if (!phoneDigits && g.phone) {
+        const p = parseStoredPhone(g.phone);
+        setCountry(p.country);
+        setPhoneDigits(p.digits);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guest]);
+
   // Baobab Points
   const pointsInfo = useMemo(() => {
     if (!gConfig?.enabled || !wallet || wallet.balance <= 0) return null;
@@ -185,7 +208,7 @@ export default function CheckoutScreen({ navigation, route }) {
   }, [country, delivery, phoneDigits, zone]);
 
   const placeOrder = useCallback(async () => {
-    if (!userId) {
+    if (!userId && !guest) {
       navigation.navigate('QuickAuth', { pendingAction: 'checkout', returnScreen: 'Cart' });
       return;
     }
@@ -211,6 +234,29 @@ export default function CheckoutScreen({ navigation, route }) {
       return;
     }
 
+    // Sans compte : session liée au numéro ; code SMS seulement si nécessaire
+    if (guest) {
+      try {
+        const phoneE164 = toBackendPhone(country, phoneDigits);
+        const r = await ensureGuestSession(phoneE164, delivery.name.trim());
+        const offline = OFFLINE_PAYMENTS.includes(paymentStatusFor(method));
+        if (r.accountExists || (offline && !r.session?.verified)) {
+          resumeAfterOtp.current = true;
+          setOtp({
+            open: true,
+            reason: r.accountExists
+              ? 'Ce numéro a déjà un compte. Confirmez-le par SMS pour commander sans vous connecter.'
+              : 'Pour le paiement à la livraison, nous vérifions votre numéro une seule fois.',
+          });
+          return;
+        }
+        setGuestVerified(!!r.session?.verified);
+      } catch (e) {
+        Toast.show({ type: 'error', text1: 'Commande impossible', text2: e.response?.data?.message || 'Vérifiez votre connexion.' });
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       // E.164 sans espace (+22787727501), format exigé par le backend
@@ -220,11 +266,11 @@ export default function CheckoutScreen({ navigation, route }) {
 
       const order = buildOrder({
         userId, cartItems, delivery, phone, zone, location, shippingCalculations: ship.calcs,
-        subtotal, shippingFee: ship.fee, reduction, total, promo: appliedPromo,
-        pointsToUse: points, pointsDiscount, paymentMethod: method, transactionId, existingOrder,
+        subtotal, shippingFee: ship.fee, reduction: guest ? 0 : reduction, total, promo: guest ? null : appliedPromo,
+        pointsToUse: guest ? 0 : points, pointsDiscount: guest ? 0 : pointsDiscount, paymentMethod: method, transactionId, existingOrder,
       });
 
-      await apiClient.post('/createOrUpdateAddress', {
+      if (!guest) await apiClient.post('/createOrUpdateAddress', {
         name: delivery.name.trim(),
         numero: phone,
         email: delivery.email.trim() || null,
@@ -240,12 +286,14 @@ export default function CheckoutScreen({ navigation, route }) {
         ? await apiClient.put('/updateCommande', order)
         : await apiClient.post('/createCommande', order);
       if (!res.data?.commande) throw new Error('Impossible de créer la commande');
+      const created = { reference: res.data.commande.reference || transactionId, trackingToken: res.data.commande.trackingToken };
+      if (guest && created.trackingToken) await AsyncStorage.setItem('lastGuestOrder', JSON.stringify(created));
 
       if (isOfflinePayment(method)) {
         await dispatch(clearPanierData());
         await AsyncStorage.multiRemove(['pendingOrder', 'shippingDetails', 'appliedPromoCode', 'paymentInitiated']);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        setDone({ reference: transactionId, method });
+        setDone({ reference: transactionId, method, trackingToken: created.trackingToken });
         return;
       }
 
@@ -268,7 +316,7 @@ export default function CheckoutScreen({ navigation, route }) {
     }
   }, [
     appliedPromo, blocked, cartItems, country, delivery, dispatch, location, method, navigation, payable, phoneDigits, points,
-    pointsDiscount, quoteRequired, reduction, ship, subtotal, total, userId, validate, zone,
+    pointsDiscount, quoteRequired, reduction, ship, subtotal, total, userId, validate, zone, guest,
   ]);
 
   // ── Confirmation ─────────────────────────────────────────────────────────────
@@ -290,16 +338,23 @@ export default function CheckoutScreen({ navigation, route }) {
             <Text variant="title" selectable>{done.reference}</Text>
           </View>
         </Animated.View>
+        {guest && done.trackingToken ? (
+          <ScrollView style={styles.guestScroll} contentContainerStyle={styles.guestScrollContent} keyboardShouldPersistTaps="handled">
+            <GuestSuccess reference={done.reference} trackingToken={done.trackingToken} verified={guestVerified} navigation={navigation} />
+          </ScrollView>
+        ) : null}
         <View style={styles.doneActions}>
-          <Button
-            title="Suivre ma commande"
-            icon="cube-outline"
-            full
-            size="lg"
-            onPress={() => {
-              navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Orders' }] });
-            }}
-          />
+          {!guest ? (
+            <Button
+              title="Suivre ma commande"
+              icon="cube-outline"
+              full
+              size="lg"
+              onPress={() => {
+                navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Orders' }] });
+              }}
+            />
+          ) : null}
           <Button
             title="Continuer mes achats"
             variant="ghost"
@@ -444,11 +499,28 @@ export default function CheckoutScreen({ navigation, route }) {
         {!method ? <Text variant="caption" color="textMuted" align="center" style={styles.mt6}>Choisissez un mode de paiement pour continuer</Text> : null}
       </View>
       <ZonePickerSheet visible={zoneSheet} onClose={() => setZoneSheet(false)} selected={zone} onSelect={changeZone} />
+      <GuestOtpSheet
+        visible={otp.open}
+        phone={toBackendPhone(country, phoneDigits)}
+        name={delivery.name.trim()}
+        reason={otp.reason}
+        onClose={() => { setOtp({ open: false, reason: '' }); resumeAfterOtp.current = false; }}
+        onVerified={() => {
+          setOtp({ open: false, reason: '' });
+          setGuestVerified(true);
+          if (resumeAfterOtp.current) {
+            resumeAfterOtp.current = false;
+            setTimeout(() => placeOrder(), 0);
+          }
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  guestScroll: { alignSelf: 'stretch', flexGrow: 0, maxHeight: '55%' },
+  guestScrollContent: { paddingHorizontal: 4 },
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   mt4: { marginTop: 4 },

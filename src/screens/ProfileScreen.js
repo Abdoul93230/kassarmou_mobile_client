@@ -188,6 +188,13 @@ export default function ProfileScreen({ navigation }) {
             onPress={() => navigation.navigate('QuickAuth', { returnScreen: 'MainTabs', returnParams: { screen: 'Profile' } })}
             style={styles.guestBtn}
           />
+          <Button
+            title="Suivre une commande passée sans compte"
+            variant="ghost"
+            size="md"
+            onPress={() => navigation.navigate('FindOrders')}
+            style={styles.guestBtn}
+          />
         </LinearGradient>
         <View style={styles.perks}>
           {[

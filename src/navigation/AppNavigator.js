@@ -32,6 +32,8 @@ import FaqScreen from '../screens/FaqScreen';
 import BoutiqueScreen from '../screens/BoutiqueScreen';
 import AllStoresScreen from '../screens/AllStoresScreen';
 import NearbyScreen from '../screens/NearbyScreen';
+import TrackingScreen from '../screens/TrackingScreen';
+import FindOrdersScreen from '../screens/FindOrdersScreen';
 import SellerDetailScreen from '../screens/SellerDetailScreen';
 import WalletScreen from '../screens/WalletScreen';
 
@@ -134,6 +136,8 @@ function AppNavigator() {
         ProductListScreen: 'Categorie/:categoryName',
         AllStores: 'boutiques',
         Nearby: 'pres-de-chez-moi',
+        Tracking: 'suivi/:reference',
+        FindOrders: 'suivi',
         Cart: 'Panier',
         Checkout: 'checkout',
         Orders: 'commandes',
@@ -206,6 +210,16 @@ function AppNavigator() {
         <Stack.Screen
           name="Nearby"
           component={NearbyScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Tracking"
+          component={TrackingScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="FindOrders"
+          component={FindOrdersScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen 

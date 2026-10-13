@@ -7,6 +7,7 @@ import useReorder from '../hooks/useReorder';
 import StageBadge from '../components/orders/StageBadge';
 import { Button, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
 import { SUPPORT } from '../config/env';
+import { fetchShareLink, shareTracking } from '../services/guestSession';
 import { formatPrice } from '../utils/formatPrice';
 import { formatPhoneInternational } from '../utils/phoneRules';
 import { formatDate, orderDate, orderPreview, orderStage } from '../utils/orders';
@@ -104,7 +105,19 @@ export default function OrderDetailScreen({ route, navigation }) {
           <Text variant="h2">Commande n° {ref.slice(-8)}</Text>
           <Text variant="caption" color="textMuted">Passée le {formatDate(orderDate(order))}</Text>
         </View>
-        <IconButton name="share-outline" onPress={() => Share.share({ message: `Ma commande Ihambaobab n° ${ref}` }).catch(() => {})} bg={colors.surfaceAlt} accessibilityLabel="Partager la référence" />
+        <IconButton
+          name="share-social-outline"
+          onPress={async () => {
+            // Lien de suivi partageable (sans connexion) ; la référence seule en secours
+            try {
+              const url = await fetchShareLink(order._id);
+              if (url) return shareTracking(url);
+            } catch {}
+            Share.share({ message: `Ma commande Ihambaobab n° ${ref}` }).catch(() => {});
+          }}
+          bg={colors.surfaceAlt}
+          accessibilityLabel="Partager le suivi"
+        />
       </View>
 
       <ScrollView

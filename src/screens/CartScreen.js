@@ -18,6 +18,7 @@ import useCartCheckout from '../hooks/useCartCheckout';
 import { Button, EmptyState, IconButton, PressableScale, Text } from '../ui';
 import CartLine from '../components/cart/CartLine';
 import ZonePickerSheet from '../components/cart/ZonePickerSheet';
+import CheckoutChoiceSheet from '../components/guest/CheckoutChoiceSheet';
 import { zoneLabel } from '../services/shippingV3';
 import ProductRail from '../components/home/ProductRail';
 import { formatPrice } from '../utils/formatPrice';
@@ -92,7 +93,9 @@ export default function CartScreen({ navigation }) {
     }
   }, [cart, navigation, promoInput, user]);
 
-  const checkout = useCallback(() => {
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const checkout = useCallback((asGuest = false) => {
+    asGuest = asGuest === true;
     if (!cart.zone) {
       setZoneSheet(true);
       return;
@@ -103,11 +106,13 @@ export default function CartScreen({ navigation }) {
       return;
     }
     if (!cart.shippingReady) return;
-    if (!user) {
-      navigation.navigate('QuickAuth', { pendingAction: 'checkout', returnScreen: 'Cart' });
+    // Sans compte : choix « avec un compte » (mis en avant) ou « sans compte »
+    if (!user && !asGuest) {
+      setChoiceOpen(true);
       return;
     }
     navigation.navigate('Checkout', {
+      guest: !user,
       subtotal: cart.subtotal,
       reduction: cart.reduction,
       shippingFee: cart.shippingTotal,
@@ -333,7 +338,7 @@ export default function CartScreen({ navigation }) {
           title={cart.zone ? 'Commander' : 'Choisir la livraison'}
           iconRight={cart.zone ? 'arrow-forward' : 'location-outline'}
           size="lg"
-          onPress={checkout}
+          onPress={() => checkout()}
           disabled={busy || (!!cart.zone && !cart.shippingReady)}
           style={styles.flex}
           full
@@ -341,6 +346,12 @@ export default function CartScreen({ navigation }) {
       </View>
 
       <ZonePickerSheet visible={zoneSheet} onClose={() => setZoneSheet(false)} selected={cart.zone} onSelect={cart.setZone} />
+      <CheckoutChoiceSheet
+        visible={choiceOpen}
+        onClose={() => setChoiceOpen(false)}
+        onGuest={() => { setChoiceOpen(false); checkout(true); }}
+        onAccount={() => { setChoiceOpen(false); navigation.navigate('QuickAuth', { pendingAction: 'checkout', returnScreen: 'Cart' }); }}
+      />
     </View>
   );
 }

@@ -22,15 +22,23 @@ const apiClient = axios.create({
 // Fonction utilitaire pour delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Routes ouvertes à la commande sans compte
+const GUEST_ROUTES = /\/(createCommande|updateCommande|getCommandesById\/|getCommandeByReference\/|api\/orders\/[^/]+\/share)/;
+
 // Intercepteur pour ajouter le token à chaque requête
 apiClient.interceptors.request.use(
   async (config) => {
     try {
       const userString = await AsyncStorage.getItem('userEcomme');
-      if (userString) {
-        const user = JSON.parse(userString);
-        if (user.token) {
-          config.headers.Authorization = `Bearer ${user.token}`;
+      const user = userString ? JSON.parse(userString) : null;
+      if (user?.token) {
+        config.headers.Authorization = `Bearer ${user.token}`;
+      } else if (!config.headers.Authorization && GUEST_ROUTES.test(String(config.url || ''))) {
+        // Commande sans compte : jeton invité sur les routes de commande uniquement
+        const guest = JSON.parse((await AsyncStorage.getItem('ihamGuestSession')) || 'null');
+        if (guest?.token) {
+          config.headers.Authorization = `Bearer ${guest.token}`;
+          config._guest = true;
         }
       }
     } catch (error) {
@@ -85,7 +93,8 @@ apiClient.interceptors.response.use(
     
     // Gérer erreur 401 uniquement pour les requêtes protégées portant un token
     // Les endpoints publics d'auth/OTP peuvent aussi répondre 401 sans signifier une session expirée.
-    if (error.response?.status === 401 && hasBearerToken && !isPublicAuthRequest) {
+    // Requête invité (pas de session de compte) : jamais de déconnexion ni de panier vidé
+    if (error.response?.status === 401 && hasBearerToken && !isPublicAuthRequest && !originalRequest?._guest) {
       try {
         // Supprimer le token du storage
         await AsyncStorage.removeItem('userEcomme');

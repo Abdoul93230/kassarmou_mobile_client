@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, BackHandler, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -199,7 +199,18 @@ export default function PaymentWebViewScreen({ navigation, route }) {
   // (iPay n'accepte pas de rejouer une transaction échouée — même logique que le web)
   const retry = () => navigation.goBack();
 
-  const goOrders = () => navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Orders' }] });
+  const user = useSelector((st) => st.auth.user);
+  // Sans compte : suivi par lien (la commande invité est mémorisée au checkout)
+  const goOrders = async () => {
+    if (!user) {
+      const last = JSON.parse((await AsyncStorage.getItem('lastGuestOrder')) || 'null');
+      if (last?.trackingToken) {
+        navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Tracking', params: { reference: last.reference, k: last.trackingToken } }] });
+        return;
+      }
+    }
+    navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Orders' }] });
+  };
 
   return (
     <View style={styles.screen}>
