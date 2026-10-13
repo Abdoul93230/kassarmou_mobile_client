@@ -12,6 +12,7 @@ import PasswordField from '../components/auth/PasswordField';
 import useAuthReturn, { authErrorMessage } from '../hooks/useAuthReturn';
 import { Button, PressableScale, Text } from '../ui';
 import { validatePassword } from '../utils/passwordRules';
+import { formatPhoneInternational } from '../utils/phoneRules';
 import { colors, radius } from '../theme';
 
 const OTP_LENGTH = 6;
@@ -168,7 +169,7 @@ export default function VerifyOTPScreen({ navigation, route }) {
       stepKey="code"
       onBack={() => navigation.goBack()}
       title="Entrez le code"
-      subtitle={`Nous avons envoyé un code à 6 chiffres par ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} au ${formData.phoneNumber || 'numéro indiqué'}.`}
+      subtitle={`Nous avons envoyé un code à 6 chiffres par ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} au ${formatPhoneInternational(formData.phoneNumber) || 'numéro indiqué'}.`}
     >
       <OtpBoxes value={code} onChange={(v) => { setCode(v); setError(null); }} onComplete={submitCode} error={!!error} />
 

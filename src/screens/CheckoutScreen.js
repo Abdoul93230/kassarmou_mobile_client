@@ -15,12 +15,11 @@ import { generateUniqueID } from '../services/paymentHelpers';
 import { buildOrder, isOfflinePayment } from '../services/orderBuilder';
 import { Button, Chip, IconButton, PressableScale, SmartImage, Text } from '../ui';
 import TextField from '../ui/TextField';
+import PhoneField from '../components/auth/PhoneField';
 import PaymentOptions, { ONLINE } from '../components/checkout/PaymentOptions';
 import {
   DEFAULT_PHONE_COUNTRY,
-  PHONE_COUNTRIES,
-  applyPhoneInputChange,
-  getPhonePlaceholder,
+  formatPhoneInternational,
   parseStoredPhone,
   toBackendPhone,
   validatePhone,
@@ -80,7 +79,6 @@ export default function CheckoutScreen({ navigation, route }) {
   const [delivery, setDelivery] = useState({ ...EMPTY_DELIVERY, name: user?.name || '', ...fromZone(selectedZone) });
   const [country, setCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [phoneDigits, setPhoneDigits] = useState('');
-  const [countryPicker, setCountryPicker] = useState(false);
   const [editingAddress, setEditingAddress] = useState(true);
   const [errors, setErrors] = useState({});
   const [method, setMethod] = useState(ONLINE);
@@ -164,8 +162,8 @@ export default function CheckoutScreen({ navigation, route }) {
 
     setSubmitting(true);
     try {
-      // Format exigé par le backend : indicatif collé au numéro, sans espace (+22787727501)
-      const phone = toBackendPhone(country, phoneDigits).replace(/\s+/g, '');
+      // E.164 sans espace (+22787727501), format exigé par le backend
+      const phone = toBackendPhone(country, phoneDigits);
       const transactionId = generateUniqueID();
       const existingOrder = JSON.parse((await AsyncStorage.getItem('pendingOrder')) || 'null');
 
@@ -257,7 +255,6 @@ export default function CheckoutScreen({ navigation, route }) {
     );
   }
 
-  const phoneDisplay = applyPhoneInputChange(country, phoneDigits).display;
   const offline = isOfflinePayment(method);
 
   return (
@@ -287,40 +284,22 @@ export default function CheckoutScreen({ navigation, route }) {
           {!editingAddress ? (
             <View>
               <Text variant="title">{delivery.name}</Text>
-              <Text variant="body" color="textSecondary">{country.dialCode} {phoneDisplay}</Text>
+              <Text variant="body" color="textSecondary">{formatPhoneInternational(toBackendPhone(country, phoneDigits))}</Text>
               <Text variant="body" color="textSecondary">{[delivery.quartier, delivery.region].filter(Boolean).join(', ')}</Text>
               {delivery.description ? <Text variant="small" color="textMuted" style={styles.mt4}>{delivery.description}</Text> : null}
             </View>
           ) : (
             <View>
               <TextField label="Nom complet" icon="person-outline" value={delivery.name} onChangeText={(t) => setField('name', t)} error={errors.name} autoComplete="name" textContentType="name" />
-              <TextField
+              <PhoneField
+                country={country}
+                onCountryChange={setCountry}
+                digits={phoneDigits}
+                onDigitsChange={(d) => { setPhoneDigits(d); setErrors((e) => ({ ...e, phone: undefined })); }}
                 label="Téléphone"
-                value={phoneDisplay}
-                onChangeText={(t) => { setPhoneDigits(applyPhoneInputChange(country, t).digits); setErrors((e) => ({ ...e, phone: undefined })); }}
-                placeholder={getPhonePlaceholder(country)}
-                keyboardType="phone-pad"
                 error={errors.phone}
                 hint="Le livreur vous appellera sur ce numéro"
-                prefix={
-                  <PressableScale onPress={() => setCountryPicker((v) => !v)} style={styles.dial} hitSlop={6}>
-                    <Text variant="bodyMedium">{country.flag} {country.dialCode}</Text>
-                    <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-                  </PressableScale>
-                }
               />
-              {countryPicker ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.countries}>
-                  {PHONE_COUNTRIES.map((c) => (
-                    <Chip
-                      key={c.iso}
-                      label={`${c.flag} ${c.dialCode}`}
-                      active={c.iso === country.iso}
-                      onPress={() => { setCountry(c); setPhoneDigits(''); setCountryPicker(false); }}
-                    />
-                  ))}
-                </ScrollView>
-              ) : null}
               <View style={styles.twoCols}>
                 <TextField label="Région / ville" value={delivery.region} onChangeText={(t) => setField('region', t)} error={errors.region} style={styles.flex} />
                 <TextField label="Quartier" value={delivery.quartier} onChangeText={(t) => setField('quartier', t)} error={errors.quartier} style={styles.flex} />

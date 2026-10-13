@@ -17,7 +17,11 @@ function PhoneField({ country, onCountryChange, digits, onDigitsChange, error, l
         ref={ref}
         label={label}
         value={display}
-        onChangeText={(t) => onDigitsChange(applyPhoneInputChange(country, t).digits)}
+        onChangeText={(t) => {
+          const next = applyPhoneInputChange(country, t);
+          if (next.country.iso !== country.iso) onCountryChange(next.country); // numéro international collé
+          onDigitsChange(next.digits);
+        }}
         placeholder={getPhonePlaceholder(country)}
         keyboardType="phone-pad"
         autoComplete="tel"

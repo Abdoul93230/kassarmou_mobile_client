@@ -11,6 +11,7 @@ import apiClient from '../config/api';
 import { LEGACY_DEFAULT_AVATAR, SUPPORT } from '../config/env';
 import { requestPasswordResetOtp, updateUserProfile } from '../redux/authSlice';
 import { authErrorMessage } from '../hooks/useAuthReturn';
+import { formatPhoneInternational } from '../utils/phoneRules';
 import { Button, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
 import TextField from '../ui/TextField';
 import { colors, GUTTER, radius, shadows } from '../theme';
@@ -159,7 +160,7 @@ export default function EditProfileScreen({ navigation }) {
             <TextField
               label="Téléphone"
               icon="call-outline"
-              value={phone}
+              value={formatPhoneInternational(phone)}
               editable={false}
               hint="C'est votre identifiant de connexion."
               suffix={<Ionicons name="lock-closed" size={16} color={colors.textMuted} />}

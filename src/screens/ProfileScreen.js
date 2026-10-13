@@ -16,6 +16,7 @@ import { clearLikes } from '../redux/likesSlice';
 import { fetchWallet, selectWallet } from '../redux/gamificationSlice';
 import { catalogApi, useMyOrdersQuery } from '../redux/catalogApi';
 import { orderStage } from '../utils/orders';
+import { formatPhoneInternational } from '../utils/phoneRules';
 import { Button, PressableScale, SmartImage, Text } from '../ui';
 import DeleteAccountSheet from '../components/profile/DeleteAccountSheet';
 import { colors, gradients, GUTTER, radius, shadows } from '../theme';
@@ -226,7 +227,7 @@ export default function ProfileScreen({ navigation }) {
           </PressableScale>
           <View style={styles.flex}>
             <Text variant="h2" color="textInverse" numberOfLines={1}>{name}</Text>
-            <Text variant="small" color="textInverse" style={styles.heroSub} numberOfLines={1}>{profile?.phone || profile?.email || ''}</Text>
+            <Text variant="small" color="textInverse" style={styles.heroSub} numberOfLines={1}>{formatPhoneInternational(profile?.phone) || profile?.email || ''}</Text>
             <PressableScale onPress={() => navigation.navigate('EditProfile')} style={styles.editPill} hitSlop={6}>
               <Ionicons name="create-outline" size={13} color={colors.textInverse} />
               <Text variant="caption" color="textInverse">Modifier le profil</Text>

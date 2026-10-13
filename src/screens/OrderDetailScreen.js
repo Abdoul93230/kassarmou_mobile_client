@@ -8,6 +8,7 @@ import StageBadge from '../components/orders/StageBadge';
 import { Button, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
 import { SUPPORT } from '../config/env';
 import { formatPrice } from '../utils/formatPrice';
+import { formatPhoneInternational } from '../utils/phoneRules';
 import { formatDate, orderDate, orderPreview, orderStage } from '../utils/orders';
 import { colors, GUTTER, radius, shadows } from '../theme';
 
@@ -125,7 +126,7 @@ export default function OrderDetailScreen({ route, navigation }) {
             <Ionicons name="location" size={18} color={colors.primary} />
             <View style={styles.flex}>
               <Text variant="title">{d.customerName || '—'}</Text>
-              {d.numero ? <Text variant="body" color="textSecondary">{d.numero}</Text> : null}
+              {d.numero ? <Text variant="body" color="textSecondary">{formatPhoneInternational(d.numero)}</Text> : null}
               <Text variant="body" color="textSecondary">{[d.quartier, d.region].filter(Boolean).join(', ')}</Text>
               {d.description ? <Text variant="small" color="textMuted" style={styles.mt4}>{d.description}</Text> : null}
             </View>
