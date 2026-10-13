@@ -17,6 +17,8 @@ import { Button, Chip, IconButton, PressableScale, SmartImage, Text } from '../u
 import TextField from '../ui/TextField';
 import PhoneField from '../components/auth/PhoneField';
 import PaymentOptions, { ONLINE } from '../components/checkout/PaymentOptions';
+import ZonePickerSheet from '../components/cart/ZonePickerSheet';
+import { getZones, quoteCart, rememberZone, zoneLabel } from '../services/shippingV3';
 import {
   DEFAULT_PHONE_COUNTRY,
   formatPhoneInternational,
@@ -29,16 +31,18 @@ import { productImage } from '../utils/image';
 import { colors, GUTTER, radius, shadows } from '../theme';
 
 const F = (n) => `${formatPrice(n)} FCFA`;
-const EMPTY_DELIVERY = { name: '', email: '', region: '', quartier: '', description: '' };
+const EMPTY_DELIVERY = { name: '', email: '', landmark: '' };
 
-/** Déduit région / quartier de la zone choisie au panier (« Niger > Niamey > Commune 1 ») */
-const fromZone = (zone) => {
-  const parts = String(zone?.fullPath || '').split('>').map((s) => s.trim()).filter(Boolean);
-  return {
-    region: parts[1] || parts[0] || '',
-    quartier: ['city', 'district'].includes(zone?.type) ? zone.name : '',
-  };
-};
+/** Frais par boutique issus d'un devis v3 (même forme que useCartCheckout) */
+const calcsFromQuote = (q) => Object.fromEntries((q?.parcels || []).map((p) => [p.sellerId, {
+  totalCost: p.deliverable ? p.fee || 0 : 0,
+  deliverable: p.deliverable,
+  quoteRequired: p.quoteRequired,
+  message: p.message,
+  delay: p.delay?.label || null,
+  free: p.free || null,
+  storeName: p.storeName,
+}]));
 
 function Section({ title, icon, right, children }) {
   return (
@@ -72,11 +76,16 @@ export default function CheckoutScreen({ navigation, route }) {
   const userId = user?.id || user?._id;
 
   const {
-    subtotal = 0, reduction = 0, shippingFee = 0, total = 0,
-    selectedZone = null, appliedPromo = null, shippingCalculations = {},
+    subtotal = 0, reduction = 0, shippingFee = 0,
+    selectedZone = null, deliveryLocation = null, appliedPromo = null, shippingCalculations = {},
   } = route.params || {};
 
-  const [delivery, setDelivery] = useState({ ...EMPTY_DELIVERY, name: user?.name || '', ...fromZone(selectedZone) });
+  const [delivery, setDelivery] = useState({ ...EMPTY_DELIVERY, name: user?.name || '' });
+  // Zone, position et frais : modifiables ici (nouveau devis à chaque changement de zone)
+  const [zone, setZone] = useState(selectedZone);
+  const [location, setLocation] = useState(deliveryLocation);
+  const [ship, setShip] = useState({ fee: shippingFee, calcs: shippingCalculations, loading: false, error: null });
+  const [zoneSheet, setZoneSheet] = useState(false);
   const [country, setCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [phoneDigits, setPhoneDigits] = useState('');
   const [editingAddress, setEditingAddress] = useState(true);
@@ -97,21 +106,54 @@ export default function CheckoutScreen({ navigation, route }) {
         setDelivery((d) => ({
           name: a.name || d.name,
           email: a.email || '',
-          region: a.region || d.region,
-          quartier: a.quartier || d.quartier,
-          description: a.description || '',
+          // Ancien format : le repère était saisi dans « description »
+          landmark: a.landmark || a.description || '',
         }));
         if (a.numero) {
           const p = parseStoredPhone(a.numero);
           setCountry(p.country);
           setPhoneDigits(p.digits);
         }
-        if (a.name && a.numero && a.region && a.quartier) setEditingAddress(false);
+        if (!location && a.location?.lat != null) setLocation(a.location);
+        if (a.name && a.numero && (a.zoneId || selectedZone)) setEditingAddress(false);
       })
       .catch(() => {});
     dispatch(fetchPublicConfig());
     dispatch(fetchWallet(userId));
   }, [dispatch, userId]);
+
+  const changeZone = useCallback(async (z, meta) => {
+    setZone(z);
+    rememberZone(z);
+    if (meta?.location) setLocation(meta.location);
+    setErrors((e) => ({ ...e, zone: undefined }));
+    setShip((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const q = await quoteCart(z._id, cartItems.filter((i) => i._id).map((i) => ({ productId: String(i._id), quantity: Number(i.quantite) || 1 })));
+      setShip({ fee: q.totalFee, calcs: calcsFromQuote(q), loading: false, error: null });
+    } catch {
+      setShip((s) => ({ ...s, loading: false, error: 'Calcul des frais indisponible. Réessayez.' }));
+    }
+  }, [cartItems]);
+
+  // Adresse sans zone transmise par le panier : on reprend celle de l'adresse enregistrée
+  useEffect(() => {
+    if (zone || !userId) return;
+    apiClient.get(`/getAddressByUserKey/${userId}`)
+      .then(async (r) => {
+        const id = r.data?.address?.zoneId;
+        if (!id) return;
+        const z = (await getZones()).find((x) => x._id === String(id));
+        if (z) changeZone(z);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const parcels = Object.values(ship.calcs || {});
+  const blocked = parcels.filter((c) => c.deliverable === false && !c.quoteRequired);
+  const quoteRequired = parcels.some((c) => c.quoteRequired);
+  const total = Math.max(0, subtotal - reduction) + (ship.fee || 0);
 
   // Baobab Points
   const pointsInfo = useMemo(() => {
@@ -134,13 +176,12 @@ export default function CheckoutScreen({ navigation, route }) {
     if (delivery.name.trim().length < 2) e.name = 'Indiquez votre nom complet';
     const phone = validatePhone(country, phoneDigits, true);
     if (!phone.isValid) e.phone = phone.message;
-    if (!delivery.region.trim()) e.region = 'Indiquez votre région ou ville';
-    if (!delivery.quartier.trim()) e.quartier = 'Indiquez votre quartier';
+    if (!zone?._id) e.zone = 'Choisissez votre quartier ou votre ville';
     if (delivery.email.trim() && !/^\S+@\S+\.\S+$/.test(delivery.email.trim())) e.email = 'Adresse email invalide';
     setErrors(e);
     if (Object.keys(e).length) setEditingAddress(true);
     return !Object.keys(e).length;
-  }, [country, delivery, phoneDigits]);
+  }, [country, delivery, phoneDigits, zone]);
 
   const placeOrder = useCallback(async () => {
     if (!userId) {
@@ -159,6 +200,15 @@ export default function CheckoutScreen({ navigation, route }) {
       Toast.show({ type: 'error', text1: 'Votre panier est vide' });
       return;
     }
+    if (ship.loading) return;
+    if (blocked.length) {
+      Toast.show({ type: 'error', text1: 'Livraison indisponible', text2: `${blocked[0].storeName} : ${blocked[0].message || 'zone non desservie'}` });
+      return;
+    }
+    if (quoteRequired && !isOfflinePayment(method)) {
+      Toast.show({ type: 'info', text1: 'Livraison sur devis', text2: 'Choisissez le paiement à la livraison ou le paiement assisté.' });
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -168,15 +218,19 @@ export default function CheckoutScreen({ navigation, route }) {
       const existingOrder = JSON.parse((await AsyncStorage.getItem('pendingOrder')) || 'null');
 
       const order = buildOrder({
-        userId, cartItems, delivery, phone, zone: selectedZone, shippingCalculations,
-        subtotal, shippingFee, reduction, total, promo: appliedPromo,
+        userId, cartItems, delivery, phone, zone, location, shippingCalculations: ship.calcs,
+        subtotal, shippingFee: ship.fee, reduction, total, promo: appliedPromo,
         pointsToUse: points, pointsDiscount, paymentMethod: method, transactionId, existingOrder,
       });
 
       await apiClient.post('/createOrUpdateAddress', {
-        ...delivery,
+        name: delivery.name.trim(),
         numero: phone,
         email: delivery.email.trim() || null,
+        zoneId: zone._id,
+        landmark: delivery.landmark.trim(),
+        description: delivery.landmark.trim(),
+        ...(location ? { location } : {}),
         clefUser: userId,
       });
 
@@ -211,8 +265,8 @@ export default function CheckoutScreen({ navigation, route }) {
       setSubmitting(false);
     }
   }, [
-    appliedPromo, cartItems, country, delivery, dispatch, method, navigation, payable, phoneDigits, points,
-    pointsDiscount, reduction, selectedZone, shippingCalculations, shippingFee, subtotal, total, userId, validate,
+    appliedPromo, blocked, cartItems, country, delivery, dispatch, location, method, navigation, payable, phoneDigits, points,
+    pointsDiscount, quoteRequired, reduction, ship, subtotal, total, userId, validate, zone,
   ]);
 
   // ── Confirmation ─────────────────────────────────────────────────────────────
@@ -285,8 +339,9 @@ export default function CheckoutScreen({ navigation, route }) {
             <View>
               <Text variant="title">{delivery.name}</Text>
               <Text variant="body" color="textSecondary">{formatPhoneInternational(toBackendPhone(country, phoneDigits))}</Text>
-              <Text variant="body" color="textSecondary">{[delivery.quartier, delivery.region].filter(Boolean).join(', ')}</Text>
-              {delivery.description ? <Text variant="small" color="textMuted" style={styles.mt4}>{delivery.description}</Text> : null}
+              <Text variant="body" color="textSecondary">{zone ? [zoneLabel(zone).title, zoneLabel(zone).subtitle].filter(Boolean).join(', ') : 'Zone à choisir'}</Text>
+              {delivery.landmark ? <Text variant="small" color="textMuted" style={styles.mt4}>Repère : {delivery.landmark}</Text> : null}
+              {location ? <Text variant="caption" color="primary" style={styles.mt4}>📍 Position enregistrée pour le livreur</Text> : null}
             </View>
           ) : (
             <View>
@@ -300,11 +355,17 @@ export default function CheckoutScreen({ navigation, route }) {
                 error={errors.phone}
                 hint="Le livreur vous appellera sur ce numéro"
               />
-              <View style={styles.twoCols}>
-                <TextField label="Région / ville" value={delivery.region} onChangeText={(t) => setField('region', t)} error={errors.region} style={styles.flex} />
-                <TextField label="Quartier" value={delivery.quartier} onChangeText={(t) => setField('quartier', t)} error={errors.quartier} style={styles.flex} />
-              </View>
-              <TextField label="Repère pour le livreur" optional icon="navigate-outline" value={delivery.description} onChangeText={(t) => setField('description', t)} placeholder="Ex. près de la grande mosquée, portail bleu" multiline />
+              <Text variant="smallMedium" color="textSecondary" style={styles.fieldLabel}>Quartier ou ville</Text>
+              <PressableScale onPress={() => setZoneSheet(true)} scaleTo={0.985} style={[styles.zoneField, errors.zone && styles.zoneFieldError]}>
+                <Ionicons name="location" size={18} color={zone ? colors.primary : colors.textMuted} />
+                <View style={styles.flex}>
+                  <Text variant={zone ? 'title' : 'body'} color={zone ? 'text' : 'textMuted'} numberOfLines={1}>{zone ? zoneLabel(zone).title : 'Choisir dans la liste'}</Text>
+                  {zone && zoneLabel(zone).subtitle ? <Text variant="caption" color="textMuted" numberOfLines={1}>{zoneLabel(zone).subtitle}</Text> : null}
+                </View>
+                <Text variant="smallMedium" color="primary">{zone ? 'Modifier' : 'Choisir'}</Text>
+              </PressableScale>
+              {errors.zone ? <Text variant="small" color="danger" style={styles.fieldError}>{errors.zone}</Text> : null}
+              <TextField label="Point de repère" optional icon="navigate-outline" value={delivery.landmark} onChangeText={(t) => setField('landmark', t)} placeholder="Ex. derrière la pharmacie, portail bleu" maxLength={200} />
               <TextField label="Email" optional icon="mail-outline" value={delivery.email} onChangeText={(t) => setField('email', t)} error={errors.email} keyboardType="email-address" autoCapitalize="none" placeholder="Pour recevoir votre reçu" />
             </View>
           )}
@@ -351,7 +412,17 @@ export default function CheckoutScreen({ navigation, route }) {
           </ScrollView>
           <Row label="Sous-total" value={F(subtotal)} />
           {reduction > 0 ? <Row label={`Code ${appliedPromo?.code || 'promo'}`} value={`-${F(reduction)}`} tone="success" /> : null}
-          <Row label="Livraison" value={shippingFee > 0 ? F(shippingFee) : 'Offerte'} />
+          <Row
+            label="Livraison"
+            value={ship.loading ? 'Calcul…' : ship.fee > 0 ? `${F(ship.fee)}${quoteRequired ? ' + devis' : ''}` : quoteRequired ? 'Sur devis' : parcels.some((c) => c.free) ? 'Offerte' : F(0)}
+            tone={ship.fee === 0 && parcels.some((c) => c.free) ? 'success' : undefined}
+          />
+          {parcels.length > 1 || parcels.some((c) => c.delay || c.deliverable === false) ? parcels.map((c) => (
+            <Text key={c.storeName} variant="caption" color={c.deliverable === false ? (c.quoteRequired ? 'wood' : 'danger') : 'textMuted'} style={styles.parcelLine} numberOfLines={2}>
+              {c.storeName} · {c.deliverable === false ? (c.message || (c.quoteRequired ? 'sur devis' : 'non livrable')) : `${c.free ? 'offerte' : F(c.totalCost)}${c.delay ? ` · ${c.delay}` : ''}`}
+            </Text>
+          )) : null}
+          {ship.error ? <Text variant="caption" color="danger" style={styles.parcelLine}>{ship.error}</Text> : null}
           {pointsDiscount > 0 ? <Row label="Baobab Points" value={`-${F(pointsDiscount)}`} tone="success" /> : null}
           <View style={styles.divider} />
           <Row label="Total à payer" value={F(payable)} bold />
@@ -365,11 +436,12 @@ export default function CheckoutScreen({ navigation, route }) {
           size="lg"
           full
           loading={submitting}
-          disabled={!method}
+          disabled={!method || ship.loading || blocked.length > 0}
           onPress={placeOrder}
         />
         {!method ? <Text variant="caption" color="textMuted" align="center" style={styles.mt6}>Choisissez un mode de paiement pour continuer</Text> : null}
       </View>
+      <ZonePickerSheet visible={zoneSheet} onClose={() => setZoneSheet(false)} selected={zone} onSelect={changeZone} />
     </KeyboardAvoidingView>
   );
 }
@@ -389,7 +461,14 @@ const styles = StyleSheet.create({
 
   dial: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingRight: 10, borderRightWidth: 1, borderRightColor: colors.border },
   countries: { gap: 8, paddingBottom: 14 },
-  twoCols: { flexDirection: 'row', gap: 10 },
+  fieldLabel: { marginBottom: 6, marginTop: 2 },
+  fieldError: { marginTop: 4 },
+  zoneField: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 54, paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, marginBottom: 14,
+  },
+  zoneFieldError: { borderColor: colors.danger },
+  parcelLine: { paddingLeft: 8, marginTop: 2 },
   note: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 6, padding: 12, borderRadius: radius.md, backgroundColor: colors.primarySoft },
   pointsRow: { flexDirection: 'row', gap: 8 },
 

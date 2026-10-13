@@ -17,7 +17,7 @@ export const paymentStatusFor = (method) =>
  * OrderConfirmation.tsx du web) : couleurs/tailles, frais de port par boutique, zone.
  */
 export function buildOrder({
-  userId, cartItems, delivery, phone, zone, shippingCalculations = {},
+  userId, cartItems, delivery, phone, zone, location = null, shippingCalculations = {},
   subtotal, shippingFee, reduction, total, promo, pointsToUse = 0, pointsDiscount = 0,
   paymentMethod, transactionId, existingOrder,
 }) {
@@ -62,16 +62,21 @@ export function buildOrder({
     livraisonDetails: {
       customerName: delivery.name.trim(),
       email: delivery.email?.trim() || null,
-      region: delivery.region.trim(),
-      quartier: delivery.quartier.trim(),
+      // Région / quartier officiels : recalculés par le serveur depuis la zone
+      region: zone?.fullPath?.split(' > ')[1] || zone?.name || '',
+      quartier: zone?.name || '',
       numero: phone,
-      description: delivery.description?.trim() || '',
+      description: delivery.landmark?.trim() || '',
+      zoneId: zone?._id,
+      landmark: delivery.landmark?.trim() || '',
+      ...(location ? { location } : {}),
     },
     prod,
     shippingByStore: Object.values(groups).map((g) => ({
       storeId: g.storeId,
       storeName: g.storeName,
       shippingCost: shippingCalculations[g.storeId]?.totalCost || 0,
+      delay: shippingCalculations[g.storeId]?.delay || null,
     })),
     ...(zone?._id && { customerZoneId: zone._id }),
     ...(promo?._id && { codePro: true, idCodePro: promo._id, codePromo: promo.code }),

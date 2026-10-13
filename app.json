@@ -74,6 +74,14 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Ihambaobab utilise votre position uniquement pour trouver votre quartier de livraison.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
       ]
     ]
   }

@@ -18,6 +18,7 @@ import useCartCheckout from '../hooks/useCartCheckout';
 import { Button, EmptyState, IconButton, PressableScale, Text } from '../ui';
 import CartLine from '../components/cart/CartLine';
 import ZonePickerSheet from '../components/cart/ZonePickerSheet';
+import { zoneLabel } from '../services/shippingV3';
 import ProductRail from '../components/home/ProductRail';
 import { formatPrice } from '../utils/formatPrice';
 import { colors, fonts, GUTTER, radius, shadows } from '../theme';
@@ -96,6 +97,12 @@ export default function CartScreen({ navigation }) {
       setZoneSheet(true);
       return;
     }
+    if (cart.blockedParcels.length) {
+      const b = cart.blockedParcels[0];
+      Alert.alert('Livraison indisponible', `${b.storeName} : ${b.message || 'cette boutique ne livre pas encore dans votre zone.'}\n\nChangez de zone ou retirez ses articles.`);
+      return;
+    }
+    if (!cart.shippingReady) return;
     if (!user) {
       navigation.navigate('QuickAuth', { pendingAction: 'checkout', returnScreen: 'Cart' });
       return;
@@ -106,6 +113,8 @@ export default function CartScreen({ navigation }) {
       shippingFee: cart.shippingTotal,
       total: cart.total,
       selectedZone: cart.zone,
+      deliveryLocation: cart.location,
+      quoteRequired: cart.quoteRequired,
       appliedPromo: cart.promo,
       shippingCalculations: cart.shipping,
       groupedByStore: cart.groups,
@@ -165,12 +174,21 @@ export default function CartScreen({ navigation }) {
           <View style={styles.flex}>
             <Text variant="caption" color="textSecondary">Livrer à</Text>
             <Text variant="title" numberOfLines={1}>
-              {cart.zone ? cart.zone.name : cart.zoneReady ? 'Choisir ma zone de livraison' : 'Détection de votre zone…'}
+              {cart.zone ? cart.zone.name : cart.zoneReady ? 'Choisir mon quartier ou ma ville' : 'Chargement…'}
             </Text>
-            {cart.zone?.fullPath ? <Text variant="caption" color="textMuted" numberOfLines={1}>{cart.zone.fullPath}</Text> : null}
+            {cart.zone && zoneLabel(cart.zone).subtitle ? <Text variant="caption" color="textMuted" numberOfLines={1}>{zoneLabel(cart.zone).subtitle}</Text> : null}
           </View>
           <Text variant="smallMedium" color="primary">{cart.zone ? 'Modifier' : 'Choisir'}</Text>
         </PressableScale>
+
+        {cart.freeHint && !cart.shippingLoading ? (
+          <View style={styles.freeHint}>
+            <Ionicons name="gift-outline" size={16} color={colors.success} />
+            <Text variant="small" color="success" style={styles.flex}>
+              Plus que {F(cart.freeHint.remaining)} d’articles dans une boutique pour la livraison offerte
+            </Text>
+          </View>
+        ) : null}
 
         {/* Articles par boutique */}
         {cart.groupList.map((g) => {
@@ -188,10 +206,10 @@ export default function CartScreen({ navigation }) {
                   busy && !ship ? (
                     <ActivityIndicator size="small" color={colors.primary} />
                   ) : ship ? (
-                    <View style={styles.shipPill}>
-                      <Ionicons name="car-outline" size={13} color={colors.primaryDark} />
-                      <Text variant="caption" color="primaryDark">
-                        {ship.totalCost > 0 ? `${formatPrice(ship.totalCost)} F${ship.estimated ? ' (est.)' : ''}` : 'Livraison offerte'}
+                    <View style={[styles.shipPill, !ship.deliverable && (ship.quoteRequired ? styles.shipPillQuote : styles.shipPillOff)]}>
+                      <Ionicons name="car-outline" size={13} color={!ship.deliverable ? (ship.quoteRequired ? colors.wood : colors.danger) : colors.primaryDark} />
+                      <Text variant="caption" color={!ship.deliverable ? (ship.quoteRequired ? 'wood' : 'danger') : ship.free ? 'success' : 'primaryDark'}>
+                        {!ship.deliverable ? (ship.quoteRequired ? 'Sur devis' : 'Non livrable') : ship.free ? 'Livraison offerte' : `${formatPrice(ship.totalCost)} F`}
                       </Text>
                     </View>
                   ) : null
@@ -206,9 +224,36 @@ export default function CartScreen({ navigation }) {
                   onRemove={() => removeLine(item)}
                 />
               ))}
+              {cart.zone && ship ? (
+                <View style={[styles.shipFoot, !ship.deliverable && (ship.quoteRequired ? styles.shipFootQuote : styles.shipFootOff)]}>
+                  <Ionicons name={ship.deliverable ? 'time-outline' : 'alert-circle-outline'} size={14} color={ship.deliverable ? colors.primaryDark : ship.quoteRequired ? colors.wood : colors.danger} />
+                  <View style={styles.flex}>
+                    <Text variant="caption" color={ship.deliverable ? 'textSecondary' : ship.quoteRequired ? 'wood' : 'danger'} numberOfLines={2}>
+                      {ship.deliverable
+                        ? `${ship.origin || g.storeName} → ${cart.zone.name}${ship.delay ? ` · ${ship.delay}` : ''}`
+                        : ship.message || 'Cette boutique ne livre pas encore dans votre zone.'}
+                    </Text>
+                    {ship.deliverable && ship.freeHint ? (
+                      <Text variant="caption" color="success">Plus que {F(ship.freeHint.remaining)} ici pour la livraison offerte</Text>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
             </View>
           );
         })}
+
+        {cart.shippingError ? (
+          <View style={styles.notice}>
+            <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
+            <Text variant="small" color="danger" style={styles.flex}>{cart.shippingError}</Text>
+          </View>
+        ) : cart.quoteRequired ? (
+          <View style={[styles.notice, styles.noticeQuote]}>
+            <Ionicons name="cube-outline" size={16} color={colors.wood} />
+            <Text variant="small" color="wood" style={styles.flex}>Article très volumineux : livraison sur devis. Notre équipe vous appelle pour fixer les frais (paiement à la livraison).</Text>
+          </View>
+        ) : null}
 
         {cart.savings > 0 ? (
           <View style={styles.savings}>
@@ -265,7 +310,7 @@ export default function CartScreen({ navigation }) {
           {cart.reduction > 0 ? <SummaryRow label="Code promo" value={`-${F(cart.reduction)}`} tone="success" /> : null}
           <SummaryRow
             label="Livraison"
-            value={!cart.zone ? 'Choisir une zone' : busy ? 'Calcul…' : cart.shippingTotal > 0 ? F(cart.shippingTotal) : 'Offerte'}
+            value={!cart.zone ? 'Choisir une zone' : busy ? 'Calcul…' : !cart.quote ? '—' : cart.shippingTotal > 0 ? `${F(cart.shippingTotal)}${cart.quoteRequired ? ' + devis' : ''}` : cart.quoteRequired ? 'Sur devis' : 'Offerte'}
             tone={!cart.zone ? 'textMuted' : undefined}
           />
           <View style={styles.divider} />
@@ -289,7 +334,7 @@ export default function CartScreen({ navigation }) {
           iconRight={cart.zone ? 'arrow-forward' : 'location-outline'}
           size="lg"
           onPress={checkout}
-          disabled={busy}
+          disabled={busy || (!!cart.zone && !cart.shippingReady)}
           style={styles.flex}
           full
         />
@@ -325,6 +370,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primarySoft,
     borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3,
   },
+  shipPillQuote: { backgroundColor: colors.woodSoft },
+  shipPillOff: { backgroundColor: colors.dangerSoft },
+  shipFoot: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8, paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
+  },
+  shipFootQuote: { backgroundColor: colors.woodSoft, borderRadius: radius.sm, padding: 8, borderTopWidth: 0 },
+  shipFootOff: { backgroundColor: colors.dangerSoft, borderRadius: radius.sm, padding: 8, borderTopWidth: 0 },
+  freeHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: GUTTER, marginTop: 10,
+    padding: 12, borderRadius: radius.md, backgroundColor: colors.successSoft,
+  },
+  notice: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: GUTTER, marginTop: 14,
+    padding: 12, borderRadius: radius.md, backgroundColor: colors.dangerSoft,
+  },
+  noticeQuote: { backgroundColor: colors.woodSoft },
 
   savings: {
     flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: GUTTER, marginTop: 14,

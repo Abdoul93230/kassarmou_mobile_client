@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import apiClient from '../config/api';
+import { getRememberedZone, getZones, quoteCart, rememberZone } from '../services/shippingV3';
 import { groupByStore, originalPrice, unitPrice } from '../utils/cart';
-
-const ZONE_KEY = 'deliveryZone';
-const FALLBACK = { fixedCost: 1000, costPerKg: 250 };
 
 // Helpers purs : voir utils/cart.js (ré-exportés pour compatibilité)
 export { storeIdOf, unitPrice, originalPrice, itemWeight, availableStock, groupByStore } from '../utils/cart';
@@ -13,14 +10,17 @@ export { storeIdOf, unitPrice, originalPrice, itemWeight, availableStock, groupB
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 /**
- * Toute la logique panier → checkout : zone de livraison (mémorisée), frais de port
- * par boutique (calculés en parallèle), code promo (validé côté serveur), totaux.
+ * Toute la logique panier → checkout : zone de livraison (mémorisée ou issue de l'adresse),
+ * devis de livraison v3 (un appel pour tout le panier, même calcul que la commande),
+ * code promo (validé côté serveur), totaux.
  */
 export default function useCartCheckout(articles, user) {
   const [zone, setZoneState] = useState(null);
   const [zoneReady, setZoneReady] = useState(false);
-  const [shipping, setShipping] = useState({}); // { [storeId]: { totalCost, estimated } }
+  const [location, setLocation] = useState(null); // position GPS facultative (choisie via « Ma position »)
+  const [quote, setQuote] = useState(null);
   const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingError, setShippingError] = useState(null);
   const [promo, setPromo] = useState(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const calcId = useRef(0);
@@ -34,89 +34,94 @@ export default function useCartCheckout(articles, user) {
     [articles],
   );
 
-  // ── Zone : mémorisée, sinon détectée (IP) une seule fois ──
-  const setZone = useCallback((z) => {
+  // ── Zone : mémorisée, sinon celle de l'adresse enregistrée (plus de détection par IP) ──
+  const setZone = useCallback((z, meta) => {
     setZoneState(z);
-    if (z) AsyncStorage.setItem(ZONE_KEY, JSON.stringify(z)).catch(() => {});
+    rememberZone(z);
+    if (meta?.location) setLocation(meta.location);
   }, []);
 
+  const userId = user?.id || user?._id;
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(ZONE_KEY);
-        if (saved) {
-          if (!cancelled) setZoneState(JSON.parse(saved));
+        const remembered = await getRememberedZone();
+        if (remembered) {
+          if (!cancelled) setZoneState(remembered);
           return;
         }
-        const ip = await axios.get('https://ifconfig.me/ip', { timeout: 5000 });
-        const geo = await apiClient.get('/proxy/ip-api', { headers: { 'Client-IP': ip.data }, timeout: 8000 });
-        for (const q of [geo.data?.regionName || 'Niamey', geo.data?.country || 'Niger']) {
-          const r = await apiClient.get('/api/shipping2/zones/search', { params: { q, limit: 1 } });
-          const found = r.data?.success && r.data?.data?.[0];
-          if (found) {
-            if (!cancelled) setZone(found);
-            return;
-          }
-        }
+        if (!userId) return;
+        const r = await apiClient.get(`/getAddressByUserKey/${userId}`).catch(() => null);
+        const zoneId = r?.data?.address?.zoneId;
+        if (!zoneId) return;
+        const z = (await getZones()).find((x) => x._id === String(zoneId));
+        if (z && !cancelled) setZone(z);
       } catch {
-        // détection impossible : l'utilisateur choisira sa zone
+        // l'utilisateur choisira sa zone
       } finally {
         if (!cancelled) setZoneReady(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [setZone]);
+  }, [setZone, userId]);
 
-  // ── Frais de port : recalcul (anti-rebond) quand la zone ou les poids changent ──
-  const weightKey = groupList.map((g) => `${g.storeId}:${g.totalWeight.toFixed(2)}`).join('|');
+  // ── Devis v3 : un appel pour tout le panier, relancé (anti-rebond) si la zone ou le panier change ──
+  const quoteKey = (articles || []).map((a) => `${a._id}:${Number(a.quantite) || 0}`).sort().join('|');
   useEffect(() => {
-    if (!zone?._id || !groupList.length) {
-      setShipping({});
+    if (!zone?._id || !(articles || []).length) {
+      setQuote(null);
+      setShippingError(null);
       return undefined;
     }
     const id = ++calcId.current;
     setShippingLoading(true);
+    setShippingError(null);
     const timer = setTimeout(async () => {
-      const entries = await Promise.all(
-        groupList.map(async (g) => {
-          const weight = Math.max(0.1, Math.round(g.totalWeight * 100) / 100);
-          try {
-            if (g.storeId === 'unknown') throw new Error('boutique inconnue');
-            const r = await apiClient.post('/api/shipping2/calculate', { sellerId: g.storeId, customerZoneId: zone._id, weight }, { timeout: 10000 });
-            const d = r.data?.data;
-            if (!r.data?.success || !d) throw new Error('réponse invalide');
-            return [g.storeId, {
-              totalCost: Number(d.totalCost) || 0,
-              fixedCost: Number(d.fixedCost) || 0,
-              weightCost: Number(d.weightCost) || 0,
-              costPerKg: Number(d.costPerKg) || FALLBACK.costPerKg,
-              appliedPolicy: d.appliedPolicy || null,
-              estimated: false,
-            }];
-          } catch {
-            return [g.storeId, {
-              totalCost: Math.round(FALLBACK.fixedCost + FALLBACK.costPerKg * weight),
-              fixedCost: FALLBACK.fixedCost,
-              weightCost: Math.round(FALLBACK.costPerKg * weight),
-              costPerKg: FALLBACK.costPerKg,
-              appliedPolicy: { zone: 'Politique par défaut', type: 'fallback' },
-              estimated: true,
-            }];
-          }
-        }),
-      );
-      if (id !== calcId.current) return; // un calcul plus récent a été lancé
-      const result = Object.fromEntries(entries);
-      setShipping(result);
-      setShippingLoading(false);
-      AsyncStorage.setItem('shippingDetails', JSON.stringify({ zone, calculations: result })).catch(() => {});
-    }, 350);
+      try {
+        const items = (articles || [])
+          .filter((a) => a._id && Number(a.quantite) > 0)
+          .map((a) => ({ productId: String(a._id), quantity: Number(a.quantite) }));
+        const q = await quoteCart(zone._id, items);
+        if (id !== calcId.current) return; // un calcul plus récent a été lancé
+        setQuote(q);
+      } catch {
+        if (id !== calcId.current) return;
+        setQuote(null);
+        setShippingError('Calcul des frais indisponible. Réessayez dans un instant.');
+      } finally {
+        if (id === calcId.current) setShippingLoading(false);
+      }
+    }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zone?._id, weightKey]);
+  }, [zone?._id, quoteKey]);
 
-  const shippingTotal = useMemo(() => Object.values(shipping).reduce((s, c) => s + (c.totalCost || 0), 0), [shipping]);
+  /** Frais par boutique : { [storeId]: { totalCost, deliverable, quoteRequired, message, delay, free, freeHint, origin } } */
+  const shipping = useMemo(() => {
+    const out = {};
+    for (const p of quote?.parcels || []) {
+      out[p.sellerId] = {
+        totalCost: p.deliverable ? p.fee || 0 : 0,
+        deliverable: p.deliverable,
+        quoteRequired: p.quoteRequired,
+        message: p.message,
+        delay: p.delay?.label || null,
+        free: p.free || null,
+        freeHint: p.freeHint || null,
+        origin: p.origin?.name || null,
+        relation: p.relationLabel || null,
+        storeName: p.storeName,
+      };
+    }
+    return out;
+  }, [quote]);
+
+  const shippingTotal = quote?.totalFee || 0;
+  const blockedParcels = useMemo(() => (quote?.parcels || []).filter((p) => !p.deliverable && !p.quoteRequired), [quote]);
+  const quoteRequired = !!quote?.quoteRequired;
+  const freeHint = useMemo(() => (quote?.parcels || []).map((p) => p.freeHint).find(Boolean) || null, [quote]);
+  const shippingReady = !!zone && !!quote && !shippingLoading;
 
   // ── Code promo ──
   const validatePromo = useCallback(
@@ -192,8 +197,9 @@ export default function useCartCheckout(articles, user) {
 
   return {
     groups, groupList, itemCount, subtotal, savings,
-    zone, setZone, zoneReady,
-    shipping, shippingTotal, shippingLoading,
+    zone, setZone, zoneReady, location,
+    quote, shipping, shippingTotal, shippingLoading, shippingError, shippingReady,
+    blockedParcels, quoteRequired, freeHint,
     promo, applyPromo, removePromo, promoLoading,
     reduction, total,
   };
