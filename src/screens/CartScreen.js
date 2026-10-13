@@ -174,7 +174,7 @@ export default function CartScreen({ navigation }) {
           <View style={styles.flex}>
             <Text variant="caption" color="textSecondary">Livrer à</Text>
             <Text variant="title" numberOfLines={1}>
-              {cart.zone ? cart.zone.name : cart.zoneReady ? 'Choisir mon quartier ou ma ville' : 'Chargement…'}
+              {cart.zone ? zoneLabel(cart.zone).title : cart.zoneReady ? 'Choisir mon quartier ou ma ville' : 'Chargement…'}
             </Text>
             {cart.zone && zoneLabel(cart.zone).subtitle ? <Text variant="caption" color="textMuted" numberOfLines={1}>{zoneLabel(cart.zone).subtitle}</Text> : null}
           </View>
@@ -230,7 +230,7 @@ export default function CartScreen({ navigation }) {
                   <View style={styles.flex}>
                     <Text variant="caption" color={ship.deliverable ? 'textSecondary' : ship.quoteRequired ? 'wood' : 'danger'} numberOfLines={2}>
                       {ship.deliverable
-                        ? `${ship.origin || g.storeName} → ${cart.zone.name}${ship.delay ? ` · ${ship.delay}` : ''}`
+                        ? `${ship.origin || g.storeName} → ${zoneLabel(cart.zone).title}${ship.delay ? ` · ${ship.delay}` : ''}`
                         : ship.message || 'Cette boutique ne livre pas encore dans votre zone.'}
                     </Text>
                     {ship.deliverable && ship.freeHint ? (

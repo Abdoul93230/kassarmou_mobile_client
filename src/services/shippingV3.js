@@ -41,9 +41,13 @@ export async function getZones({ force = false } = {}) {
 export const normalize = (s) =>
   String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-/** « Yantala Bas » + « Commune 1, Niamey » */
+/** « Yantala Bas » + « Commune 1, Niamey » (ou « Maijirgui » + « près de Tessaoua, Maradi ») */
 export function zoneLabel(z) {
   const parts = String(z?.fullPath || z?.name || '').split(' > ');
+  if (z?.localityName) {
+    const around = [z.name, ...parts.slice(1, -1).reverse()].filter((x, i, a) => a.indexOf(x) === i).join(', ');
+    return { title: z.localityName, subtitle: `près de ${around}` };
+  }
   const context = parts.slice(1, -1).reverse().join(', ');
   return { title: z?.name || '', subtitle: context || (parts[0] !== z?.name ? parts[0] : '') };
 }
@@ -117,6 +121,11 @@ export async function getDevicePosition() {
   }
 }
 
+/** Signale une localité absente de la liste (pour que l'équipe l'ajoute) — sans bloquer le client */
+export function requestLocality(name, nearZoneId) {
+  apiClient.post('/api/shipping-v3/zone-requests', { name, nearZoneId }, { timeout: 8000 }).catch(() => {});
+}
+
 // ─── Zone mémorisée ──────────────────────────────────────────────────────────
 
 export async function rememberZone(z) {
@@ -133,7 +142,8 @@ export async function getRememberedZone() {
     if (!z?._id) return null;
     const list = await getZones().catch(() => null);
     if (!list) return z;
-    return list.find((x) => x._id === z._id) || null;
+    const found = list.find((x) => x._id === z._id);
+    return found ? (z.localityName ? { ...found, localityName: z.localityName } : found) : null;
   } catch {
     return null;
   }

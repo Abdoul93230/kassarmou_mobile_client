@@ -68,6 +68,7 @@ export function buildOrder({
       numero: phone,
       description: delivery.landmark?.trim() || '',
       zoneId: zone?._id,
+      localityName: zone?.localityName || '',
       landmark: delivery.landmark?.trim() || '',
       ...(location ? { location } : {}),
     },

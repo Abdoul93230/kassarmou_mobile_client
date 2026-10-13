@@ -144,7 +144,8 @@ export default function CheckoutScreen({ navigation, route }) {
         const id = r.data?.address?.zoneId;
         if (!id) return;
         const z = (await getZones()).find((x) => x._id === String(id));
-        if (z) changeZone(z);
+        const locality = r.data?.address?.localityName;
+        if (z) changeZone(locality ? { ...z, localityName: locality } : z);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -228,6 +229,7 @@ export default function CheckoutScreen({ navigation, route }) {
         numero: phone,
         email: delivery.email.trim() || null,
         zoneId: zone._id,
+        localityName: zone.localityName || '',
         landmark: delivery.landmark.trim(),
         description: delivery.landmark.trim(),
         ...(location ? { location } : {}),

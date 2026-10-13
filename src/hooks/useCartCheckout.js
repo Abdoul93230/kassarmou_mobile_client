@@ -56,7 +56,8 @@ export default function useCartCheckout(articles, user) {
         const zoneId = r?.data?.address?.zoneId;
         if (!zoneId) return;
         const z = (await getZones()).find((x) => x._id === String(zoneId));
-        if (z && !cancelled) setZone(z);
+        const locality = r?.data?.address?.localityName;
+        if (z && !cancelled) setZone(locality ? { ...z, localityName: locality } : z);
       } catch {
         // l'utilisateur choisira sa zone
       } finally {
