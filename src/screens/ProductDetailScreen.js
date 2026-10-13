@@ -20,6 +20,8 @@ import QuantityStepper from '../ui/QuantityStepper';
 import ImageGallery from '../components/product/ImageGallery';
 import VariantPicker from '../components/product/VariantPicker';
 import SellerCard from '../components/product/SellerCard';
+import DeliveryEstimate from '../components/product/DeliveryEstimate';
+import { sellerIdOf } from '../services/shippingV3';
 import ReviewsSection, { summarize } from '../components/product/ReviewsSection';
 import ProductRail from '../components/home/ProductRail';
 import DeepLinkingService from '../services/deepLinkingService';
@@ -101,7 +103,6 @@ export default function ProductDetailScreen({ route, navigation }) {
   const maxQty = hasStockInfo && stock > 0 ? Math.min(stock, 99) : 99;
   const { avg, count } = useMemo(() => summarize(reviews), [reviews]);
   const description = useMemo(() => htmlToText(product?.description), [product?.description]);
-  const zones = product?.shipping?.zones || [];
 
   const onSelectVariant = useCallback(
     (v) => {
@@ -261,25 +262,8 @@ export default function ProductDetailScreen({ route, navigation }) {
           </View>
         ) : null}
 
-        {/* Livraison */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoIcon}>
-            <Ionicons name="car-outline" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.flex}>
-            <Text variant="title">Livraison</Text>
-            {zones.length ? (
-              zones.slice(0, 3).map((z, i) => (
-                <View key={`${z.name}-${i}`} style={styles.zoneRow}>
-                  <Text variant="small" color="textSecondary" numberOfLines={1} style={styles.flex}>{z.name}</Text>
-                  <Text variant="smallMedium">{Number(z.price) > 0 ? `${formatPrice(z.price)} F` : 'Gratuite'}</Text>
-                </View>
-              ))
-            ) : (
-              <Text variant="small" color="textSecondary">Frais calculés au panier selon votre quartier ou votre ville.</Text>
-            )}
-          </View>
-        </View>
+        {/* Livraison : d'où, vers où, frais et délai réels */}
+        <DeliveryEstimate productId={product._id} sellerId={sellerIdOf(product)} quantity={quantity} style={styles.delivery} />
         <View style={[styles.infoCard, styles.infoCardTight]}>
           <View style={styles.infoIcon}>
             <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
@@ -422,7 +406,7 @@ const styles = StyleSheet.create({
   },
   infoCardTight: { marginTop: 10 },
   infoIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  zoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  delivery: { marginHorizontal: GUTTER, marginTop: 24 },
 
   section: { paddingHorizontal: GUTTER, marginTop: 32 },
   sectionTitle: { marginBottom: 10 },

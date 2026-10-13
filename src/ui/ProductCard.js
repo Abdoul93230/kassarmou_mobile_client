@@ -7,6 +7,8 @@ import Text from './Text';
 import Price, { getPricing } from './Price';
 import useProductActions, { useIsLiked } from '../hooks/useProductActions';
 import { productImage } from '../utils/image';
+import useSellerOrigin from '../hooks/useSellerOrigin';
+import { sellerIdOf } from '../services/shippingV3';
 import { colors, radius, shadows } from '../theme';
 
 const storeName = (p) => p?.Clefournisseur?.storeName || p?.Clefournisseur?.name || null;
@@ -18,6 +20,7 @@ const storeName = (p) => p?.Clefournisseur?.storeName || p?.Clefournisseur?.name
 function ProductCard({ product, width, variant = 'grid', showStore = true }) {
   const { openProduct, like, addToCart } = useProductActions();
   const liked = useIsLiked(product?._id);
+  const origin = useSellerOrigin(showStore ? sellerIdOf(product) : null);
   const { discount } = getPricing(product);
   const outOfStock = product?.quantite !== undefined && Number(product.quantite) <= 0;
   const imageHeight = variant === 'rail' ? width * 1.05 : width * 1.18;
@@ -64,12 +67,22 @@ function ProductCard({ product, width, variant = 'grid', showStore = true }) {
         <Text variant="smallMedium" numberOfLines={2} style={styles.name}>
           {product.name}
         </Text>
-        {showStore && storeName(product) ? (
+        {showStore && (storeName(product) || origin) ? (
           <View style={styles.storeRow}>
-            <Ionicons name="storefront-outline" size={11} color={colors.textMuted} />
-            <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.flex}>
-              {storeName(product)}
-            </Text>
+            {storeName(product) ? (
+              <>
+                <Ionicons name="storefront-outline" size={11} color={colors.textMuted} />
+                <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.shrink}>
+                  {storeName(product)}
+                </Text>
+              </>
+            ) : null}
+            {origin ? (
+              <View style={styles.origin}>
+                <Ionicons name="location" size={10} color={colors.wood} />
+                <Text variant="caption" color="wood" numberOfLines={1}>{origin.city}</Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
         <Price product={product} style={styles.price} />
@@ -103,6 +116,8 @@ const styles = StyleSheet.create({
   info: { paddingTop: 8, paddingHorizontal: 2, gap: 3 },
   name: { minHeight: 36 },
   storeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  shrink: { flexShrink: 1 },
+  origin: { flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: 'auto', flexShrink: 0, maxWidth: '55%' },
   flex: { flex: 1 },
   price: { marginTop: 1 },
 });
