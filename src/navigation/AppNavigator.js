@@ -31,6 +31,7 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import FaqScreen from '../screens/FaqScreen';
 import BoutiqueScreen from '../screens/BoutiqueScreen';
 import AllStoresScreen from '../screens/AllStoresScreen';
+import NearbyScreen from '../screens/NearbyScreen';
 import SellerDetailScreen from '../screens/SellerDetailScreen';
 import WalletScreen from '../screens/WalletScreen';
 
@@ -132,6 +133,7 @@ function AppNavigator() {
         SellerDetail: 'Profile_boutiquier/:sellerId',
         ProductListScreen: 'Categorie/:categoryName',
         AllStores: 'boutiques',
+        Nearby: 'pres-de-chez-moi',
         Cart: 'Panier',
         Checkout: 'checkout',
         Orders: 'commandes',
@@ -199,6 +201,11 @@ function AppNavigator() {
         <Stack.Screen 
           name="AllStores" 
           component={AllStoresScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Nearby"
+          component={NearbyScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen 

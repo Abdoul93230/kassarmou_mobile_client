@@ -22,6 +22,7 @@ import CategoryRail from '../components/home/CategoryRail';
 import QuickActions from '../components/home/QuickActions';
 import ProductRail from '../components/home/ProductRail';
 import StoreRail from '../components/home/StoreRail';
+import NearbyRail from '../components/home/NearbyRail';
 import TrustStrip from '../components/home/TrustStrip';
 import EventBanner from '../components/EventBanner';
 import CheckinCard from '../components/CheckinCard';
@@ -169,6 +170,8 @@ export default function HomeScreen({ navigation }) {
           <EventBanner />
           <CheckinCard navigation={navigation} />
         </View>
+
+        <NearbyRail navigation={navigation} />
 
         <ProductRail
           products={flashDeals}

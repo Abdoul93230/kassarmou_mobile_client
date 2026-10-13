@@ -188,6 +188,12 @@ export function loadSellerOrigin(sellerId) {
   });
 }
 
+/** « Près de chez moi » : produits des boutiques les plus proches (quartier → ville → région) */
+export async function fetchNearby(zoneId, page = 1, limit = 20) {
+  const r = await apiClient.get('/api/shipping-v3/nearby', { params: { zoneId, page, limit }, timeout: 12000 });
+  return r.data.data;
+}
+
 /** Identifiant de la boutique d'un produit (Clefournisseur peuplé ou brut) */
 export function sellerIdOf(product) {
   const c = product?.Clefournisseur;
