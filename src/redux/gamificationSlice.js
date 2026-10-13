@@ -143,7 +143,17 @@ const gamificationSlice = createSlice({
       .addCase(dailyCheckin.rejected, (state, action) => {
         state.isLoadingCheckin = false;
         state.error = action.payload;
-      });
+      })
+      // Déconnexion (manuelle ou session expirée) : on oublie le portefeuille du compte précédent
+      .addMatcher(
+        (action) => action.type === "auth/logout" || action.type === "auth/logout/fulfilled",
+        (state) => {
+          state.wallet = null;
+          state.transactions = [];
+          state.totalTransactions = 0;
+          state.checkinResult = null;
+        }
+      );
   },
 });
 

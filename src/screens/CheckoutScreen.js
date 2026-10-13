@@ -181,12 +181,13 @@ export default function CheckoutScreen({ navigation, route }) {
 
   // Baobab Points
   const pointsInfo = useMemo(() => {
-    if (!gConfig?.enabled || !wallet || wallet.balance <= 0) return null;
+    // Points réservés aux comptes : jamais en invité ni sans connexion
+    if (guest || !userId || !gConfig?.enabled || !wallet || wallet.balance <= 0) return null;
     const rate = gConfig?.redemption?.pointsToFcfaRate ?? 20;
     const maxPct = gConfig?.redemption?.maxPercentPerOrder ?? 30;
     const maxPoints = Math.min(wallet.balance, Math.floor((subtotal * maxPct) / 100 / rate));
     return maxPoints > 0 ? { rate, maxPct, maxPoints, balance: wallet.balance } : null;
-  }, [gConfig, subtotal, wallet]);
+  }, [gConfig, guest, subtotal, userId, wallet]);
   const pointsDiscount = pointsInfo ? points * pointsInfo.rate : 0;
   const payable = Math.max(0, total - pointsDiscount);
 
