@@ -7,8 +7,11 @@ import { formatPhoneInternational } from '../../utils/phoneRules';
 import { Button, PressableScale, Text } from '../../ui';
 import { colors, fonts, radius } from '../../theme';
 
-/** Vérification du numéro par SMS (1 fois par appareil, valable 90 jours) */
-function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified }) {
+/**
+ * Vérification du numéro par SMS (1 fois par appareil, valable 90 jours).
+ * SMS jamais reçu (ou envoi en échec) : `onCallback` → commande confirmée par appel de l'équipe.
+ */
+function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified, onCallback }) {
   const insets = useSafeAreaInsets();
   const [code, setCode] = useState('');
   const [sending, setSending] = useState(false);
@@ -16,6 +19,10 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified }) {
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
   const sentFor = useRef(null);
+  // Option « confirmer par appel » : 30 s après l'envoi (ou tout de suite si l'envoi échoue)
+  const [callbackAvail, setCallbackAvail] = useState(false);
+  const [fallbackIn, setFallbackIn] = useState(0);
+  const [askCallback, setAskCallback] = useState(false);
 
   const send = async () => {
     setSending(true);
@@ -23,10 +30,12 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified }) {
     try {
       const d = await sendGuestOtp(phone, name);
       setCooldown(d.cooldownSeconds || 60);
+      if (d.callbackAvailable) { setCallbackAvail(true); setFallbackIn(30); }
     } catch (e) {
       const d = e.response?.data;
       setError(d?.message || 'Envoi impossible. Vérifiez le numéro.');
       if (d?.data?.cooldownSeconds) setCooldown(d.data.cooldownSeconds);
+      if (d?.data?.callbackAvailable) { setCallbackAvail(true); setFallbackIn(0); }
     } finally {
       setSending(false);
     }
@@ -36,6 +45,8 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified }) {
     if (visible && sentFor.current !== phone) {
       sentFor.current = phone;
       setCode('');
+      setAskCallback(false);
+      setCallbackAvail(false);
       send();
     }
     if (!visible) sentFor.current = null;
@@ -46,6 +57,12 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified }) {
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [cooldown]);
+
+  useEffect(() => {
+    if (fallbackIn <= 0) return undefined;
+    const t = setTimeout(() => setFallbackIn((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [fallbackIn]);
 
   const verify = async (value = code) => {
     if (!/^\d{6}$/.test(value)) return;
@@ -95,6 +112,27 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified }) {
               {sending ? 'Envoi…' : cooldown > 0 ? `Renvoyer le code dans ${cooldown}s` : 'Renvoyer le code'}
             </Text>
           </PressableScale>
+          {onCallback && callbackAvail && fallbackIn <= 0 ? (
+            askCallback ? (
+              <View style={styles.callback}>
+                <View style={styles.row}>
+                  <Ionicons name="call" size={16} color={colors.wood} />
+                  <Text variant="bodyMedium">Confirmation par appel</Text>
+                </View>
+                <Text variant="small" color="textSecondary" style={styles.mt4}>
+                  Votre commande est enregistrée et notre équipe vous appelle au {formatPhoneInternational(phone)} pour la confirmer avant sa préparation. Gardez votre téléphone à portée de main.
+                </Text>
+                <Button title="Commander, je serai joignable" size="md" full onPress={onCallback} style={styles.mt10} />
+                <PressableScale onPress={() => setAskCallback(false)} style={styles.resend}>
+                  <Text variant="caption" color="textMuted">Attendre encore le SMS</Text>
+                </PressableScale>
+              </View>
+            ) : (
+              <PressableScale onPress={() => setAskCallback(true)} style={styles.resend}>
+                <Text variant="smallMedium" style={styles.woodText}>Je n'ai pas reçu le code</Text>
+              </PressableScale>
+            )
+          ) : null}
           <Text variant="caption" color="textMuted" align="center">Astuce : le paiement en ligne ne demande pas de code.</Text>
         </View>
       </KeyboardAvoidingView>
@@ -113,6 +151,9 @@ const styles = StyleSheet.create({
     textAlign: 'center', fontSize: 26, letterSpacing: 10, fontFamily: fonts.bold, color: colors.text,
   },
   resend: { alignSelf: 'center', paddingVertical: 10 },
+  callback: { marginTop: 6, marginBottom: 6, padding: 12, borderRadius: radius.md, backgroundColor: colors.woodSoft },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  woodText: { color: colors.wood, textDecorationLine: 'underline' },
   mt4: { marginTop: 4 },
   mt10: { marginTop: 10 },
 });

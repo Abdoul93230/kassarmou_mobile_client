@@ -94,6 +94,8 @@ export default function CheckoutScreen({ navigation, route }) {
   const [otp, setOtp] = useState({ open: false, reason: '' });
   const [guestVerified, setGuestVerified] = useState(false);
   const resumeAfterOtp = useRef(false);
+  // SMS jamais reçu : la commande part avec confirmation par appel de l'équipe
+  const phoneCallbackRef = useRef(false);
   const [country, setCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [phoneDigits, setPhoneDigits] = useState('');
   const [editingAddress, setEditingAddress] = useState(true);
@@ -241,7 +243,7 @@ export default function CheckoutScreen({ navigation, route }) {
         const phoneE164 = toBackendPhone(country, phoneDigits);
         const r = await ensureGuestSession(phoneE164, delivery.name.trim());
         const offline = OFFLINE_PAYMENTS.includes(paymentStatusFor(method));
-        if (r.accountExists || (offline && !r.session?.verified)) {
+        if (r.accountExists || (offline && !r.session?.verified && !phoneCallbackRef.current)) {
           resumeAfterOtp.current = true;
           setOtp({
             open: true,
@@ -270,6 +272,7 @@ export default function CheckoutScreen({ navigation, route }) {
         subtotal, shippingFee: ship.fee, reduction: guest ? 0 : reduction, total, promo: guest ? null : appliedPromo,
         pointsToUse: guest ? 0 : points, pointsDiscount: guest ? 0 : pointsDiscount, paymentMethod: method, transactionId, existingOrder,
       });
+      if (phoneCallbackRef.current) order.phoneCallback = true;
 
       if (!guest) await apiClient.post('/createOrUpdateAddress', {
         name: delivery.name.trim(),
@@ -287,6 +290,7 @@ export default function CheckoutScreen({ navigation, route }) {
         ? await apiClient.put('/updateCommande', order)
         : await apiClient.post('/createCommande', order);
       if (!res.data?.commande) throw new Error('Impossible de créer la commande');
+      const callbackPending = res.data.commande.phoneConfirmation === 'pending';
       const created = { reference: res.data.commande.reference || transactionId, trackingToken: res.data.commande.trackingToken };
       if (guest && created.trackingToken) await AsyncStorage.setItem('lastGuestOrder', JSON.stringify(created));
 
@@ -294,7 +298,7 @@ export default function CheckoutScreen({ navigation, route }) {
         await dispatch(clearPanierData());
         await AsyncStorage.multiRemove(['pendingOrder', 'shippingDetails', 'appliedPromoCode', 'paymentInitiated']);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        setDone({ reference: transactionId, method, trackingToken: created.trackingToken });
+        setDone({ reference: transactionId, method, trackingToken: created.trackingToken, callback: callbackPending });
         return;
       }
 
@@ -341,7 +345,7 @@ export default function CheckoutScreen({ navigation, route }) {
         </Animated.View>
         {guest && done.trackingToken ? (
           <ScrollView style={styles.guestScroll} contentContainerStyle={styles.guestScrollContent} keyboardShouldPersistTaps="handled">
-            <GuestSuccess reference={done.reference} trackingToken={done.trackingToken} verified={guestVerified} navigation={navigation} />
+            <GuestSuccess reference={done.reference} trackingToken={done.trackingToken} verified={guestVerified} callback={done.callback} navigation={navigation} />
           </ScrollView>
         ) : null}
         <View style={styles.doneActions}>
@@ -506,7 +510,14 @@ export default function CheckoutScreen({ navigation, route }) {
         name={delivery.name.trim()}
         reason={otp.reason}
         onClose={() => { setOtp({ open: false, reason: '' }); resumeAfterOtp.current = false; }}
+        onCallback={() => {
+          setOtp({ open: false, reason: '' });
+          phoneCallbackRef.current = true;
+          resumeAfterOtp.current = false;
+          setTimeout(() => placeOrder(), 0);
+        }}
         onVerified={() => {
+          phoneCallbackRef.current = false;
           setOtp({ open: false, reason: '' });
           setGuestVerified(true);
           if (resumeAfterOtp.current) {

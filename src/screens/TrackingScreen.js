@@ -97,6 +97,12 @@ export default function TrackingScreen({ route, navigation }) {
                 </View>
               );
             })}
+            {!st.cancelled && order.phoneConfirmation === 'pending' ? (
+              <View style={styles.payNote}>
+                <Ionicons name="call-outline" size={18} color={colors.wood} />
+                <Text variant="small" style={styles.flex}>Notre équipe va vous appeler pour confirmer cette commande avant sa préparation.</Text>
+              </View>
+            ) : null}
             {!st.cancelled && st.payment ? (
               <View style={[styles.payNote, st.payment === 'failed' && styles.payNoteFailed]}>
                 <Ionicons name={st.payment === 'failed' ? 'alert-circle' : 'time-outline'} size={18} color={st.payment === 'failed' ? colors.danger : colors.wood} />

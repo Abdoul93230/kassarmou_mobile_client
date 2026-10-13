@@ -14,7 +14,7 @@ import { colors, radius } from '../../theme';
  * Après une commande sans compte : lien de suivi (voir, copier, partager)
  * et création du compte avec un simple mot de passe (numéro déjà vérifié).
  */
-function GuestSuccess({ reference, trackingToken, verified, navigation }) {
+function GuestSuccess({ reference, trackingToken, verified, callback = false, navigation }) {
   const dispatch = useDispatch();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -41,6 +41,12 @@ function GuestSuccess({ reference, trackingToken, verified, navigation }) {
 
   return (
     <View style={styles.wrap}>
+      {callback ? (
+        <View style={[styles.card, styles.callback]}>
+          <Text variant="bodyMedium">📞 Nous allons vous appeler</Text>
+          <Text variant="caption" color="textSecondary">Le code SMS n'est pas arrivé : notre équipe vous appelle très vite pour confirmer la commande avant sa préparation.</Text>
+        </View>
+      ) : null}
       <View style={styles.card}>
         <Text variant="title">Suivez votre commande</Text>
         <Text variant="caption" color="textSecondary">Ce lien suffit : gardez-le ou partagez-le.</Text>
@@ -90,6 +96,7 @@ const styles = StyleSheet.create({
   card: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   claim: { backgroundColor: colors.primarySoft, borderColor: colors.primary + '55' },
   success: { backgroundColor: colors.successSoft, borderColor: colors.success + '55' },
+  callback: { backgroundColor: colors.woodSoft, borderColor: colors.wood + '55', gap: 4 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   iconBtn: { width: 46, height: 46, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
