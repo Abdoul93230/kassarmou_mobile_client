@@ -269,7 +269,19 @@ function AppNavigator() {
           component={FaqScreen}
           options={{ headerShown: false }}
         />
-        
+
+        {/* Paiement : accessible aussi en commande sans compte (invité) */}
+        <Stack.Screen
+          name="Checkout"
+          component={CheckoutScreen}
+          options={{ title: 'Paiement' }}
+        />
+        <Stack.Screen
+          name="PaymentWebView"
+          component={PaymentWebViewScreen}
+          options={{ title: 'Paiement sécurisé', gestureEnabled: false }}
+        />
+
         {/* Écrans protégés (nécessitent authentification) */}
         {isAuthenticated && (
           <>
@@ -283,17 +295,7 @@ function AppNavigator() {
               component={EditProfileScreen}
               options={{ headerShown: false }}
             />
-            <Stack.Screen 
-              name="Checkout" 
-              component={CheckoutScreen}
-              options={{ title: 'Paiement' }}
-            />
-            <Stack.Screen 
-              name="PaymentWebView" 
-              component={PaymentWebViewScreen}
-              options={{ title: 'Paiement sécurisé', gestureEnabled: false }}
-            />
-            <Stack.Screen 
+            <Stack.Screen
               name="Orders" 
               component={OrdersScreen}
               options={{ headerShown: false }}
