@@ -164,7 +164,8 @@ export default function CheckoutScreen({ navigation, route }) {
 
     setSubmitting(true);
     try {
-      const phone = toBackendPhone(country, phoneDigits);
+      // Format exigé par le backend : indicatif collé au numéro, sans espace (+22787727501)
+      const phone = toBackendPhone(country, phoneDigits).replace(/\s+/g, '');
       const transactionId = generateUniqueID();
       const existingOrder = JSON.parse((await AsyncStorage.getItem('pendingOrder')) || 'null');
 
@@ -202,7 +203,11 @@ export default function CheckoutScreen({ navigation, route }) {
       Toast.show({
         type: 'error',
         text1: 'Commande non envoyée',
-        text2: e.response?.data?.message || e.message || 'Vérifiez votre connexion et réessayez.',
+        text2:
+          e.response?.data?.message ||
+          (Array.isArray(e.response?.data?.err) ? e.response.data.err.join(' ') : null) ||
+          e.response?.data?.error ||
+          'Vérifiez votre connexion et réessayez.',
       });
     } finally {
       setSubmitting(false);
