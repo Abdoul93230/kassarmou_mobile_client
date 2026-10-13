@@ -14,14 +14,24 @@ const STEPS = [
   { label: 'Livrée', icon: 'checkmark-done' },
 ];
 
+const PAY_WAITING = ['en_attente', 'en attente', 'en cours', 'pending'];
+const PAY_FAILED = ['échec', 'echec', 'failed'];
+
+/**
+ * Étape réelle de la commande. statusLivraison vaut « en cours » dès la création :
+ * on ne s'y fie pas, seul etatTraitement (mis à jour par l'équipe) fait avancer la livraison,
+ * et une commande en ligne non payée reste à « Commande passée ».
+ */
 function stageOf(o) {
   const etat = String(o?.etatTraitement || '').toLowerCase();
   const livr = String(o?.statusLivraison || '').toLowerCase();
+  const pay = String(o?.statusPayment || '').toLowerCase();
   if (etat.includes('annul') || livr.includes('annul')) return { cancelled: true, step: 0 };
-  if ((livr.includes('livr') && !livr.includes('cours')) || etat.includes('livrée') || etat.includes('livré')) return { cancelled: false, step: 3 };
-  if (etat.includes('livraison') || livr.includes('cours')) return { cancelled: false, step: 2 };
-  if (etat.includes('traitement') || etat.includes('prépar') || etat.includes('reçu') || etat.includes('confirm')) return { cancelled: false, step: 1 };
-  return { cancelled: false, step: 0 };
+  if (['livraison reçu', 'livré', 'livrée', 'traité'].includes(etat) || ['livré', 'livrée'].includes(livr)) return { cancelled: false, step: 3 };
+  if (['reçu par le livreur', 'en cours de livraison'].includes(etat)) return { cancelled: false, step: 2 };
+  if (PAY_FAILED.includes(pay)) return { cancelled: false, step: 0, payment: 'failed' };
+  if (PAY_WAITING.includes(pay)) return { cancelled: false, step: 0, payment: 'waiting' };
+  return { cancelled: false, step: 1 };
 }
 
 const F = (n) => `${formatPrice(n || 0)} F`;
@@ -87,6 +97,16 @@ export default function TrackingScreen({ route, navigation }) {
                 </View>
               );
             })}
+            {!st.cancelled && st.payment ? (
+              <View style={[styles.payNote, st.payment === 'failed' && styles.payNoteFailed]}>
+                <Ionicons name={st.payment === 'failed' ? 'alert-circle' : 'time-outline'} size={18} color={st.payment === 'failed' ? colors.danger : colors.wood} />
+                <Text variant="small" color={st.payment === 'failed' ? 'danger' : 'text'} style={styles.flex}>
+                  {st.payment === 'failed'
+                    ? "Paiement non abouti : la commande n'est pas encore validée et ne sera pas préparée. Repassez-la ou contactez-nous."
+                    : 'Paiement en attente : la préparation commence dès sa confirmation.'}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.card}>
@@ -138,6 +158,8 @@ const styles = StyleSheet.create({
   lineDone: { backgroundColor: colors.primary },
   stepText: { paddingTop: 4, paddingBottom: 14 },
   cancelled: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
+  payNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 4, padding: 12, borderRadius: radius.md, backgroundColor: colors.woodSoft },
+  payNoteFailed: { backgroundColor: colors.dangerSoft },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   thumb: { width: 52, height: 52, borderRadius: radius.sm },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 8 },
