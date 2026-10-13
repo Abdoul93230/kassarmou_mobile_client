@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { IconButton, PressableScale, Text } from '../ui';
 import { SUPPORT } from '../config/env';
+import { useSelector } from 'react-redux';
 import { colors, fonts, GUTTER, radius, shadows } from '../theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -56,6 +57,7 @@ function Item({ item, open, onToggle }) {
 /** Centre d'aide : recherche dans la FAQ et contact direct */
 export default function FaqScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const user = useSelector((s) => s.auth.user);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(0);
 
@@ -96,7 +98,7 @@ export default function FaqScreen({ navigation }) {
           <Text variant="h3">Besoin d'aide ?</Text>
           <Text variant="small" color="textSecondary" style={styles.mt4}>Notre équipe au Niger vous répond.</Text>
           <View style={styles.contactRow}>
-            <PressableScale onPress={() => navigation.navigate('Messages')} style={styles.contactBtn} scaleTo={0.96}>
+            <PressableScale onPress={() => (user ? navigation.navigate('Messages') : navigation.navigate('QuickAuth', { returnScreen: 'Faq' }))} style={styles.contactBtn} scaleTo={0.96}>
               <Ionicons name="chatbubbles-outline" size={22} color={colors.primary} />
               <Text variant="caption">Messages</Text>
             </PressableScale>
