@@ -56,8 +56,8 @@ const fetchDataWithCache = async (endpoint, cacheKey, dispatch, actionCreator, s
 // Thunk avec logique de cache intégrée - BON ENDPOINT
 export const fetchCategories = (setLoading) => async (dispatch) => {
   await fetchDataWithCache(
-    '/getAllCategories',
-    'categories_cache',
+    '/getCategoriesWithProducts', // seules les catégories qui ont des produits publiés
+    'categories_with_products_cache',
     dispatch,
     setCategories,
     setLoading
@@ -67,8 +67,8 @@ export const fetchCategories = (setLoading) => async (dispatch) => {
 // Fonction pour forcer le rafraîchissement (ignorer le cache)
 export const forceRefreshCategories = () => async (dispatch) => {
   try {
-    await AsyncStorage.removeItem('categories_cache');
-    await AsyncStorage.removeItem('categories_cache_timestamp');
+    await AsyncStorage.removeItem('categories_with_products_cache');
+    await AsyncStorage.removeItem('categories_with_products_cache_timestamp');
     await dispatch(fetchCategories());
   } catch (error) {
     console.log('[CategoriesActions] Error force refreshing categories:', error);

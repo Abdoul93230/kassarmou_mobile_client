@@ -75,8 +75,8 @@ export const getTypes = () => async (dispatch) => {
 
 export const getCategories = (setLoading) => async (dispatch) => {
   await fetchDataWithCache(
-    '/getAllCategories',
-    'categories_cache',
+    '/getCategoriesWithProducts', // seules les catégories qui ont des produits publiés
+    'categories_with_products_cache',
     dispatch,
     setCategories,
     setLoading
@@ -118,7 +118,7 @@ export const clearAllCache = () => async () => {
     const cacheKeys = [
       'products_cache',
       'types_cache',
-      'categories_cache',
+      'categories_with_products_cache',
       'products_pubs_cache',
       'products_commentes_cache'
     ];
