@@ -349,13 +349,27 @@ export default function StoreChatScreen({ navigation, route }) {
         </View>
       ) : null}
 
+      {/* Aperçu de l'article joint au prochain message */}
       {context ? (
         <View style={styles.contextBar}>
-          <Ionicons name={context.kind === 'order' ? 'receipt-outline' : 'pricetag-outline'} size={16} color={colors.primaryDark} />
-          <Text variant="small" color="textSecondary" numberOfLines={1} style={styles.flex}>
-            À propos de : <Text variant="smallMedium">{context.title}</Text>
+          <Text variant="caption" color="textSecondary" style={styles.contextLabel}>
+            {context.kind === 'order' ? 'Commande jointe à votre message' : 'Article joint à votre message'}
           </Text>
-          <IconButton name="close" size={32} iconSize={16} onPress={() => setContext(null)} bg="transparent" accessibilityLabel="Ne pas joindre" />
+          <View style={styles.contextCard}>
+            <PressableScale onPress={() => openCard(context)} scaleTo={0.98} style={styles.contextMain} accessibilityLabel={`Voir ${context.title}`}>
+              {context.image ? <SmartImage uri={context.image} width={64} style={styles.contextImg} /> : (
+                <View style={[styles.contextImg, styles.cardIcon]}>
+                  <Ionicons name={context.kind === 'order' ? 'receipt-outline' : 'pricetag-outline'} size={22} color={colors.primaryDark} />
+                </View>
+              )}
+              <View style={styles.flex}>
+                <Text variant="smallMedium" numberOfLines={2}>{context.title}</Text>
+                {context.subtitle ? <Text variant="caption" color="textSecondary" numberOfLines={1}>{context.subtitle}</Text> : null}
+                <Text variant="title" color="primaryDark">{fcfa(context.price)}</Text>
+              </View>
+            </PressableScale>
+            <IconButton name="close" size={30} iconSize={16} onPress={() => setContext(null)} bg={colors.surfaceAlt} accessibilityLabel="Retirer l'article" />
+          </View>
         </View>
       ) : null}
 
@@ -430,9 +444,16 @@ const styles = StyleSheet.create({
   quick: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: GUTTER, paddingBottom: 10 },
   quickChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
   contextBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: GUTTER, paddingRight: 8, paddingVertical: 4,
-    backgroundColor: colors.sandSoft, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
+    paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 4,
+    backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
   },
+  contextLabel: { marginBottom: 6 },
+  contextCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: radius.md,
+    backgroundColor: colors.primarySoft, borderLeftWidth: 3, borderLeftColor: colors.primary,
+  },
+  contextMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  contextImg: { width: 56, height: 56, borderRadius: 10 },
   composer: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: GUTTER, paddingTop: 10,
     backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,

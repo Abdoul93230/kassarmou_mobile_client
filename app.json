@@ -205,7 +205,12 @@
       "policy": "appVersion"
     },
     "plugins": [
-      "expo-status-bar",
+      [
+        "expo-status-bar",
+        {
+          "style": "dark"
+        }
+      ],
       "expo-image",
       "expo-font",
       [
