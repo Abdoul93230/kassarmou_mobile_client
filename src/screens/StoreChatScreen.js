@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,9 +9,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
 import { IconButton, PressableScale, SmartImage, Text } from '../ui';
-import { colors, fonts, GUTTER, radius } from '../theme';
+import { colors, GUTTER, radius } from '../theme';
 import { emit, emitWithAck, messagingApi, useMessagingEvents, useMessagingState } from '../services/messaging';
 import { registerDevicePush } from '../services/pushNotifications';
+import ChatComposer from '../components/chat/ChatComposer';
+import VoiceMessageBubble from '../components/chat/VoiceMessageBubble';
+import { configureVoicePlayback, stopVoicePlayback } from '../components/chat/voicePlayback';
 
 const STARTERS = ['Est-il toujours disponible ?', 'Quels sont les délais de livraison ?', "Avez-vous d'autres tailles ou couleurs ?", 'Pouvez-vous me montrer plus de photos ?'];
 const PUSH_ASKED = 'ihamPushAsked';
@@ -61,7 +64,7 @@ export default function StoreChatScreen({ navigation, route }) {
   const [context, setContext] = useState(null); // carte produit / commande à joindre au prochain message
   const [text, setText] = useState('');
   const [online, setOnline] = useState(false);
-  const [storeTyping, setStoreTyping] = useState(false);
+  const [storeTyping, setStoreTyping] = useState(false); // false | 'text' | 'audio'
   const [uploading, setUploading] = useState(false);
   const convIdRef = useRef(null);
   const typingTimer = useRef(null);
@@ -107,9 +110,26 @@ export default function StoreChatScreen({ navigation, route }) {
     if (convIdRef.current) emit('conversation:view', { conversationId: convIdRef.current });
     return () => {
       focused.current = false;
+      stopVoicePlayback();
       emit('conversation:leave', {});
     };
   }, []));
+
+  // Vocaux consécutifs : lecture enchaînée (liste du plus récent au plus ancien)
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  useEffect(() => {
+    configureVoicePlayback({
+      getNext: (id) => {
+        const list = messagesRef.current;
+        const i = list.findIndex((m) => String(m.clientTempId || m.id) === id);
+        const next = i > 0 ? list[i - 1] : null;
+        return next && (next.audio?.url || next.localUri) ? { ...next, id: String(next.clientTempId || next.id) } : null;
+      },
+      onError: (msg) => Toast.show({ type: 'error', text1: msg }),
+    });
+    return () => configureVoicePlayback({});
+  }, []);
 
   // Reconnexion : on se signale de nouveau et on récupère ce qui a été manqué
   const wasConnected = useRef(connected);
@@ -144,9 +164,9 @@ export default function StoreChatScreen({ navigation, route }) {
       if (conversationId !== convIdRef.current || by !== 'store') return;
       setMessages((prev) => prev.map((m) => (m.from === 'client' && !m.readAt && !m.pending ? { ...m, readAt: at } : m)));
     },
-    typing: ({ conversationId, typing, from }) => {
+    typing: ({ conversationId, typing, from, kind }) => {
       if (conversationId !== convIdRef.current || from !== 'store') return;
-      setStoreTyping(typing);
+      setStoreTyping(typing ? (kind === 'audio' ? 'audio' : 'text') : false);
       clearTimeout(storeTypingTimer.current);
       if (typing) storeTypingTimer.current = setTimeout(() => setStoreTyping(false), 8000);
     },
@@ -175,7 +195,7 @@ export default function StoreChatScreen({ navigation, route }) {
 
   const deliver = async (msg) => {
     const body = {
-      text: msg.text, attachments: msg.attachments, clientTempId: msg.clientTempId,
+      text: msg.text, attachments: msg.attachments, audio: msg.audio?.url ? msg.audio : undefined, clientTempId: msg.clientTempId,
       productId: msg.card?.kind === 'product' ? msg.card.id : undefined,
       orderId: msg.card?.kind === 'order' ? msg.card.id : undefined,
     };
@@ -188,7 +208,8 @@ export default function StoreChatScreen({ navigation, route }) {
       } catch {
         saved = await messagingApi.send(convIdRef.current, body); // repli HTTP
       }
-      setMessages((prev) => prev.map((m) => (m.clientTempId === msg.clientTempId ? saved : m)));
+      // Le vocal garde son fichier local : relecture immédiate sans retéléchargement
+      setMessages((prev) => prev.map((m) => (m.clientTempId === msg.clientTempId ? { ...saved, localUri: m.localUri } : m)));
       askPushOnce();
     } catch (e) {
       setMessages((prev) => prev.map((m) => (m.clientTempId === msg.clientTempId ? { ...m, pending: false, failed: true } : m)));
@@ -211,7 +232,33 @@ export default function StoreChatScreen({ navigation, route }) {
     deliver(msg);
   };
 
+  // Vocal : affiché tout de suite (fichier local), envoyé sur Cloudinary puis à la boutique
+  const sendVoice = async (uri, durationMs) => {
+    if (!convIdRef.current) return;
+    const id = tempId();
+    const msg = {
+      id, clientTempId: id, from: 'client', text: '', attachments: [], card: context, localUri: uri,
+      audio: { url: null, durationMs }, createdAt: new Date().toISOString(), pending: true,
+    };
+    setMessages((prev) => [msg, ...prev]);
+    setContext(null);
+    try {
+      const audio = await messagingApi.uploadAudio(uri, durationMs);
+      const ready = { ...msg, audio };
+      setMessages((prev) => prev.map((m) => (m.clientTempId === id ? { ...m, audio } : m)));
+      await deliver(ready);
+    } catch {
+      setMessages((prev) => prev.map((m) => (m.clientTempId === id ? { ...m, pending: false, failed: true } : m)));
+      Toast.show({ type: 'error', text1: 'Vocal non envoyé', text2: 'Touchez-le pour réessayer.' });
+    }
+  };
+
   const retry = (m) => {
+    if (m.localUri && !m.audio?.url) {
+      setMessages((prev) => prev.filter((x) => x.clientTempId !== m.clientTempId));
+      sendVoice(m.localUri, m.audio?.durationMs || 0);
+      return;
+    }
     setMessages((prev) => prev.map((x) => (x.clientTempId === m.clientTempId ? { ...x, failed: false, pending: true } : x)));
     deliver(m);
   };
@@ -263,7 +310,7 @@ export default function StoreChatScreen({ navigation, route }) {
   const lastMine = messages.find((m) => m.from === 'client' && !m.pending && !m.failed);
 
   const storeName = store?.name || 'Boutique';
-  const status = storeTyping ? 'écrit…' : online ? 'En ligne' : 'Vous répond ici dès que possible';
+  const status = storeTyping === 'audio' ? 'enregistre un vocal…' : storeTyping ? 'écrit…' : online ? 'En ligne' : 'Vous répond ici dès que possible';
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -306,7 +353,7 @@ export default function StoreChatScreen({ navigation, route }) {
           onEndReached={loadOlder}
           onEndReachedThreshold={0.3}
           ListHeaderComponent={storeTyping ? (
-            <View style={[styles.bubbleRow, styles.left]}><View style={[styles.bubble, styles.theirs]}><Text variant="small" color="textMuted">{storeName} écrit…</Text></View></View>
+            <View style={[styles.bubbleRow, styles.left]}><View style={[styles.bubble, styles.theirs]}><Text variant="small" color="textMuted">{storeName} {storeTyping === 'audio' ? 'enregistre un vocal…' : 'écrit…'}</Text></View></View>
           ) : null}
           ListFooterComponent={
             <View style={styles.safety}>
@@ -326,6 +373,7 @@ export default function StoreChatScreen({ navigation, route }) {
                 <Wrapper onPress={item.failed ? () => retry(item) : undefined} style={[styles.bubble, mine ? styles.mine : styles.theirs, item.failed && styles.failed]}>
                   <Card card={item.card} mine={mine} onPress={() => openCard(item.card)} />
                   {(item.attachments || []).map((u) => <SmartImage key={u} uri={u} width={240} style={styles.photo} />)}
+                  {item.audio?.url || item.localUri ? <VoiceMessageBubble message={item} mine={mine} /> : null}
                   {item.text ? <Text variant="body" color={mine ? 'textInverse' : 'text'}>{item.text}</Text> : null}
                   {!mine && item.signature ? <Text variant="caption" color="textMuted" style={styles.signature}>— {item.signature}</Text> : null}
                   <Text variant="caption" color={mine ? 'textInverse' : 'textMuted'} style={styles.time}>
@@ -374,30 +422,23 @@ export default function StoreChatScreen({ navigation, route }) {
       ) : null}
 
       {!error ? (
-        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-          <PressableScale onPress={pickPhoto} disabled={uploading || loading} scaleTo={0.9} style={styles.attach} accessibilityLabel="Envoyer une photo">
-            {uploading ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="image-outline" size={22} color={colors.textSecondary} />}
-          </PressableScale>
-          <TextInput
-            value={text}
-            onChangeText={onType}
-            placeholder={`Écrire à ${storeName}…`}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            maxLength={2000}
-            style={styles.input}
-            editable={!loading}
-          />
-          <PressableScale
-            onPress={() => send()}
-            disabled={!text.trim() || loading}
-            scaleTo={0.9}
-            style={[styles.send, (!text.trim() || loading) && styles.sendOff]}
-            accessibilityLabel="Envoyer"
-          >
-            <Ionicons name="send" size={18} color={colors.textInverse} />
-          </PressableScale>
-        </View>
+        <ChatComposer
+          value={text}
+          onChangeText={onType}
+          onSendText={() => send()}
+          onSendVoice={sendVoice}
+          onRecordingStart={() => {
+            stopVoicePlayback();
+            emit('typing:start', { conversationId: convIdRef.current, kind: 'audio' });
+          }}
+          onRecordingStop={() => emit('typing:stop', { conversationId: convIdRef.current })}
+          onError={(m) => Toast.show({ type: 'info', text1: m })}
+          onPickPhoto={pickPhoto}
+          uploading={uploading}
+          placeholder={`Écrire à ${storeName}…`}
+          bottomInset={insets.bottom}
+          disabled={loading}
+        />
       ) : null}
     </KeyboardAvoidingView>
   );
@@ -454,15 +495,4 @@ const styles = StyleSheet.create({
   },
   contextMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   contextImg: { width: 56, height: 56, borderRadius: 10 },
-  composer: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: GUTTER, paddingTop: 10,
-    backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
-  },
-  attach: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
-  input: {
-    flex: 1, maxHeight: 120, minHeight: 44, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11,
-    borderRadius: 22, backgroundColor: colors.bg, fontFamily: fonts.regular, fontSize: 15, color: colors.text,
-  },
-  send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  sendOff: { opacity: 0.4 },
 });

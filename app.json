@@ -235,6 +235,12 @@
         {
           "color": "#30A08B"
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Ihambaobab utilise le micro uniquement pour enregistrer les messages vocaux que vous envoyez aux boutiques."
+        }
       ]
     ]
   }

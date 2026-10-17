@@ -24,6 +24,13 @@ export const messagingApi = {
   unread: () => apiClient.get('/api/messaging/unread').then((r) => r.data.count || 0),
   registerPushToken: (token) => apiClient.post('/api/messaging/push-token', { token }),
   unregisterPushToken: (token) => apiClient.delete('/api/messaging/push-token', { data: { token } }).catch(() => {}),
+  uploadAudio: async (uri, durationMs) => {
+    const ext = (String(uri).split('?')[0].split('.').pop() || 'm4a').toLowerCase();
+    const fd = new FormData();
+    fd.append('audio', { uri, name: `vocal-${Date.now()}.${ext}`, type: ext === 'webm' ? 'audio/webm' : 'audio/mp4' });
+    const r = await apiClient.post('/api/messaging/upload-audio', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90000 });
+    return { url: r.data.url, durationMs: r.data.durationMs || durationMs || 0 };
+  },
   upload: async (asset) => {
     const fd = new FormData();
     const name = asset.fileName || `photo-${Date.now()}.jpg`;

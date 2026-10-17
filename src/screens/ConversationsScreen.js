@@ -43,8 +43,8 @@ export default function ConversationsScreen({ navigation }) {
 
   useMessagingEvents({
     'conversation:updated': (c) => setRows((prev) => (prev ? [c, ...prev.filter((x) => x.id !== c.id)] : prev)),
-    typing: ({ conversationId, typing: on, from }) => {
-      if (from === 'store') setTyping((t) => ({ ...t, [conversationId]: on }));
+    typing: ({ conversationId, typing: on, from, kind }) => {
+      if (from === 'store') setTyping((t) => ({ ...t, [conversationId]: on ? (kind === 'audio' ? 'enregistre un vocal…' : 'écrit…') : false }));
     },
   });
 
@@ -122,7 +122,7 @@ export default function ConversationsScreen({ navigation }) {
               </View>
               <View style={styles.line}>
                 <Text variant="small" color={typing[c.id] ? 'primary' : c.unread ? 'text' : 'textSecondary'} numberOfLines={1} style={[styles.flex, c.unread && styles.bold]}>
-                  {typing[c.id] ? 'écrit…' : `${c.lastMessage?.from === 'client' ? 'Vous : ' : ''}${c.lastMessage?.text || ''}`}
+                  {typing[c.id] ? typing[c.id] : `${c.lastMessage?.from === 'client' ? 'Vous : ' : ''}${c.lastMessage?.text || ''}`}
                 </Text>
                 {c.unread ? <View style={styles.badge}><Text variant="caption" color="textInverse" style={styles.badgeText}>{c.unread > 99 ? '99+' : c.unread}</Text></View> : null}
               </View>
