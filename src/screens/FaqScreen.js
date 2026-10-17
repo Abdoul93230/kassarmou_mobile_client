@@ -98,7 +98,7 @@ export default function FaqScreen({ navigation }) {
           <Text variant="h3">Besoin d'aide ?</Text>
           <Text variant="small" color="textSecondary" style={styles.mt4}>Notre équipe au Niger vous répond.</Text>
           <View style={styles.contactRow}>
-            <PressableScale onPress={() => (user ? navigation.navigate('Messages') : navigation.navigate('QuickAuth', { returnScreen: 'Faq' }))} style={styles.contactBtn} scaleTo={0.96}>
+            <PressableScale onPress={() => (user ? navigation.navigate('Support') : navigation.navigate('QuickAuth', { returnScreen: 'Faq' }))} style={styles.contactBtn} scaleTo={0.96}>
               <Ionicons name="chatbubbles-outline" size={22} color={colors.primary} />
               <Text variant="caption">Messages</Text>
             </PressableScale>

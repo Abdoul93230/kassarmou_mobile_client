@@ -244,6 +244,9 @@ export const logoutUser = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       console.log("🚪 Déconnexion en cours...");
+      // Cet appareil ne doit plus recevoir les messages de ce compte (avant d'effacer le jeton de session)
+      await require('../services/pushNotifications').unregisterDevicePush().catch(() => {});
+      require('../services/messaging').disconnectMessaging();
       await removeUserFromStorage();
       isCheckingAuth = false;
       console.log("✅ Déconnexion réussie");

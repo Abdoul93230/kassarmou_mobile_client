@@ -16,6 +16,7 @@ import {
   useStoresQuery,
 } from '../redux/catalogApi';
 import { IconButton, PressableScale, ProductCard, ProductCardSkeleton, SectionHeader, Text, getPricing } from '../ui';
+import { useMessagingState } from '../services/messaging';
 import BannerCarousel from '../components/home/BannerCarousel';
 import CategoryRail from '../components/home/CategoryRail';
 import QuickActions from '../components/home/QuickActions';
@@ -39,6 +40,7 @@ const greeting = () => {
 
 // ─── En-tête : logo, salutation, recherche, messagerie ────────────────────────────
 function HomeHeader({ user, onSearch, onMessages, elevated }) {
+  const { unread } = useMessagingState(); // non-lus des boutiques, en temps réel
   const insets = useSafeAreaInsets();
   const firstName = (user?.name || '').trim().split(' ')[0];
   return (
@@ -53,7 +55,7 @@ function HomeHeader({ user, onSearch, onMessages, elevated }) {
         <View style={styles.headerIcons}>
           {/* Le panier est déjà dans la barre d'onglets : en haut, recherche + messagerie */}
           <IconButton name="search" onPress={onSearch} bg={colors.surfaceAlt} accessibilityLabel="Rechercher un produit ou une boutique" />
-          {user ? <IconButton name="chatbubble-ellipses-outline" onPress={onMessages} bg={colors.surfaceAlt} accessibilityLabel="Messages" /> : null}
+          {user ? <IconButton name="chatbubble-ellipses-outline" onPress={onMessages} bg={colors.surfaceAlt} badge={unread} accessibilityLabel={unread ? `Messages, ${unread} non lu${unread > 1 ? 's' : ''}` : 'Messages'} /> : null}
         </View>
       </View>
     </View>

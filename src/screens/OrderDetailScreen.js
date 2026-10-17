@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useOrderQuery } from '../redux/catalogApi';
 import useReorder from '../hooks/useReorder';
+import useContactStore from '../hooks/useContactStore';
 import StageBadge from '../components/orders/StageBadge';
 import { Button, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
 import { SUPPORT } from '../config/env';
@@ -66,6 +67,7 @@ function Line({ label, value, tone, bold }) {
 
 /** Suivi détaillé d'une commande */
 export default function OrderDetailScreen({ route, navigation }) {
+  const contactStore = useContactStore(navigation);
   const { orderId, order: initial } = route.params || {};
   const insets = useSafeAreaInsets();
   const { data, isLoading, isFetching, isError, refetch } = useOrderQuery(orderId, { skip: !orderId });
@@ -180,6 +182,22 @@ export default function OrderDetailScreen({ route, navigation }) {
           <Line label="Total" value={F(order.prix)} bold />
           <Text variant="caption" color="textMuted" style={styles.mt8}>Statut du paiement : {order.statusPayment || '—'}</Text>
         </View>
+
+        {(order.shippingByStore || []).filter((s) => s?.storeId).map((s) => (
+          <PressableScale
+            key={s.storeId}
+            onPress={() => contactStore({ sellerId: String(s.storeId), storeName: s.storeName, orderId: order._id })}
+            style={styles.help}
+            scaleTo={0.99}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+            <View style={styles.flex}>
+              <Text variant="title">Écrire à {s.storeName}</Text>
+              <Text variant="caption" color="textSecondary">Une question sur vos articles ? La commande est jointe</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </PressableScale>
+        ))}
 
         <PressableScale onPress={contactSupport} style={styles.help} scaleTo={0.99}>
           <Ionicons name="logo-whatsapp" size={20} color="#25D366" />

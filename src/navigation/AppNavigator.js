@@ -21,6 +21,9 @@ import ProfileScreen from '../screens/ProfileScreen';
 import OrdersScreen from '../screens/OrdersScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import MessagesScreen from '../screens/MessagesScreen';
+import ConversationsScreen from '../screens/ConversationsScreen';
+import StoreChatScreen from '../screens/StoreChatScreen';
+import MessagingBridge from '../components/MessagingBridge';
 import CategoryScreen from '../screens/CategoryScreen';
 import SearchScreen from '../screens/SearchScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
@@ -149,6 +152,7 @@ function AppNavigator() {
           Orders: 'commandes',
           OrderDetail: 'commandes/:orderId',
           Messages: 'Messagerie',
+          StoreChat: 'Messagerie/:conversationId',
           Wallet: 'wallet',
         } : {}),
       }
@@ -314,14 +318,26 @@ function AppNavigator() {
               component={OrderDetailScreen}
               options={{ headerShown: false }}
             />
-            <Stack.Screen 
-              name="Messages" 
+            {/* Messagerie : boutiques (temps réel) + support Ihambaobab */}
+            <Stack.Screen
+              name="Messages"
+              component={ConversationsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="StoreChat"
+              component={StoreChatScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Support"
               component={MessagesScreen}
-              options={{ title: 'Messages' }}
+              options={{ headerShown: false }}
             />
           </>
         )}
       </Stack.Navigator>
+      <MessagingBridge />
     </NavigationContainer>
   );
 }

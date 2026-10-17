@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Linking, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +18,7 @@ import useStoreSocial from '../hooks/useStoreSocial';
 import ProductGrid from '../components/ProductGrid';
 import BannerCarousel from '../components/home/BannerCarousel';
 import { Button, Chip, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, Stars, Text, getPricing } from '../ui';
+import useContactStore from '../hooks/useContactStore';
 import { siteUrl } from '../config/env';
 import { capitalize } from '../utils/text';
 import { colors, fonts, gradients, GUTTER, radius, shadows } from '../theme';
@@ -87,7 +88,6 @@ export default function BoutiqueScreen({ route, navigation }) {
   }, [all, q, sort, typeId]);
 
   const name = store?.storeName || params.storeName || 'Boutique';
-  const whatsapp = String(store?.whatsapp || store?.businessPhone || '').replace(/[^\d]/g, '');
   const rating = Number(stats.data?.rating ?? store?.rating) || 0;
   const reviewsCount = Number(stats.data?.reviewsCount ?? store?.reviewsCount) || 0;
 
@@ -96,11 +96,11 @@ export default function BoutiqueScreen({ route, navigation }) {
     Share.share({ message: `Découvrez ${name} sur Ihambaobab 🛍️\n${url}`, url, title: name }).catch(() => {});
   }, [name]);
 
+  // La plateforme reste l'intermédiaire : messagerie intégrée, jamais le numéro du vendeur
+  const contactStore = useContactStore(navigation);
   const contact = useCallback(() => {
-    if (!whatsapp) return;
-    const text = encodeURIComponent(`Bonjour ${name}, je vous contacte depuis Ihambaobab.`);
-    Linking.openURL(`https://wa.me/${whatsapp}?text=${text}`).catch(() => {});
-  }, [name, whatsapp]);
+    if (sellerId) contactStore({ sellerId: String(sellerId), storeName: name, storeLogo: store?.logo });
+  }, [contactStore, name, sellerId, store?.logo]);
 
   const loadingStore = !store && (byName.isLoading || storeQ.isLoading || (!sellerId && !!params.storeName && !byName.isError));
   const missingTarget = !params.sellerId && !params.storeName;
@@ -187,8 +187,8 @@ export default function BoutiqueScreen({ route, navigation }) {
                 onPress={social.toggleLike}
                 accessibilityLabel={social.liked ? "Je n'aime plus" : "J'aime la boutique"}
               />
-              {whatsapp ? (
-                <IconButton name="logo-whatsapp" color="#25D366" bg={colors.surfaceAlt} size={48} onPress={contact} accessibilityLabel="Contacter sur WhatsApp" />
+              {sellerId ? (
+                <IconButton name="chatbubble-ellipses-outline" color={colors.primaryDark} bg={colors.primarySoft} size={48} onPress={contact} accessibilityLabel={`Écrire à ${name}`} />
               ) : null}
             </View>
 

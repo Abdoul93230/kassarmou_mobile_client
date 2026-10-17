@@ -15,6 +15,7 @@ import {
   useProductsByTypeQuery,
 } from '../redux/catalogApi';
 import useProductActions, { useIsLiked } from '../hooks/useProductActions';
+import useContactStore from '../hooks/useContactStore';
 import { Button, EmptyState, IconButton, PressableScale, Skeleton, Stars, Text } from '../ui';
 import QuantityStepper from '../ui/QuantityStepper';
 import ImageGallery from '../components/product/ImageGallery';
@@ -45,6 +46,7 @@ const computePricing = (product, variant) => {
 };
 
 export default function ProductDetailScreen({ route, navigation }) {
+  const contactStore = useContactStore(navigation);
   const params = route?.params || {};
   const productId = params.productId || params.product?._id;
   const dispatch = useDispatch();
@@ -283,6 +285,22 @@ export default function ProductDetailScreen({ route, navigation }) {
             })
           }
         />
+        {sellerIdOf(product) ? (
+          <PressableScale
+            onPress={() => contactStore({
+              sellerId: String(sellerIdOf(product)),
+              storeName: product.Clefournisseur?.storeName || product.Clefournisseur?.name,
+              storeLogo: product.Clefournisseur?.logo,
+              productId: product._id,
+            })}
+            scaleTo={0.98}
+            style={styles.contactBtn}
+            accessibilityLabel="Poser une question à la boutique"
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primaryDark} />
+            <Text variant="smallMedium" color="primaryDark">Poser une question à la boutique</Text>
+          </PressableScale>
+        ) : null}
 
         {/* Description */}
         {description ? (
@@ -405,6 +423,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
   },
   infoCardTight: { marginTop: 10 },
+  contactBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: GUTTER, marginTop: 10,
+    paddingVertical: 12, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.primarySoft,
+  },
   infoIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   delivery: { marginHorizontal: GUTTER, marginTop: 24 },
 

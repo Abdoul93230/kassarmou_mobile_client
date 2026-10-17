@@ -111,7 +111,7 @@ export default function MessagesScreen({ navigation }) {
           title="Discutez avec nous"
           message="Connectez-vous pour écrire au support et suivre nos réponses."
           actionLabel="Se connecter"
-          onAction={() => navigation.navigate('QuickAuth', { returnScreen: 'Messages' })}
+          onAction={() => navigation.navigate('QuickAuth', { returnScreen: 'Support' })}
         />
       </View>
     );
