@@ -114,6 +114,8 @@ function AppNavigator() {
     return <SplashScreen />;
   }
 
+  // Liens du site (https://www.ihambaobab.com/...) ouverts dans l'app : mêmes chemins que le web.
+  // Les chemins Android revendiqués sont listés dans app.json (intentFilters) : à garder alignés.
   const linking = {
     prefixes: [
       'ihambaobab://',
@@ -121,12 +123,13 @@ function AppNavigator() {
       'https://www.ihambaobab.com'
     ],
     config: {
+      // L'accueil reste sous l'écran ouvert par le lien : « retour » ne quitte pas l'app
+      initialRouteName: 'MainTabs',
       screens: {
         MainTabs: {
           screens: {
             Home: '',
-            Search: 'search',
-            Favorites: 'favorites',
+            Categories: 'categories',
             Profile: 'profile',
           }
         },
@@ -139,9 +142,15 @@ function AppNavigator() {
         Tracking: 'suivi/:reference',
         FindOrders: 'suivi',
         Cart: 'Panier',
-        Checkout: 'checkout',
-        Orders: 'commandes',
-        OrderDetail: 'commandes/:orderId',
+        Search: 'Search',
+        Faq: 'faq',
+        // Écrans réservés aux comptes connectés : sans session, le lien ouvre l'accueil
+        ...(isAuthenticated ? {
+          Orders: 'commandes',
+          OrderDetail: 'commandes/:orderId',
+          Messages: 'Messagerie',
+          Wallet: 'wallet',
+        } : {}),
       }
     }
   };

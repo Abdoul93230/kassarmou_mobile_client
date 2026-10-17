@@ -33,12 +33,152 @@
             {
               "scheme": "https",
               "host": "ihambaobab.com",
-              "pathPrefix": "/"
+              "path": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/ProduitDetail/"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/boutique/"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/Profile_boutiquier/"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/Categorie/"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/boutiques"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/pres-de-chez-moi"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/suivi"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/Panier"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/Search"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/categories"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/faq"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/commandes"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/Messagerie"
+            },
+            {
+              "scheme": "https",
+              "host": "ihambaobab.com",
+              "pathPrefix": "/wallet"
             },
             {
               "scheme": "https",
               "host": "www.ihambaobab.com",
-              "pathPrefix": "/"
+              "path": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/ProduitDetail/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/boutique/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/Profile_boutiquier/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/Categorie/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/boutiques"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/pres-de-chez-moi"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/suivi"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/Panier"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/Search"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/categories"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/faq"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/commandes"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/Messagerie"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ihambaobab.com",
+              "pathPrefix": "/wallet"
             }
           ],
           "category": [

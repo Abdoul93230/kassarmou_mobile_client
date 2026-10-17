@@ -31,7 +31,8 @@ export default function SearchScreen({ navigation, route }) {
   const inputRef = useRef(null);
   const categories = useSelector((s) => s.products.categories || EMPTY);
 
-  const [query, setQuery] = useState(route?.params?.query || '');
+  // q : lien du site (/Search?q=...)
+  const [query, setQuery] = useState(route?.params?.query || route?.params?.q || '');
   const [history, setHistory] = useState([]);
   const term = useDebounced(query.trim(), 350);
   const active = term.length >= 2;
