@@ -9,7 +9,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { getCategories, getProducts_Pubs, getTypes } from '../redux/productsSlice';
 import { fetchUserLikes } from '../redux/likesSlice';
-import { selectPanierCount } from '../redux/cartSlice';
 import {
   flattenPages,
   useProductFeedInfiniteQuery,
@@ -38,8 +37,8 @@ const greeting = () => {
   return 'Bonsoir';
 };
 
-// ─── En-tête : logo, salutation, panier, recherche ────────────────────────────
-function HomeHeader({ user, cartCount, onSearch, onCart, onMessages, elevated }) {
+// ─── En-tête : logo, salutation, recherche, messagerie ────────────────────────────
+function HomeHeader({ user, onSearch, onMessages, elevated }) {
   const insets = useSafeAreaInsets();
   const firstName = (user?.name || '').trim().split(' ')[0];
   return (
@@ -52,20 +51,11 @@ function HomeHeader({ user, cartCount, onSearch, onCart, onMessages, elevated })
           </Text>
         </View>
         <View style={styles.headerIcons}>
+          {/* Le panier est déjà dans la barre d'onglets : en haut, recherche + messagerie */}
+          <IconButton name="search" onPress={onSearch} bg={colors.surfaceAlt} accessibilityLabel="Rechercher un produit ou une boutique" />
           {user ? <IconButton name="chatbubble-ellipses-outline" onPress={onMessages} bg={colors.surfaceAlt} accessibilityLabel="Messages" /> : null}
-          <IconButton name="bag-handle-outline" onPress={onCart} bg={colors.surfaceAlt} badge={cartCount} accessibilityLabel="Panier" />
         </View>
       </View>
-
-      <PressableScale onPress={onSearch} scaleTo={0.985} style={styles.search} accessibilityRole="search" accessibilityLabel="Rechercher">
-        <Ionicons name="search" size={19} color={colors.textMuted} />
-        <Text variant="body" color="textMuted" style={styles.flex} numberOfLines={1}>
-          Rechercher un produit, une boutique…
-        </Text>
-        <View style={styles.searchBtn}>
-          <Ionicons name="arrow-forward" size={16} color={colors.textInverse} />
-        </View>
-      </PressableScale>
     </View>
   );
 }
@@ -77,7 +67,6 @@ export default function HomeScreen({ navigation }) {
   const cardWidth = (width - GUTTER * 2 - GAP) / 2;
 
   const user = useSelector((s) => s.auth.user);
-  const cartCount = useSelector(selectPanierCount);
   const allCategories = useSelector((s) => s.products.categories || EMPTY);
   const banners = useSelector((s) => s.products.products_Pubs || EMPTY);
 
@@ -239,10 +228,8 @@ export default function HomeScreen({ navigation }) {
     <View style={styles.screen}>
       <HomeHeader
         user={user}
-        cartCount={cartCount}
         elevated={elevated}
         onSearch={() => navigation.navigate('Search')}
-        onCart={() => navigation.navigate('Cart')}
         onMessages={() => navigation.navigate('Messages')}
       />
       <FlashList
@@ -276,12 +263,6 @@ const styles = StyleSheet.create({
   brand: { flex: 1, gap: 2 },
   logo: { width: 134, height: 34 },
   headerIcons: { flexDirection: 'row', gap: 10 },
-  search: {
-    marginTop: 12, height: 50, borderRadius: radius.pill, backgroundColor: colors.surface,
-    flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 18, paddingRight: 5,
-    borderWidth: 1, borderColor: colors.border, ...shadows.sm,
-  },
-  searchBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 
   firstBlock: { paddingTop: 8 },
   bannerBlock: { marginTop: 20 },
