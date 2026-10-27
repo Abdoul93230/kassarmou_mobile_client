@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:408814555603:android:5ef1188ddb58dbeebedf26",
+        "android_client_info": {
+          "package_name": "com.ihambaobab.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC4vEKuqeYpp8wi-nCYyNhy5VjxYS3StHE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:408814555603:android:8445fe8861bf4724bedf26",
         "android_client_info": {
           "package_name": "com.ihambaobab.seller"
