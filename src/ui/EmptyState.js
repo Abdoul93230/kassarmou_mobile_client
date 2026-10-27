@@ -3,10 +3,11 @@ import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Text from './Text';
 import Button from './Button';
-import { colors } from '../theme';
+import { colors, useTheme } from '../theme';
 
 /** État vide / erreur : icône, message clair et une action pour s'en sortir */
 function EmptyState({ icon = 'cube-outline', title, message, actionLabel, onAction, tone = 'primary', style }) {
+  const { colors } = useTheme();
   const tint = tone === 'danger' ? colors.danger : colors.primary;
   const soft = tone === 'danger' ? colors.dangerSoft : colors.primarySoft;
   return (

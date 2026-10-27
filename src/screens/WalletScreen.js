@@ -23,12 +23,11 @@ import { checkinPoints } from '../components/CheckinCard';
 import { siteUrl } from '../config/env';
 import { formatPrice } from '../utils/formatPrice';
 import { formatDate } from '../utils/orders';
-import { colors, gradients, GUTTER, radius, shadows } from '../theme';
+import { gradients, GUTTER, radius, shadows, useTheme } from '../theme';
 
 const LEVEL_STYLE = {
   Graine: { colors: ['#4B5563', '#6B7280'], icon: 'leaf-outline' },
   Arbre: { colors: gradients.brand, icon: 'leaf' },
-  'Grand Baobab': { colors: [colors.wood, '#8A5427'], icon: 'star' },
 };
 
 const TX = {
@@ -51,6 +50,7 @@ const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateStrin
 
 /** Programme de fidélité Baobab Points */
 export default function WalletScreen({ navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
@@ -60,6 +60,12 @@ export default function WalletScreen({ navigation }) {
   const config = useSelector(selectConfig);
   const checkinLoading = useSelector(selectIsLoadingCheckin);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Grand Baobab a besoin de colors.wood qui est dynamique
+  const levelStyles = useMemo(() => ({
+    ...LEVEL_STYLE,
+    'Grand Baobab': { colors: [colors.wood, '#8A5427'], icon: 'star' },
+  }), [colors.wood]);
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -76,7 +82,7 @@ export default function WalletScreen({ navigation }) {
   const rate = config?.redemption?.pointsToFcfaRate ?? 20;
   const levels = useMemo(() => config?.levels || [], [config]);
   const level = wallet?.level || 'Graine';
-  const style = LEVEL_STYLE[level] || LEVEL_STYLE.Graine;
+  const style = levelStyles[level] || levelStyles.Graine;
 
   // Progression vers le niveau suivant (sur le total gagné)
   const progress = useMemo(() => {
@@ -121,7 +127,7 @@ export default function WalletScreen({ navigation }) {
 
   if (!userId) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={[styles.screen, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
         <EmptyState
           icon="gift-outline"
           title="Gagnez des Baobab Points"
@@ -143,7 +149,7 @@ export default function WalletScreen({ navigation }) {
   ];
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <Text variant="h2" style={styles.flex}>Baobab Points</Text>
@@ -182,7 +188,7 @@ export default function WalletScreen({ navigation }) {
         )}
 
         {/* Pointage */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <View style={styles.row}>
             <View style={[styles.icon, { backgroundColor: colors.warningSoft }]}><Ionicons name="flame" size={20} color={colors.warning} /></View>
             <View style={styles.flex}>
@@ -201,7 +207,7 @@ export default function WalletScreen({ navigation }) {
           <View style={styles.week}>
             {Array.from({ length: 7 }).map((_, i) => {
               const filled = i < weekDone;
-              return <View key={i} style={[styles.day, filled && styles.dayOn]}><Text variant="caption" color={filled ? 'textInverse' : 'textMuted'}>{i + 1}</Text></View>;
+              return <View key={i} style={[styles.day, { backgroundColor: colors.surfaceAlt }, filled && { backgroundColor: colors.warning }]}><Text variant="caption" color={filled ? 'textInverse' : 'textMuted'}>{i + 1}</Text></View>;
             })}
           </View>
           <Text variant="caption" color="textMuted">7 jours de suite = bonus de {config?.modules?.DAILY_CHECKIN?.bonus7d ?? 10} BP</Text>
@@ -209,12 +215,12 @@ export default function WalletScreen({ navigation }) {
 
         {/* Parrainage */}
         {wallet?.referralCode ? (
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text variant="title">Invitez vos proches</Text>
             <Text variant="small" color="textSecondary" style={styles.mt4}>
               Vous gagnez {config?.modules?.REFERRAL?.pointsParrain ?? 25} BP pour chaque ami qui commande avec votre code.
             </Text>
-            <PressableScale onPress={copyCode} style={styles.code} scaleTo={0.98} accessibilityLabel="Copier mon code">
+            <PressableScale onPress={copyCode} style={[styles.code, { borderColor: colors.primary, backgroundColor: colors.primarySoft }]} scaleTo={0.98} accessibilityLabel="Copier mon code">
               <Text variant="h2" style={styles.codeText}>{wallet.referralCode}</Text>
               <Ionicons name="copy-outline" size={18} color={colors.primary} />
             </PressableScale>
@@ -223,18 +229,18 @@ export default function WalletScreen({ navigation }) {
         ) : null}
 
         {/* Comment gagner */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <Text variant="title" style={styles.mb8}>Comment gagner des points</Text>
           {earnWays.map(([icon, title, desc]) => (
             <View key={title} style={styles.earn}>
-              <View style={[styles.icon, styles.iconSmall]}><Ionicons name={icon} size={16} color={colors.primary} /></View>
+              <View style={[styles.icon, styles.iconSmall, { backgroundColor: colors.primarySoft }]}><Ionicons name={icon} size={16} color={colors.primary} /></View>
               <View style={styles.flex}>
                 <Text variant="bodyMedium">{title}</Text>
                 <Text variant="caption" color="textSecondary">{desc}</Text>
               </View>
             </View>
           ))}
-          <View style={styles.note}>
+          <View style={[styles.note, { backgroundColor: colors.bg }]}>
             <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
             <Text variant="caption" color="textSecondary" style={styles.flex}>
               À la commande : 1 BP = {rate} FCFA, jusqu'à {config?.redemption?.maxPercentPerOrder ?? 30} % du montant. Les points expirent après {config?.earning?.pointsExpireMonths ?? 12} mois.
@@ -243,7 +249,7 @@ export default function WalletScreen({ navigation }) {
         </View>
 
         {/* Historique */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <Text variant="title" style={styles.mb8}>Historique</Text>
           {!transactions.length ? (
             <Text variant="small" color="textMuted">Aucun mouvement pour l'instant.</Text>
@@ -272,7 +278,7 @@ export default function WalletScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1 },
   flex: { flex: 1 },
   dim: { opacity: 0.85 },
   mt4: { marginTop: 4 },
@@ -288,20 +294,19 @@ const styles = StyleSheet.create({
   balance: { fontSize: 42, lineHeight: 50, marginTop: 2 },
   progressWrap: { marginTop: 16, gap: 6 },
   progressTrack: { height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' },
-  progressFill: { height: 6, borderRadius: 3, backgroundColor: colors.textInverse },
-  card: { marginHorizontal: GUTTER, marginTop: 14, padding: 16, borderRadius: radius.lg, backgroundColor: colors.surface, ...shadows.sm },
+  progressFill: { height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },
+  card: { marginHorizontal: GUTTER, marginTop: 14, padding: 16, borderRadius: radius.lg, ...shadows.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  icon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   iconSmall: { width: 32, height: 32, borderRadius: 16 },
   week: { flexDirection: 'row', gap: 6, marginTop: 14, marginBottom: 8 },
-  day: { flex: 1, height: 30, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  dayOn: { backgroundColor: colors.warning },
+  day: { flex: 1, height: 30, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
   code: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 14, padding: 14,
-    borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: colors.primarySoft,
+    borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed',
   },
   codeText: { letterSpacing: 2 },
   earn: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  note: { flexDirection: 'row', gap: 6, marginTop: 10, padding: 10, borderRadius: radius.md, backgroundColor: colors.bg },
+  note: { flexDirection: 'row', gap: 6, marginTop: 10, padding: 10, borderRadius: radius.md },
   tx: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
 });

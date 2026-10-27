@@ -9,7 +9,7 @@ import useProductActions, { useIsLiked } from '../hooks/useProductActions';
 import { productImage } from '../utils/image';
 import useSellerOrigin from '../hooks/useSellerOrigin';
 import { sellerIdOf } from '../services/shippingV3';
-import { colors, radius, shadows } from '../theme';
+import { colors, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const storeName = (p) => p?.Clefournisseur?.storeName || p?.Clefournisseur?.name || null;
 
@@ -18,6 +18,7 @@ const storeName = (p) => p?.Clefournisseur?.storeName || p?.Clefournisseur?.name
  * variant : 'grid' (grilles 2 colonnes) | 'rail' (carrousels horizontaux, plus compacte)
  */
 function ProductCard({ product, width, variant = 'grid', showStore = true }) {
+  const { colors, isDark } = useTheme();
   const { openProduct, like, addToCart } = useProductActions();
   const liked = useIsLiked(product?._id);
   const origin = useSellerOrigin(showStore ? sellerIdOf(product) : null);
@@ -39,7 +40,7 @@ function ProductCard({ product, width, variant = 'grid', showStore = true }) {
       accessibilityRole="button"
       accessibilityLabel={product.name}
     >
-      <View style={[styles.imageWrap, { height: imageHeight }]}>
+      <View style={[styles.imageWrap, { height: imageHeight, backgroundColor: colors.surfaceAlt }]}>
         <SmartImage uri={productImage(product)} width={width} style={StyleSheet.absoluteFill} recyclingKey={product._id} />
 
         {discount > 0 ? (
@@ -48,7 +49,14 @@ function ProductCard({ product, width, variant = 'grid', showStore = true }) {
           </View>
         ) : null}
 
-        <PressableScale onPress={onLike} haptic={false} scaleTo={0.85} hitSlop={10} style={styles.heart} accessibilityLabel={liked ? 'Retirer des favoris' : 'Ajouter aux favoris'}>
+        <PressableScale
+          onPress={onLike}
+          haptic={false}
+          scaleTo={0.85}
+          hitSlop={10}
+          style={[styles.heart, { backgroundColor: isDark ? 'rgba(30, 36, 45, 0.9)' : 'rgba(255, 255, 255, 0.92)' }]}
+          accessibilityLabel={liked ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+        >
           <Ionicons name={liked ? 'heart' : 'heart-outline'} size={18} color={liked ? colors.danger : colors.text} />
         </PressableScale>
 
@@ -57,7 +65,7 @@ function ProductCard({ product, width, variant = 'grid', showStore = true }) {
             <Text variant="caption" color="textInverse">Épuisé</Text>
           </View>
         ) : (
-          <PressableScale onPress={onAdd} haptic={false} scaleTo={0.85} hitSlop={8} style={styles.add} accessibilityLabel="Ajouter au panier">
+          <PressableScale onPress={onAdd} haptic={false} scaleTo={0.85} hitSlop={8} style={[styles.add, { backgroundColor: colors.primary }]} accessibilityLabel="Ajouter au panier">
             <Ionicons name="add" size={20} color={colors.textInverse} />
           </PressableScale>
         )}
@@ -91,7 +99,7 @@ function ProductCard({ product, width, variant = 'grid', showStore = true }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   imageWrap: {
     borderRadius: radius.lg,
     overflow: 'hidden',
@@ -120,6 +128,6 @@ const styles = StyleSheet.create({
   origin: { flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: 'auto', flexShrink: 0, maxWidth: '55%' },
   flex: { flex: 1 },
   price: { marginTop: 1 },
-});
+}));
 
 export default memo(ProductCard);

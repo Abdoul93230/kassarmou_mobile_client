@@ -8,7 +8,7 @@ import { flattenPages, useProductFeedInfiniteQuery } from '../redux/catalogApi';
 import ProductGrid from '../components/ProductGrid';
 import { Chip, IconButton, Text, getPricing } from '../ui';
 import { capitalize } from '../utils/text';
-import { colors, GUTTER } from '../theme';
+import { GUTTER, useTheme } from '../theme';
 
 const SORTS = [
   { key: 'newest', label: 'Nouveautés', icon: 'sparkles-outline' },
@@ -30,6 +30,7 @@ const sorters = {
  * params : categoryId, categoryName, filter ('promo' | 'new'), marque, title
  */
 export default function ProductListScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const { categoryId: paramCategoryId, categoryName, filter, marque, title } = route.params || {};
   const insets = useSafeAreaInsets();
   const cartCount = useSelector(selectPanierCount);
@@ -104,7 +105,7 @@ export default function ProductListScreen({ route, navigation }) {
   );
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <View style={styles.flex}>
@@ -135,7 +136,7 @@ export default function ProductListScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1 },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: GUTTER, paddingBottom: 10 },
   filters: { paddingBottom: 14, gap: 10 },

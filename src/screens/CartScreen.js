@@ -22,7 +22,7 @@ import CheckoutChoiceSheet from '../components/guest/CheckoutChoiceSheet';
 import { zoneLabel } from '../services/shippingV3';
 import ProductRail from '../components/home/ProductRail';
 import { formatPrice } from '../utils/formatPrice';
-import { colors, fonts, GUTTER, radius, shadows } from '../theme';
+import { colors, fonts, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const F = (n) => `${formatPrice(n)} FCFA`;
 
@@ -36,6 +36,7 @@ function SummaryRow({ label, value, tone, bold }) {
 }
 
 export default function CartScreen({ navigation }) {
+  const { colors } = useTheme();
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const articles = useSelector(selectPanierArticles) || [];
@@ -127,7 +128,7 @@ export default function CartScreen({ navigation }) {
   }, [cart, navigation, user]);
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
       {isStack ? <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" /> : null}
       <View style={styles.flex}>
         <Text variant="h1">Mon panier</Text>
@@ -148,7 +149,7 @@ export default function CartScreen({ navigation }) {
   // ── Panier vide ────────────────────────────────────────────────────────────
   if (!articles.length) {
     return (
-      <View style={styles.screen}>
+      <View style={[styles.screen, { backgroundColor: colors.bg }]}>
         {header}
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
           <EmptyState
@@ -167,12 +168,12 @@ export default function CartScreen({ navigation }) {
   const busy = cart.shippingLoading;
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       {header}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 + bottomInset }} keyboardShouldPersistTaps="handled">
         {/* Zone de livraison */}
-        <PressableScale onPress={() => setZoneSheet(true)} scaleTo={0.985} style={[styles.zone, !cart.zone && styles.zoneMissing]}>
+        <PressableScale onPress={() => setZoneSheet(true)} scaleTo={0.985} style={[styles.zone, { backgroundColor: colors.surface, borderColor: colors.border }, !cart.zone && styles.zoneMissing]}>
           <View style={[styles.zoneIcon, !cart.zone && styles.zoneIconMissing]}>
             <Ionicons name="location" size={18} color={cart.zone ? colors.primary : colors.textInverse} />
           </View>
@@ -329,7 +330,7 @@ export default function CartScreen({ navigation }) {
       </ScrollView>
 
       {/* Barre de commande */}
-      <View style={[styles.bar, { paddingBottom: Math.max(bottomInset, 12) }]}>
+      <View style={[styles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(bottomInset, 12) }]}>
         <View>
           <Text variant="caption" color="textSecondary">Total</Text>
           <Text variant="price" style={styles.barTotal}>{formatPrice(cart.total)} F</Text>
@@ -356,7 +357,7 @@ export default function CartScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 12, backgroundColor: colors.bg },
@@ -426,4 +427,4 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
   },
   barTotal: { fontSize: 20, lineHeight: 26 },
-});
+}));

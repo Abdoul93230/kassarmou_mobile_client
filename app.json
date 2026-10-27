@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "ihambaobab",
     "ios": {
       "supportsTablet": true,
@@ -186,6 +186,11 @@
             "DEFAULT"
           ]
         }
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
@@ -239,7 +244,9 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Ihambaobab utilise le micro uniquement pour enregistrer les messages vocaux que vous envoyez aux boutiques."
+          "microphonePermission": "Ihambaobab utilise le micro uniquement pour enregistrer les messages vocaux que vous envoyez aux boutiques.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
         }
       ]
     ]

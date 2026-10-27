@@ -3,15 +3,18 @@ import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PressableScale from './PressableScale';
 import Text from './Text';
-import { colors, GUTTER } from '../theme';
+import { colors, GUTTER, useTheme } from '../theme';
 
 /** Titre de section avec lien « Voir tout » optionnel */
-function SectionHeader({ title, subtitle, actionLabel = 'Voir tout', onAction, icon, iconColor = colors.primary, style }) {
+function SectionHeader({ title, subtitle, actionLabel = 'Voir tout', onAction, icon, iconColor, style }) {
+  const { colors } = useTheme();
+  const effectiveIconColor = iconColor || colors.primary;
+
   return (
     <View style={[styles.row, style]}>
       <View style={styles.flex}>
         <View style={styles.titleRow}>
-          {icon ? <Ionicons name={icon} size={18} color={iconColor} /> : null}
+          {icon ? <Ionicons name={icon} size={18} color={effectiveIconColor} /> : null}
           <Text variant="h2" numberOfLines={1}>{title}</Text>
         </View>
         {subtitle ? <Text variant="small" color="textSecondary" numberOfLines={1}>{subtitle}</Text> : null}

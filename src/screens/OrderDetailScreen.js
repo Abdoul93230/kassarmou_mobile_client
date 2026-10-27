@@ -12,7 +12,7 @@ import { fetchShareLink, shareTracking } from '../services/guestSession';
 import { formatPrice } from '../utils/formatPrice';
 import { formatPhoneInternational } from '../utils/phoneRules';
 import { formatDate, orderDate, orderPreview, orderStage } from '../utils/orders';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const F = (n) => `${formatPrice(n || 0)} FCFA`;
 const STEPS = [
@@ -23,9 +23,10 @@ const STEPS = [
 ];
 
 function Timeline({ stage }) {
+  const { colors } = useTheme();
   if (stage.key === 'cancelled') {
     return (
-      <View style={styles.cancelled}>
+      <View style={[styles.cancelled, { backgroundColor: colors.dangerSoft }]}>
         <Ionicons name="close-circle" size={20} color={colors.danger} />
         <Text variant="bodyMedium" color="danger">Cette commande a été annulée</Text>
       </View>
@@ -40,14 +41,14 @@ function Timeline({ stage }) {
         return (
           <View key={s.label} style={styles.step}>
             <View style={styles.stepRail}>
-              <View style={[styles.stepDot, done && styles.stepDotDone]}>
+              <View style={[styles.stepDot, { backgroundColor: colors.surfaceAlt }, done && [styles.stepDotDone, { backgroundColor: colors.primary }]]}>
                 <Ionicons name={s.icon} size={14} color={done ? colors.textInverse : colors.textMuted} />
               </View>
-              {!last ? <View style={[styles.stepLine, i < current && styles.stepLineDone]} /> : null}
+              {!last ? <View style={[styles.stepLine, { backgroundColor: colors.border }, i < current && [styles.stepLineDone, { backgroundColor: colors.primary }]]} /> : null}
             </View>
             <View style={styles.stepText}>
               <Text variant={i === current ? 'title' : 'body'} color={done ? 'text' : 'textMuted'}>{s.label}</Text>
-              {i === current && stage.key === 'unpaid' ? <Text variant="caption" color="wood">Paiement en attente</Text> : null}
+              {i === current && stage.key === 'unpaid' ? <Text variant="caption" color={stage.tone === 'danger' ? 'danger' : 'wood'}>{stage.note}</Text> : null}
             </View>
           </View>
         );
@@ -67,6 +68,7 @@ function Line({ label, value, tone, bold }) {
 
 /** Suivi détaillé d'une commande */
 export default function OrderDetailScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const contactStore = useContactStore(navigation);
   const { orderId, order: initial } = route.params || {};
   const insets = useSafeAreaInsets();
@@ -76,8 +78,8 @@ export default function OrderDetailScreen({ route, navigation }) {
 
   if (!order) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.header}>
+      <View style={[styles.screen, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
+        <View style={[styles.header, { backgroundColor: colors.bg }]}>
           <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         </View>
         {isLoading ? (
@@ -100,8 +102,8 @@ export default function OrderDetailScreen({ route, navigation }) {
   };
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <View style={styles.flex}>
           <Text variant="h2">Commande n° {ref.slice(-8)}</Text>
@@ -127,7 +129,7 @@ export default function OrderDetailScreen({ route, navigation }) {
         refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <View style={styles.cardHead}>
             <Text variant="h3">Suivi</Text>
             <StageBadge stage={stage} />
@@ -135,7 +137,7 @@ export default function OrderDetailScreen({ route, navigation }) {
           <Timeline stage={stage} />
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <Text variant="h3" style={styles.mb10}>Livraison</Text>
           <View style={styles.addr}>
             <Ionicons name="location" size={18} color={colors.primary} />
@@ -148,7 +150,7 @@ export default function OrderDetailScreen({ route, navigation }) {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <Text variant="h3" style={styles.mb10}>Articles ({items.length})</Text>
           {items.map((p, i) => {
             const qty = Number(p.quantite || p.quantity) || 1;
@@ -172,13 +174,13 @@ export default function OrderDetailScreen({ route, navigation }) {
           })}
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <Text variant="h3" style={styles.mb10}>Paiement</Text>
           <Line label="Sous-total" value={F(order.prixTotal ?? order.fraisSousTotalArticles)} />
           {Number(order.reduction) > 0 ? <Line label={`Code ${order.codePromo || 'promo'}`} value={`-${F(order.reduction)}`} tone="success" /> : null}
           {Number(order.pointsDiscount) > 0 ? <Line label="Baobab Points" value={`-${F(order.pointsDiscount)}`} tone="success" /> : null}
           <Line label="Livraison" value={Number(order.fraisLivraison) > 0 ? F(order.fraisLivraison) : 'Offerte'} />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <Line label="Total" value={F(order.prix)} bold />
           <Text variant="caption" color="textMuted" style={styles.mt8}>Statut du paiement : {order.statusPayment || '—'}</Text>
         </View>
@@ -187,7 +189,7 @@ export default function OrderDetailScreen({ route, navigation }) {
           <PressableScale
             key={s.storeId}
             onPress={() => contactStore({ sellerId: String(s.storeId), storeName: s.storeName, orderId: order._id })}
-            style={styles.help}
+            style={[styles.help, { backgroundColor: colors.surface, borderColor: colors.border }]}
             scaleTo={0.99}
           >
             <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
@@ -199,7 +201,7 @@ export default function OrderDetailScreen({ route, navigation }) {
           </PressableScale>
         ))}
 
-        <PressableScale onPress={contactSupport} style={styles.help} scaleTo={0.99}>
+        <PressableScale onPress={contactSupport} style={[styles.help, { backgroundColor: colors.surface, borderColor: colors.border }]} scaleTo={0.99}>
           <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
           <View style={styles.flex}>
             <Text variant="title">Un souci avec cette commande ?</Text>
@@ -209,7 +211,7 @@ export default function OrderDetailScreen({ route, navigation }) {
         </PressableScale>
       </ScrollView>
 
-      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View style={[styles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {stage.key === 'unpaid' ? (
           <Button title={`Payer ${formatPrice(order.prix)} FCFA`} icon="lock-closed" size="lg" full onPress={() => reorder(order, 'pay')} />
         ) : (
@@ -220,7 +222,7 @@ export default function OrderDetailScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   pad: { padding: GUTTER },
@@ -254,4 +256,4 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: GUTTER, paddingTop: 12,
     backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
   },
-});
+}));

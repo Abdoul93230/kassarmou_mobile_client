@@ -2,19 +2,20 @@ import React, { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableScale, SmartImage, Text } from '../../ui';
-import { colors, GUTTER, radius } from '../../theme';
+import { colors, GUTTER, radius, useTheme, themedStyles } from '../../theme';
 import OriginBadge from '../OriginBadge';
 
 /** Carte vendeur : inspire confiance et mène à la boutique */
 function SellerCard({ seller, onPress }) {
+  const { colors } = useTheme();
   if (!seller || typeof seller !== 'object') return null;
   const name = seller.storeName || seller.name || 'Boutique';
   return (
-    <PressableScale onPress={onPress} scaleTo={0.985} style={styles.card} accessibilityLabel={`Visiter ${name}`}>
+    <PressableScale onPress={onPress} scaleTo={0.985} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityLabel={`Visiter ${name}`}>
       {seller.logo ? (
         <SmartImage uri={seller.logo} width={52} style={styles.logo} />
       ) : (
-        <View style={[styles.logo, styles.initial]}>
+        <View style={[styles.logo, styles.initial, { backgroundColor: colors.primarySoft }]}>
           <Text variant="h2" color="primaryDark">{name.charAt(0).toUpperCase()}</Text>
         </View>
       )}
@@ -28,7 +29,7 @@ function SellerCard({ seller, onPress }) {
           <OriginBadge sellerId={seller._id} variant="small" fallback={<Text variant="small" color="textSecondary">Niger</Text>} style={styles.originInline} />
         </View>
       </View>
-      <View style={styles.cta}>
+      <View style={[styles.cta, { backgroundColor: colors.primarySoft }]}>
         <Text variant="smallMedium" color="primaryDark">Boutique</Text>
         <Ionicons name="chevron-forward" size={14} color={colors.primaryDark} />
       </View>
@@ -36,7 +37,7 @@ function SellerCard({ seller, onPress }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   sub: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   originInline: { flexShrink: 1 },
   card: {
@@ -52,6 +53,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.primarySoft,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill,
   },
-});
+}));
 
 export default memo(SellerCard);

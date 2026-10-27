@@ -4,7 +4,7 @@ import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableScale, Text } from '../../ui';
-import { colors } from '../../theme';
+import { useTheme } from '../../theme';
 import {
   cycleVoicePlaybackRate,
   requestVoiceDuration,
@@ -40,6 +40,7 @@ export function formatVoiceTime(ms = 0) {
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 function VoiceMessageBubble({ message, mine }) {
+  const { colors } = useTheme();
   // Id stable entre le message en cours d'envoi et le message enregistré
   const id = String(message.clientTempId || message.id);
   const url = message?.audio?.url || message?.localUri;

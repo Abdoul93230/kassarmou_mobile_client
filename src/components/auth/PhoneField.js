@@ -4,10 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Chip, PressableScale, Text } from '../../ui';
 import TextField from '../../ui/TextField';
 import { PHONE_COUNTRIES, applyPhoneInputChange, getPhonePlaceholder } from '../../utils/phoneRules';
-import { colors } from '../../theme';
+import { colors, useTheme, themedStyles } from '../../theme';
 
 /** Champ téléphone avec indicatif pays (Niger par défaut) et formatage automatique */
 function PhoneField({ country, onCountryChange, digits, onDigitsChange, error, label = 'Numéro de téléphone', ...rest }, ref) {
+  const { colors } = useTheme();
   const [picker, setPicker] = useState(false);
   const display = applyPhoneInputChange(country, digits).display;
 
@@ -28,7 +29,7 @@ function PhoneField({ country, onCountryChange, digits, onDigitsChange, error, l
         textContentType="telephoneNumber"
         error={error}
         prefix={
-          <PressableScale onPress={() => setPicker((v) => !v)} style={styles.dial} hitSlop={6} accessibilityLabel="Changer de pays">
+          <PressableScale onPress={() => setPicker((v) => !v)} style={[styles.dial, { borderRightColor: colors.border }]} hitSlop={6} accessibilityLabel="Changer de pays">
             <Text variant="bodyMedium">{country.flag} {country.dialCode}</Text>
             <Ionicons name={picker ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
           </PressableScale>
@@ -51,9 +52,9 @@ function PhoneField({ country, onCountryChange, digits, onDigitsChange, error, l
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   dial: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingRight: 10, borderRightWidth: 1, borderRightColor: colors.border },
   countries: { gap: 8, paddingBottom: 14 },
-});
+}));
 
 export default memo(forwardRef(PhoneField));

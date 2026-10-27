@@ -5,7 +5,7 @@ import Animated, { useAnimatedStyle, withSpring, withTiming } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Text } from '../ui';
-import { colors, shadows } from '../theme';
+import { colors, shadows, useTheme, themedStyles } from '../theme';
 
 const ICONS = {
   Home: ['home', 'home-outline'],
@@ -16,6 +16,7 @@ const ICONS = {
 };
 
 const TabItem = memo(function TabItem({ label, icon, focused, badge, onPress, onLongPress }) {
+  const { colors } = useTheme();
   const pill = useAnimatedStyle(() => ({
     opacity: withTiming(focused ? 1 : 0, { duration: 180 }),
     transform: [{ scaleX: withSpring(focused ? 1 : 0.6, { damping: 16, stiffness: 260 }) }],
@@ -31,10 +32,10 @@ const TabItem = memo(function TabItem({ label, icon, focused, badge, onPress, on
       accessibilityLabel={label}
     >
       <View style={styles.iconWrap}>
-        <Animated.View style={[styles.pill, pill]} />
+        <Animated.View style={[styles.pill, { backgroundColor: colors.primarySoft }, pill]} />
         <Ionicons name={focused ? icon[0] : icon[1]} size={22} color={focused ? colors.primaryDark : colors.textMuted} />
         {badge ? (
-          <View style={styles.badge}>
+          <View style={[styles.badge, { borderColor: colors.surface }]}>
             <Text variant="caption" color="textInverse" style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
           </View>
         ) : null}
@@ -49,9 +50,10 @@ const TabItem = memo(function TabItem({ label, icon, focused, badge, onPress, on
 /** Barre d'onglets sur mesure (remplace la barre par défaut de React Navigation) */
 function TabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={[styles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
         const focused = state.index === index;
@@ -81,7 +83,7 @@ function TabBar({ state, descriptors, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   bar: {
     flexDirection: 'row', backgroundColor: colors.surface, paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
@@ -95,6 +97,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.wood, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface,
   },
   badgeText: { fontSize: 10, lineHeight: 12 },
-});
+}));
 
 export default memo(TabBar);

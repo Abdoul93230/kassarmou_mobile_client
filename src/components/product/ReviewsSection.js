@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { Button, PressableScale, Stars, Text } from '../../ui';
 import { timeAgo } from '../../utils/text';
-import { colors, fonts, GUTTER, radius } from '../../theme';
+import { colors, fonts, GUTTER, radius, useTheme, themedStyles } from '../../theme';
 
 const RATING_LABELS = ['', 'Décevant', 'Moyen', 'Bien', 'Très bien', 'Excellent'];
 
@@ -21,11 +21,12 @@ export const summarize = (reviews) => {
 };
 
 const ReviewItem = memo(function ReviewItem({ review }) {
+  const { colors } = useTheme();
   const name = review.userName || 'Client';
   return (
-    <View style={styles.review}>
+    <View style={[styles.review, { borderBottomColor: colors.border }]}>
       <View style={styles.reviewHead}>
-        <View style={styles.avatar}>
+        <View style={[styles.avatar, { backgroundColor: colors.primarySoft }]}>
           <Text variant="smallMedium" color="primaryDark">{name.charAt(0).toUpperCase()}</Text>
         </View>
         <View style={styles.flex}>
@@ -43,6 +44,7 @@ const ReviewItem = memo(function ReviewItem({ review }) {
 
 /** Fenêtre « Donner mon avis » */
 export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmit, submitting }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
   const [text, setText] = useState('');
@@ -50,10 +52,10 @@ export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmi
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheetWrap}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-          <View style={styles.handle} />
+        <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <Text variant="h2" align="center">Votre avis compte</Text>
           <Text variant="small" color="textSecondary" align="center" style={styles.sheetSub}>
             Aidez les autres clients à bien choisir
@@ -71,7 +73,7 @@ export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmi
             placeholderTextColor={colors.textMuted}
             multiline
             maxLength={600}
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }]}
           />
           <Button
             title="Publier mon avis"
@@ -95,6 +97,7 @@ export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmi
 
 /** Section Avis de la fiche produit */
 function ReviewsSection({ reviews, loading, user, onRequireAuth, onSubmitReview, submitting }) {
+  const { colors } = useTheme();
   const [sheet, setSheet] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const { avg, count, counts } = useMemo(() => summarize(reviews), [reviews]);
@@ -110,7 +113,7 @@ function ReviewsSection({ reviews, loading, user, onRequireAuth, onSubmitReview,
       </View>
 
       {count > 0 ? (
-        <View style={styles.summary}>
+        <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.avgBox}>
             <Text variant="hero" color="text">{avg.toFixed(1)}</Text>
             <Stars value={avg} size={14} />
@@ -120,8 +123,8 @@ function ReviewsSection({ reviews, loading, user, onRequireAuth, onSubmitReview,
             {[5, 4, 3, 2, 1].map((n) => (
               <View key={n} style={styles.barRow}>
                 <Text variant="caption" color="textSecondary" style={styles.barLabel}>{n}</Text>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${count ? (counts[n - 1] / count) * 100 : 0}%` }]} />
+                <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
+                  <View style={[styles.barFill, { backgroundColor: colors.star, width: `${count ? (counts[n - 1] / count) * 100 : 0}%` }]} />
                 </View>
               </View>
             ))}
@@ -160,7 +163,7 @@ function ReviewsSection({ reviews, loading, user, onRequireAuth, onSubmitReview,
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   section: { paddingHorizontal: GUTTER, marginTop: 32 },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 14 },
   flex: { flex: 1 },
@@ -195,6 +198,6 @@ const styles = StyleSheet.create({
     minHeight: 110, textAlignVertical: 'top', borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
     backgroundColor: colors.bg, padding: 14, fontFamily: fonts.regular, fontSize: 15, color: colors.text, marginBottom: 16,
   },
-});
+}));
 
 export default memo(ReviewsSection);

@@ -2,13 +2,14 @@ import React, { memo, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { Text } from '../../ui';
-import { colors, fonts, radius } from '../../theme';
+import { colors, fonts, radius, useTheme, themedStyles } from '../../theme';
 
 /**
  * Saisie du code OTP en cases. Un seul champ invisible : le code reçu par SMS
  * est proposé automatiquement par le clavier (Android / iOS) et collable d'un coup.
  */
 function OtpBoxes({ value, onChange, length = 6, error, onComplete, autoFocus = true }) {
+  const { colors } = useTheme();
   const inputRef = useRef(null);
   const shake = useSharedValue(0);
 
@@ -36,7 +37,16 @@ function OtpBoxes({ value, onChange, length = 6, error, onComplete, autoFocus = 
           const char = value[i] || '';
           const active = i === Math.min(value.length, length - 1);
           return (
-            <View key={i} style={[styles.box, char && styles.boxFilled, active && styles.boxActive, error && styles.boxError]}>
+            <View
+              key={i}
+              style={[
+                styles.box,
+                { borderColor: colors.border, backgroundColor: colors.surface },
+                char && [styles.boxFilled, { borderColor: colors.primary, backgroundColor: colors.primarySoft }],
+                active && [styles.boxActive, { borderColor: colors.primary }],
+                error && [styles.boxError, { borderColor: colors.danger, backgroundColor: colors.dangerSoft }],
+              ]}
+            >
               <Text variant="h1" style={styles.digit}>{char}</Text>
             </View>
           );
@@ -59,7 +69,7 @@ function OtpBoxes({ value, onChange, length = 6, error, onComplete, autoFocus = 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   box: {
     flex: 1, aspectRatio: 0.85, maxWidth: 56, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border,
@@ -70,6 +80,6 @@ const styles = StyleSheet.create({
   boxError: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   digit: { fontFamily: fonts.display },
   hidden: { position: 'absolute', opacity: 0, width: 1, height: 1 },
-});
+}));
 
 export default memo(OtpBoxes);

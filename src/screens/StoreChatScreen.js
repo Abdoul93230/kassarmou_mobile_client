@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
 import { IconButton, PressableScale, SmartImage, Text } from '../ui';
-import { colors, GUTTER, radius } from '../theme';
+import { colors, GUTTER, radius, useTheme, themedStyles } from '../theme';
 import { emit, emitWithAck, messagingApi, useMessagingEvents, useMessagingState } from '../services/messaging';
 import { registerDevicePush } from '../services/pushNotifications';
 import ChatComposer from '../components/chat/ChatComposer';
@@ -32,11 +32,12 @@ const dayLabel = (d) => {
 const tempId = () => `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 function Card({ card, mine, onPress }) {
+  const { colors } = useTheme();
   if (!card) return null;
   return (
-    <PressableScale onPress={onPress} scaleTo={0.98} style={[styles.card, mine && styles.cardMine]}>
+    <PressableScale onPress={onPress} scaleTo={0.98} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, mine && [styles.cardMine, { backgroundColor: colors.surfaceAlt }]]}>
       {card.image ? <SmartImage uri={card.image} width={56} style={styles.cardImg} /> : (
-        <View style={[styles.cardImg, styles.cardIcon]}>
+        <View style={[styles.cardImg, styles.cardIcon, { backgroundColor: colors.primarySoft }]}>
           <Ionicons name={card.kind === 'order' ? 'receipt-outline' : 'pricetag-outline'} size={20} color={colors.primaryDark} />
         </View>
       )}
@@ -52,6 +53,7 @@ function Card({ card, mine, onPress }) {
 
 /** Conversation avec une boutique (temps réel) */
 export default function StoreChatScreen({ navigation, route }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const params = route.params || {};
   const { connected } = useMessagingState();
@@ -313,8 +315,8 @@ export default function StoreChatScreen({ navigation, route }) {
   const status = storeTyping === 'audio' ? 'enregistre un vocal…' : storeTyping ? 'écrit…' : online ? 'En ligne' : 'Vous répond ici dès que possible';
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <PressableScale
           style={styles.headerStore}
@@ -323,7 +325,7 @@ export default function StoreChatScreen({ navigation, route }) {
           accessibilityLabel={`Voir la boutique ${storeName}`}
         >
           {store?.logo ? <SmartImage uri={store.logo} width={40} style={styles.avatar} /> : (
-            <View style={[styles.avatar, styles.avatarInitial]}><Text variant="title" color="primaryDark">{storeName.charAt(0).toUpperCase()}</Text></View>
+            <View style={[styles.avatar, styles.avatarInitial, { backgroundColor: colors.primarySoft }]}><Text variant="title" color="primaryDark">{storeName.charAt(0).toUpperCase()}</Text></View>
           )}
           <View style={styles.flex}>
             <Text variant="title" numberOfLines={1}>{storeName}</Text>
@@ -341,7 +343,7 @@ export default function StoreChatScreen({ navigation, route }) {
       ) : error ? (
         <View style={styles.errorBox}>
           <Text variant="body" color="textSecondary" align="center">{error}</Text>
-          <PressableScale onPress={() => { setLoading(true); load(); }} style={styles.retryBtn}><Text variant="smallMedium" color="textInverse">Réessayer</Text></PressableScale>
+          <PressableScale onPress={() => { setLoading(true); load(); }} style={[styles.retryBtn, { backgroundColor: colors.primary }]}><Text variant="smallMedium" color="textInverse">Réessayer</Text></PressableScale>
         </View>
       ) : (
         <FlatList
@@ -353,10 +355,10 @@ export default function StoreChatScreen({ navigation, route }) {
           onEndReached={loadOlder}
           onEndReachedThreshold={0.3}
           ListHeaderComponent={storeTyping ? (
-            <View style={[styles.bubbleRow, styles.left]}><View style={[styles.bubble, styles.theirs]}><Text variant="small" color="textMuted">{storeName} {storeTyping === 'audio' ? 'enregistre un vocal…' : 'écrit…'}</Text></View></View>
+            <View style={[styles.bubbleRow, styles.left]}><View style={[styles.bubble, styles.theirs, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text variant="small" color="textMuted">{storeName} {storeTyping === 'audio' ? 'enregistre un vocal…' : 'écrit…'}</Text></View></View>
           ) : null}
           ListFooterComponent={
-            <View style={styles.safety}>
+            <View style={[styles.safety, { backgroundColor: colors.primarySoft }]}>
               <Ionicons name="shield-checkmark" size={16} color={colors.primaryDark} />
               <Text variant="caption" color="primaryDeep" style={styles.flex}>
                 Échangez et payez uniquement sur Ihambaobab : votre achat reste protégé. Les numéros et liens externes sont masqués.
@@ -370,7 +372,7 @@ export default function StoreChatScreen({ navigation, route }) {
             const Wrapper = item.failed ? PressableScale : View;
             return (
               <View style={[styles.bubbleRow, mine ? styles.right : styles.left]}>
-                <Wrapper onPress={item.failed ? () => retry(item) : undefined} style={[styles.bubble, mine ? styles.mine : styles.theirs, item.failed && styles.failed]}>
+                <Wrapper onPress={item.failed ? () => retry(item) : undefined} style={[styles.bubble, mine ? [styles.mine, { backgroundColor: colors.primary }] : [styles.theirs, { backgroundColor: colors.surface, borderColor: colors.border }], item.failed && styles.failed]}>
                   <Card card={item.card} mine={mine} onPress={() => openCard(item.card)} />
                   {(item.attachments || []).map((u) => <SmartImage key={u} uri={u} width={240} style={styles.photo} />)}
                   {item.audio?.url || item.localUri ? <VoiceMessageBubble message={item} mine={mine} /> : null}
@@ -390,7 +392,7 @@ export default function StoreChatScreen({ navigation, route }) {
       {!loading && !error && messages.length === 0 ? (
         <View style={styles.quick}>
           {STARTERS.map((q) => (
-            <PressableScale key={q} onPress={() => send(q)} style={styles.quickChip} scaleTo={0.96}>
+            <PressableScale key={q} onPress={() => send(q)} style={[styles.quickChip, { backgroundColor: colors.primarySoft }]} scaleTo={0.96}>
               <Text variant="smallMedium" color="primaryDark">{q}</Text>
             </PressableScale>
           ))}
@@ -399,14 +401,14 @@ export default function StoreChatScreen({ navigation, route }) {
 
       {/* Aperçu de l'article joint au prochain message */}
       {context ? (
-        <View style={styles.contextBar}>
+        <View style={[styles.contextBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
           <Text variant="caption" color="textSecondary" style={styles.contextLabel}>
             {context.kind === 'order' ? 'Commande jointe à votre message' : 'Article joint à votre message'}
           </Text>
-          <View style={styles.contextCard}>
+          <View style={[styles.contextCard, { backgroundColor: colors.primarySoft, borderLeftColor: colors.primary }]}>
             <PressableScale onPress={() => openCard(context)} scaleTo={0.98} style={styles.contextMain} accessibilityLabel={`Voir ${context.title}`}>
               {context.image ? <SmartImage uri={context.image} width={64} style={styles.contextImg} /> : (
-                <View style={[styles.contextImg, styles.cardIcon]}>
+                <View style={[styles.contextImg, styles.cardIcon, { backgroundColor: colors.primarySoft }]}>
                   <Ionicons name={context.kind === 'order' ? 'receipt-outline' : 'pricetag-outline'} size={22} color={colors.primaryDark} />
                 </View>
               )}
@@ -444,7 +446,7 @@ export default function StoreChatScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   header: {
@@ -495,4 +497,4 @@ const styles = StyleSheet.create({
   },
   contextMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   contextImg: { width: 56, height: 56, borderRadius: 10 },
-});
+}));

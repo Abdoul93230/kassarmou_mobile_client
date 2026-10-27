@@ -10,7 +10,8 @@
     "build:apk": "eas build --platform android --profile preview",
     "build:prod": "eas build --platform android --profile production",
     "update:preview": "eas update --channel preview --platform android --message \"OTA preview update\"",
-    "update:production": "eas update --channel production --platform android --message \"OTA production update\""
+    "update:production": "eas update --channel production --platform android --message \"OTA production update\"",
+    "build:prod:apk": "eas build --platform android --profile production-apk"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
@@ -25,7 +26,7 @@
     "@shopify/flash-list": "2.0.2",
     "axios": "^1.13.1",
     "date-fns": "^4.1.0",
-    "expo": "~57.0.30",
+    "expo": "~57.0.31",
     "expo-asset": "~57.0.20",
     "expo-audio": "~57.0.5",
     "expo-blur": "~57.0.3",
@@ -38,10 +39,11 @@
     "expo-image-picker": "~57.0.20",
     "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.13",
-    "expo-location": "~57.0.21",
-    "expo-notifications": "~57.0.23",
+    "expo-location": "~57.0.22",
+    "expo-notifications": "~57.0.24",
     "expo-splash-screen": "~57.0.10",
     "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
     "expo-updates": "~57.0.26",
     "react": "19.2.3",
     "react-native": "0.86.3",

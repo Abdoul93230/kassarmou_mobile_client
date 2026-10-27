@@ -4,41 +4,10 @@
  * Règle : aucun écran ne doit écrire de couleur, taille ou rayon en dur — tout vient d'ici.
  */
 import { Platform } from 'react-native';
-
-export const colors = {
-  // Marque
-  primary: '#30A08B',
-  primaryDark: '#1F7A69',
-  primaryDeep: '#0F3D34',
-  primarySoft: '#E8F5F2',
-  sand: '#B2905F',
-  sandSoft: '#F6F0E7',
-  wood: '#B17236',
-  woodSoft: '#F7EDE3',
-
-  // Neutres (légèrement chauds pour s'accorder au sable)
-  bg: '#FAFAF8',
-  surface: '#FFFFFF',
-  surfaceAlt: '#F3F2EF',
-  border: '#ECEAE5',
-  divider: '#F1EFEB',
-  text: '#16181D',
-  textSecondary: '#5B6170',
-  textMuted: '#9A9FAB',
-  textInverse: '#FFFFFF',
-
-  // États
-  success: '#1E9E6A',
-  successSoft: '#E6F6EF',
-  danger: '#E5484D',
-  dangerSoft: '#FDECEC',
-  warning: '#E8A13A',
-  warningSoft: '#FDF4E6',
-  star: '#F5B301',
-
-  overlay: 'rgba(10, 14, 18, 0.45)',
-  scrim: 'rgba(10, 14, 18, 0.06)',
-};
+import { colors, lightColors, darkColors } from './colors';
+export { colors, lightColors, darkColors };
+export { ThemeProvider, useTheme, ThemeContext } from './ThemeContext';
+export { themedStyles } from './themedStyles';
 
 export const gradients = {
   brand: ['#30A08B', '#1F7A69'],

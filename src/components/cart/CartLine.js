@@ -5,12 +5,13 @@ import QuantityStepper from '../../ui/QuantityStepper';
 import { availableStock, originalPrice, unitPrice } from '../../utils/cart';
 import { formatPrice } from '../../utils/formatPrice';
 import { productImage } from '../../utils/image';
-import { colors, radius } from '../../theme';
+import { colors, radius, useTheme, themedStyles } from '../../theme';
 
 const IMG = 84;
 
 /** Ligne d'article du panier : image, nom, variante, prix, quantité (− à 1 = supprimer) */
 function CartLine({ item, onOpen, onQuantity, onRemove }) {
+  const { colors } = useTheme();
   const price = unitPrice(item);
   const original = originalPrice(item);
   const qty = Number(item.quantite) || 1;
@@ -25,8 +26,8 @@ function CartLine({ item, onOpen, onQuantity, onRemove }) {
         <Text variant="smallMedium" numberOfLines={2}>{item.name}</Text>
         {item.color || item.taille ? (
           <View style={styles.tags}>
-            {item.color ? <View style={styles.tag}><Text variant="caption" color="textSecondary">{item.color}</Text></View> : null}
-            {item.taille ? <View style={styles.tag}><Text variant="caption" color="textSecondary">Taille {item.taille}</Text></View> : null}
+            {item.color ? <View style={[styles.tag, { backgroundColor: colors.surfaceAlt }]}><Text variant="caption" color="textSecondary">{item.color}</Text></View> : null}
+            {item.taille ? <View style={[styles.tag, { backgroundColor: colors.surfaceAlt }]}><Text variant="caption" color="textSecondary">Taille {item.taille}</Text></View> : null}
           </View>
         ) : null}
         <View style={styles.bottom}>
@@ -49,7 +50,7 @@ function CartLine({ item, onOpen, onQuantity, onRemove }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   row: { flexDirection: 'row', gap: 12, paddingVertical: 12 },
   img: { width: IMG, height: IMG, borderRadius: radius.md },
   info: { flex: 1, justifyContent: 'space-between' },
@@ -58,6 +59,6 @@ const styles = StyleSheet.create({
   bottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 6 },
   flex: { flex: 1 },
   strike: { textDecorationLine: 'line-through' },
-});
+}));
 
 export default memo(CartLine);

@@ -5,13 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { sendGuestOtp, verifyGuestOtp } from '../../services/guestSession';
 import { formatPhoneInternational } from '../../utils/phoneRules';
 import { Button, PressableScale, Text } from '../../ui';
-import { colors, fonts, radius } from '../../theme';
+import { colors, fonts, radius, useTheme, themedStyles } from '../../theme';
 
 /**
  * Vérification du numéro par SMS (1 fois par appareil, valable 90 jours).
  * SMS jamais reçu (ou envoi en échec) : `onCallback` → commande confirmée par appel de l'équipe.
  */
 function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified, onCallback }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [code, setCode] = useState('');
   const [sending, setSending] = useState(false);
@@ -80,11 +81,11 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified, onCa
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-          <View style={styles.handle} />
-          <View style={styles.icon}><Ionicons name="shield-checkmark" size={22} color={colors.primary} /></View>
+        <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
+          <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}><Ionicons name="shield-checkmark" size={22} color={colors.primary} /></View>
           <Text variant="h2" style={styles.mt10}>Vérifiez votre numéro</Text>
           <Text variant="small" color="textSecondary" style={styles.mt4}>{reason || 'Pour le paiement à la livraison, nous vérifions votre numéro une seule fois.'}</Text>
           <Text variant="body" style={styles.mt10}>Code envoyé par SMS au <Text variant="bodyMedium">{formatPhoneInternational(phone)}</Text></Text>
@@ -103,7 +104,7 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified, onCa
             autoFocus
             placeholder="••••••"
             placeholderTextColor={colors.textMuted}
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }]}
           />
           {error ? <Text variant="small" color="danger" style={styles.mt4}>{error}</Text> : null}
           <Button title="Valider" size="lg" full loading={checking} disabled={code.length !== 6} onPress={() => verify()} style={styles.mt10} />
@@ -114,7 +115,7 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified, onCa
           </PressableScale>
           {onCallback && callbackAvail && fallbackIn <= 0 ? (
             askCallback ? (
-              <View style={styles.callback}>
+              <View style={[styles.callback, { backgroundColor: colors.woodSoft }]}>
                 <View style={styles.row}>
                   <Ionicons name="call" size={16} color={colors.wood} />
                   <Text variant="bodyMedium">Confirmation par appel</Text>
@@ -129,7 +130,7 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified, onCa
               </View>
             ) : (
               <PressableScale onPress={() => setAskCallback(true)} style={styles.resend}>
-                <Text variant="smallMedium" style={styles.woodText}>Je n'ai pas reçu le code</Text>
+                <Text variant="smallMedium" style={[styles.woodText, { color: colors.wood }]}>Je n'ai pas reçu le code</Text>
               </PressableScale>
             )
           ) : null}
@@ -140,7 +141,7 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified, onCa
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   backdrop: { flex: 1, backgroundColor: colors.overlay },
   wrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: 20, paddingTop: 12 },
@@ -156,6 +157,6 @@ const styles = StyleSheet.create({
   woodText: { color: colors.wood, textDecorationLine: 'underline' },
   mt4: { marginTop: 4 },
   mt10: { marginTop: 10 },
-});
+}));
 
 export default memo(GuestOtpSheet);

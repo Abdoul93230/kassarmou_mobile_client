@@ -3,7 +3,7 @@
     "version": ">= 16.26.0",
     "appVersionSource": "remote"
   },
-"build": {
+  "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
@@ -18,6 +18,14 @@
     },
     "production": {
       "channel": "production",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
       }

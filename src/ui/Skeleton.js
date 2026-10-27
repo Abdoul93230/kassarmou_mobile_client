@@ -1,10 +1,11 @@
 import React, { memo, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
-import { colors, radius as R } from '../theme';
+import { colors, radius as R, useTheme } from '../theme';
 
 /** Bloc de chargement pulsé (remplace les spinners : l'écran a déjà sa forme). */
 function Skeleton({ width = '100%', height = 16, radius = R.sm, style }) {
+  const { colors } = useTheme();
   const opacity = useSharedValue(0.55);
   useEffect(() => {
     opacity.value = withRepeat(withTiming(1, { duration: 750, easing: Easing.inOut(Easing.ease) }), -1, true);

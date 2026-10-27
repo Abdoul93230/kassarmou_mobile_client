@@ -6,7 +6,7 @@ import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 
 import { EmptyState, IconButton, PressableScale, SmartImage, Skeleton, Text } from '../ui';
-import { colors, GUTTER, radius } from '../theme';
+import { colors, GUTTER, radius, useTheme, themedStyles } from '../theme';
 import { messagingApi, setUnread, useMessagingEvents } from '../services/messaging';
 
 const when = (d) => {
@@ -21,6 +21,7 @@ const when = (d) => {
 
 /** Messages : conversations avec les boutiques + support Ihambaobab */
 export default function ConversationsScreen({ navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const user = useSelector((s) => s.auth.user);
   const [rows, setRows] = useState(null);
@@ -55,7 +56,7 @@ export default function ConversationsScreen({ navigation }) {
 
   if (!user) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={[styles.screen, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
         <EmptyState
           icon="chatbubbles-outline"
           title="Vos messages"
@@ -68,8 +69,8 @@ export default function ConversationsScreen({ navigation }) {
   }
 
   const support = (
-    <PressableScale onPress={() => navigation.navigate('Support')} scaleTo={0.985} style={styles.row} accessibilityLabel="Support Ihambaobab">
-      <View style={[styles.avatar, styles.supportAvatar]}><Ionicons name="headset" size={22} color={colors.textInverse} /></View>
+    <PressableScale onPress={() => navigation.navigate('Support')} scaleTo={0.985} style={[styles.row, { backgroundColor: colors.surface, borderBottomColor: colors.divider }]} accessibilityLabel="Support Ihambaobab">
+      <View style={[styles.avatar, styles.supportAvatar, { backgroundColor: colors.primary }]}><Ionicons name="headset" size={22} color={colors.textInverse} /></View>
       <View style={styles.flex}>
         <Text variant="title">Support Ihambaobab</Text>
         <Text variant="small" color="textSecondary" numberOfLines={1}>Commande, paiement, livraison : on vous aide</Text>
@@ -79,8 +80,8 @@ export default function ConversationsScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <Text variant="h2" style={styles.flex}>Messages</Text>
       </View>
@@ -110,10 +111,10 @@ export default function ConversationsScreen({ navigation }) {
             onPress={() => navigation.navigate('StoreChat', { conversationId: c.id, sellerId: c.store?.id, storeName: c.store?.name, storeLogo: c.store?.logo })}
             onLongPress={() => archive(c)}
             scaleTo={0.985}
-            style={styles.row}
+            style={[styles.row, { backgroundColor: colors.surface, borderBottomColor: colors.divider }]}
           >
             {c.store?.logo ? <SmartImage uri={c.store.logo} width={52} style={styles.avatar} /> : (
-              <View style={[styles.avatar, styles.initial]}><Text variant="h3" color="primaryDark">{(c.store?.name || 'B').charAt(0).toUpperCase()}</Text></View>
+              <View style={[styles.avatar, styles.initial, { backgroundColor: colors.primarySoft }]}><Text variant="h3" color="primaryDark">{(c.store?.name || 'B').charAt(0).toUpperCase()}</Text></View>
             )}
             <View style={styles.flex}>
               <View style={styles.line}>
@@ -124,7 +125,7 @@ export default function ConversationsScreen({ navigation }) {
                 <Text variant="small" color={typing[c.id] ? 'primary' : c.unread ? 'text' : 'textSecondary'} numberOfLines={1} style={[styles.flex, c.unread && styles.bold]}>
                   {typing[c.id] ? typing[c.id] : `${c.lastMessage?.from === 'client' ? 'Vous : ' : ''}${c.lastMessage?.text || ''}`}
                 </Text>
-                {c.unread ? <View style={styles.badge}><Text variant="caption" color="textInverse" style={styles.badgeText}>{c.unread > 99 ? '99+' : c.unread}</Text></View> : null}
+                {c.unread ? <View style={[styles.badge, { backgroundColor: colors.primary }]}><Text variant="caption" color="textInverse" style={styles.badgeText}>{c.unread > 99 ? '99+' : c.unread}</Text></View> : null}
               </View>
             </View>
           </PressableScale>
@@ -135,7 +136,7 @@ export default function ConversationsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   header: {
@@ -158,4 +159,4 @@ const styles = StyleSheet.create({
   skeleton: { borderRadius: radius.md },
   empty: { alignItems: 'center', paddingHorizontal: 40, paddingTop: 48, gap: 8 },
   emptyTitle: { marginTop: 6 },
-});
+}));

@@ -14,7 +14,7 @@ import { clearPanierData } from '../redux/cartSlice';
 import { catalogApi } from '../redux/catalogApi';
 import { Button, IconButton, Text } from '../ui';
 import { formatPrice } from '../utils/formatPrice';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 /** Montant de test : uniquement en développement et si explicitement défini */
 const DEV_TEST_AMOUNT = __DEV__ ? Number(process.env.EXPO_PUBLIC_PAYMENT_TEST_AMOUNT) || 0 : 0;
@@ -107,6 +107,7 @@ const buildHtml = ({ amount, transactionId }) => `<!DOCTYPE html>
 
 /** Paiement en ligne via le SDK iPay (mobile money, portefeuilles, cartes) */
 export default function PaymentWebViewScreen({ navigation, route }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const { amount, transactionId } = route.params || {};
@@ -217,8 +218,8 @@ export default function PaymentWebViewScreen({ navigation, route }) {
   const ordersLabel = user ? 'Voir mes commandes' : 'Suivre ma commande';
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
         <IconButton name="close" onPress={confirmLeave} bg={colors.surfaceAlt} accessibilityLabel="Quitter le paiement" />
         <View style={styles.flex}>
           <Text variant="title">Paiement sécurisé</Text>
@@ -245,7 +246,7 @@ export default function PaymentWebViewScreen({ navigation, route }) {
           style={styles.web}
         />
         {phase === 'loading' || phase === 'verifying' ? (
-          <Animated.View entering={FadeIn} style={styles.overlay}>
+          <Animated.View entering={FadeIn} style={[styles.overlay, { backgroundColor: colors.bg }]}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text variant="title" style={styles.mt16}>{phase === 'verifying' ? 'Confirmation du paiement…' : 'Connexion sécurisée…'}</Text>
             <Text variant="small" color="textSecondary" align="center" style={styles.mt6}>
@@ -265,7 +266,7 @@ export default function PaymentWebViewScreen({ navigation, route }) {
           <Text variant="body" color="textSecondary" align="center" style={styles.mt8}>
             Merci pour votre achat. Le vendeur prépare votre commande, vous pouvez suivre chaque étape.
           </Text>
-          <View style={styles.refPill}><Text variant="caption" color="textSecondary">Référence</Text><Text variant="title" selectable>{transactionId}</Text></View>
+          <View style={[styles.refPill, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text variant="caption" color="textSecondary">Référence</Text><Text variant="title" selectable>{transactionId}</Text></View>
           <View style={styles.actions}>
             <Button title="Suivre ma commande" icon="cube-outline" size="lg" full onPress={goOrders} />
             <Button title="Continuer mes achats" variant="ghost" full onPress={() => navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })} />
@@ -282,6 +283,7 @@ export default function PaymentWebViewScreen({ navigation, route }) {
           <Text variant="body" color="textSecondary" align="center" style={styles.mt8}>
             Aucun montant n'a été validé. Votre commande est conservée : réessayez ou choisissez un autre moyen de paiement.
           </Text>
+          <View style={[styles.refPill, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text variant="caption" color="textSecondary">Référence</Text><Text variant="title" selectable>{transactionId}</Text></View>
           <View style={styles.actions}>
             <Button title="Réessayer le paiement" icon="refresh" size="lg" full onPress={retry} />
             <Button title={ordersLabel} variant="ghost" full onPress={goOrders} />
@@ -292,7 +294,7 @@ export default function PaymentWebViewScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   mt6: { marginTop: 6 },
@@ -310,4 +312,4 @@ const styles = StyleSheet.create({
   bigIcon: { width: 110, height: 110, borderRadius: 55, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
   refPill: { marginTop: 20, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   actions: { alignSelf: 'stretch', gap: 8, marginTop: 32 },
-});
+}));

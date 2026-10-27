@@ -1,13 +1,14 @@
 import React, { memo, useMemo } from 'react';
 import { Image } from 'expo-image';
 import { optimizeImage } from '../utils/image';
-import { colors } from '../theme';
+import { colors, useTheme } from '../theme';
 
 /**
  * Image optimisée : redimensionnement CDN, cache mémoire + disque, fondu doux.
  * width = largeur affichée en points (sert à choisir la bonne taille d'image).
  */
 function SmartImage({ uri, width = 320, style, contentFit = 'cover', priority = 'normal', transition = 180, recyclingKey, ...rest }) {
+  const { colors } = useTheme();
   const source = useMemo(() => {
     const u = optimizeImage(uri, width);
     return u ? { uri: u } : null;
@@ -21,7 +22,7 @@ function SmartImage({ uri, width = 320, style, contentFit = 'cover', priority = 
       transition={transition}
       cachePolicy="memory-disk"
       priority={priority}
-      recyclingKey={recyclingKey || uri}
+      recyclingKey={recyclingKey}
       {...rest}
     />
   );

@@ -3,10 +3,11 @@ import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import useSellerOrigin from '../hooks/useSellerOrigin';
 import { Text } from '../ui';
-import { colors } from '../theme';
+import { colors, useTheme } from '../theme';
 
 /** « 📍 Niamey » : ville d'expédition d'une boutique (rien si inconnue, ou `fallback`) */
 function OriginBadge({ sellerId, detail = false, variant = 'caption', color = 'wood', fallback = null, style }) {
+  const { colors } = useTheme();
   const origin = useSellerOrigin(sellerId);
   if (!origin) return fallback;
   return (

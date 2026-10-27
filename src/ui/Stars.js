@@ -2,12 +2,13 @@ import React, { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { colors } from '../theme';
+import { colors, useTheme } from '../theme';
 
 /**
  * Étoiles de notation. Lecture seule par défaut ; interactif si onChange est fourni.
  */
 function Stars({ value = 0, size = 14, onChange, gap = 2, style }) {
+  const { colors } = useTheme();
   return (
     <View style={[styles.row, { gap }, style]} accessibilityLabel={`${Math.round(value * 10) / 10} sur 5`}>
       {[1, 2, 3, 4, 5].map((i) => {

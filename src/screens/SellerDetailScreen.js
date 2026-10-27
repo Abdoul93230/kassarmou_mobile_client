@@ -9,12 +9,13 @@ import { useStoreQuery, useStoreStatsQuery } from '../redux/catalogApi';
 import { ReviewSheet } from '../components/product/ReviewsSection';
 import { Button, EmptyState, IconButton, PressableScale, SmartImage, Stars, Text } from '../ui';
 import { timeAgo } from '../utils/text';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const PAGE = 10;
 
 /** Avis clients d'une boutique : note globale, liste paginée, rédaction, « utile » */
 export default function SellerDetailScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const { sellerId } = route.params || {};
   const insets = useSafeAreaInsets();
   const user = useSelector((s) => s.auth.user);
@@ -117,8 +118,8 @@ export default function SellerDetailScreen({ route, navigation }) {
 
   const header = (
     <View>
-      <PressableScale onPress={() => navigation.navigate('Boutique', { sellerId, storeName: name })} style={styles.storeCard} scaleTo={0.99}>
-        {s?.logo ? <SmartImage uri={s.logo} width={56} style={styles.logo} /> : <View style={[styles.logo, styles.initial]}><Text variant="h2" color="primaryDark">{name.charAt(0)}</Text></View>}
+      <PressableScale onPress={() => navigation.navigate('Boutique', { sellerId, storeName: name })} style={[styles.storeCard, { backgroundColor: colors.surface }]} scaleTo={0.99}>
+        {s?.logo ? <SmartImage uri={s.logo} width={56} style={styles.logo} /> : <View style={[styles.logo, styles.initial, { backgroundColor: colors.primarySoft }]}><Text variant="h2" color="primaryDark">{name.charAt(0)}</Text></View>}
         <View style={styles.flex}>
           <Text variant="h3" numberOfLines={1}>{name}</Text>
           <Text variant="small" color="textSecondary">Voir la boutique</Text>
@@ -126,7 +127,7 @@ export default function SellerDetailScreen({ route, navigation }) {
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </PressableScale>
 
-      <View style={styles.summary}>
+      <View style={[styles.summary, { backgroundColor: colors.surface }]}>
         <Text variant="hero" style={styles.big}>{rating ? rating.toFixed(1) : '—'}</Text>
         <Stars value={rating} size={20} gap={4} />
         <Text variant="small" color="textSecondary" style={styles.mt6}>{count ? `Basé sur ${count} avis` : 'Pas encore d\'avis'}</Text>
@@ -139,8 +140,8 @@ export default function SellerDetailScreen({ route, navigation }) {
   );
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <Text variant="h2" style={styles.flex}>Avis sur la boutique</Text>
       </View>
@@ -157,9 +158,9 @@ export default function SellerDetailScreen({ route, navigation }) {
           const mine = String(item.user?._id || item.user?.id) === String(userId);
           const useful = (item.likes || []).map(String).includes(String(userId));
           return (
-            <View style={styles.review}>
+            <View style={[styles.review, { borderBottomColor: colors.border }]}>
               <View style={styles.reviewHead}>
-                <View style={styles.avatar}><Text variant="smallMedium" color="primaryDark">{author.charAt(0).toUpperCase()}</Text></View>
+                <View style={[styles.avatar, { backgroundColor: colors.primarySoft }]}><Text variant="smallMedium" color="primaryDark">{author.charAt(0).toUpperCase()}</Text></View>
                 <View style={styles.flex}>
                   <Text variant="smallMedium">{author}{mine ? ' (vous)' : ''}</Text>
                   <View style={styles.metaRow}>
@@ -174,7 +175,7 @@ export default function SellerDetailScreen({ route, navigation }) {
                 ) : null}
               </View>
               {item.comment ? <Text variant="body" color="textSecondary" style={styles.mt8}>{item.comment}</Text> : null}
-              <PressableScale onPress={() => toggleUseful(item)} style={[styles.useful, useful && styles.usefulOn]} hitSlop={6}>
+              <PressableScale onPress={() => toggleUseful(item)} style={[styles.useful, { backgroundColor: colors.surfaceAlt }, useful && [styles.usefulOn, { backgroundColor: colors.primarySoft }]]} hitSlop={6}>
                 <Ionicons name={useful ? 'thumbs-up' : 'thumbs-up-outline'} size={14} color={useful ? colors.primaryDark : colors.textSecondary} />
                 <Text variant="caption" color={useful ? 'primaryDark' : 'textSecondary'}>Utile{item.likesCount ? ` · ${item.likesCount}` : ''}</Text>
               </PressableScale>
@@ -194,7 +195,7 @@ export default function SellerDetailScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   mt6: { marginTop: 6 },
@@ -219,4 +220,4 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   useful: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt },
   usefulOn: { backgroundColor: colors.primarySoft },
-});
+}));

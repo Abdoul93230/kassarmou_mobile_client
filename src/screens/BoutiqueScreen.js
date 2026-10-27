@@ -21,7 +21,7 @@ import { Button, Chip, EmptyState, IconButton, PressableScale, Skeleton, SmartIm
 import useContactStore from '../hooks/useContactStore';
 import { siteUrl } from '../config/env';
 import { capitalize } from '../utils/text';
-import { colors, fonts, gradients, GUTTER, radius, shadows } from '../theme';
+import { fonts, gradients, GUTTER, radius, shadows, useTheme } from '../theme';
 import OriginBadge from '../components/OriginBadge';
 
 const EMPTY = [];
@@ -44,6 +44,7 @@ function Stat({ value, label }) {
 
 /** Vitrine d'une boutique : identité, abonnement, contact, bannières, catalogue filtrable */
 export default function BoutiqueScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const cartCount = useSelector(selectPanierCount);
   const params = route?.params || {};
@@ -109,7 +110,7 @@ export default function BoutiqueScreen({ route, navigation }) {
   const header = (
     <View>
       {/* Couverture */}
-      <View style={[styles.cover, { paddingTop: insets.top }]}>
+      <View style={[styles.cover, { paddingTop: insets.top, backgroundColor: colors.primaryDeep }]}>
         {store?.coverImage ? <SmartImage uri={store.coverImage} width={420} style={StyleSheet.absoluteFill} /> : null}
         <LinearGradient colors={store?.coverImage ? ['rgba(0,0,0,0.25)', 'rgba(0,0,0,0.05)'] : gradients.hero} style={StyleSheet.absoluteFill} />
         <View style={styles.topBar}>
@@ -122,12 +123,12 @@ export default function BoutiqueScreen({ route, navigation }) {
       </View>
 
       {/* Identité */}
-      <View style={styles.card}>
-        <View style={styles.logoWrap}>
+      <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <View style={[styles.logoWrap, { backgroundColor: colors.surface }]}>
           {store?.logo ? (
             <SmartImage uri={store.logo} width={84} style={styles.logo} />
           ) : (
-            <View style={[styles.logo, styles.initial]}>
+            <View style={[styles.logo, styles.initial, { backgroundColor: colors.primarySoft }]}>
               <Text variant="hero" color="primaryDark">{name.charAt(0).toUpperCase()}</Text>
             </View>
           )}
@@ -162,11 +163,11 @@ export default function BoutiqueScreen({ route, navigation }) {
               <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             </PressableScale>
 
-            <View style={styles.stats}>
+            <View style={[styles.stats, { backgroundColor: colors.bg }]}>
               <Stat value={compact(all.length)} label="Produits" />
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <Stat value={compact(social.followers)} label="Abonnés" />
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <Stat value={compact(social.likes)} label="J'aime" />
             </View>
 
@@ -223,14 +224,14 @@ export default function BoutiqueScreen({ route, navigation }) {
       {/* Catalogue */}
       <View style={styles.catalogHead}>
         <Text variant="h2">Catalogue</Text>
-        <View style={styles.searchBox}>
+        <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
             value={q}
             onChangeText={setQ}
             placeholder={`Rechercher chez ${name}`}
             placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             returnKeyType="search"
           />
           {q ? (
@@ -258,7 +259,7 @@ export default function BoutiqueScreen({ route, navigation }) {
 
   if (notFound) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
         <View style={styles.simpleBar}>
           <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         </View>
@@ -274,7 +275,7 @@ export default function BoutiqueScreen({ route, navigation }) {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       <ProductGrid
         products={list}
         loading={products.isLoading || loadingStore}
@@ -298,7 +299,7 @@ export default function BoutiqueScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   originCenter: { alignSelf: 'center', marginTop: 4 },
-  screen: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1 },
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },
   center: { alignItems: 'center' },
@@ -306,25 +307,25 @@ const styles = StyleSheet.create({
   mt8: { marginTop: 8 },
   simpleBar: { paddingHorizontal: GUTTER, paddingVertical: 8 },
 
-  cover: { height: 170, backgroundColor: colors.primaryDeep },
+  cover: { height: 170 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: GUTTER, paddingTop: 8 },
   topActions: { flexDirection: 'row', gap: 8 },
 
   card: {
     marginHorizontal: GUTTER, marginTop: -56, paddingTop: 52, paddingHorizontal: 16, paddingBottom: 16,
-    backgroundColor: colors.surface, borderRadius: radius.xl, alignItems: 'center', ...shadows.md,
+    borderRadius: radius.xl, alignItems: 'center', ...shadows.md,
   },
-  logoWrap: { position: 'absolute', top: -42, alignSelf: 'center', padding: 4, borderRadius: 48, backgroundColor: colors.surface, ...shadows.sm },
+  logoWrap: { position: 'absolute', top: -42, alignSelf: 'center', padding: 4, borderRadius: 48, ...shadows.sm },
   logo: { width: 84, height: 84, borderRadius: 42 },
-  initial: { backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  initial: { alignItems: 'center', justifyContent: 'center' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   stats: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', marginTop: 16, paddingVertical: 12,
-    borderRadius: radius.md, backgroundColor: colors.bg,
+    borderRadius: radius.md,
   },
   stat: { flex: 1, alignItems: 'center' },
-  statDivider: { width: StyleSheet.hairlineWidth, height: 28, backgroundColor: colors.border },
+  statDivider: { width: StyleSheet.hairlineWidth, height: 28 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch', marginTop: 14 },
   infos: { alignSelf: 'stretch', marginTop: 14, gap: 6 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -333,9 +334,9 @@ const styles = StyleSheet.create({
   catalogHead: { paddingHorizontal: GUTTER, marginTop: 28, gap: 12 },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, paddingHorizontal: 14,
-    borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.pill, borderWidth: 1,
   },
-  searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.text, paddingVertical: 0 },
+  searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, paddingVertical: 0 },
   chips: { gap: 8, paddingHorizontal: GUTTER, marginTop: 12 },
   sortChips: { paddingBottom: 14 },
 });

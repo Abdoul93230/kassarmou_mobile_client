@@ -14,10 +14,11 @@ import { authErrorMessage } from '../hooks/useAuthReturn';
 import { formatPhoneInternational } from '../utils/phoneRules';
 import { Button, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
 import TextField from '../ui/TextField';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 /** Modification du profil : photo, nom, email, préférence WhatsApp, mot de passe */
 export default function EditProfileScreen({ navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
@@ -131,8 +132,8 @@ export default function EditProfileScreen({ navigation }) {
   const avatarUri = newPhoto || photo;
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <Text variant="h2" style={styles.flex}>Mon profil</Text>
       </View>
@@ -148,13 +149,13 @@ export default function EditProfileScreen({ navigation }) {
             {avatarUri ? (
               <SmartImage uri={avatarUri} width={96} style={styles.avatar} />
             ) : (
-              <View style={[styles.avatar, styles.initial]}><Text variant="hero" color="primaryDark">{(name || '?').charAt(0).toUpperCase()}</Text></View>
+              <View style={[styles.avatar, styles.initial, { backgroundColor: colors.primarySoft }]}><Text variant="hero" color="primaryDark">{(name || '?').charAt(0).toUpperCase()}</Text></View>
             )}
-            <View style={styles.camera}><Ionicons name="camera" size={16} color={colors.textInverse} /></View>
+            <View style={[styles.camera, { backgroundColor: colors.primary, borderColor: colors.bg }]}><Ionicons name="camera" size={16} color={colors.textInverse} /></View>
           </PressableScale>
           <Text variant="small" color="primary" align="center" style={styles.mt8} onPress={choosePhoto}>Changer la photo</Text>
 
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <TextField label="Prénom et nom" icon="person-outline" value={name} onChangeText={(t) => { setName(t); setErrors((x) => ({ ...x, name: undefined })); }} error={errors.name} autoCapitalize="words" autoComplete="name" />
             <TextField label="Email" optional icon="mail-outline" value={email} onChangeText={(t) => { setEmail(t); setErrors((x) => ({ ...x, email: undefined })); }} error={errors.email} keyboardType="email-address" autoCapitalize="none" autoComplete="email" placeholder="Pour recevoir vos reçus" />
             <TextField
@@ -169,7 +170,7 @@ export default function EditProfileScreen({ navigation }) {
               <Text variant="caption" color="primary">Changer de numéro ? Contactez le support</Text>
             </PressableScale>
 
-            <View style={styles.switchRow}>
+            <View style={[styles.switchRow, { borderTopColor: colors.border }]}>
               <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
               <View style={styles.flex}>
                 <Text variant="bodyMedium">Contact par WhatsApp</Text>
@@ -179,9 +180,9 @@ export default function EditProfileScreen({ navigation }) {
             </View>
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <PressableScale onPress={changePassword} style={styles.row} scaleTo={0.99}>
-              <View style={styles.rowIcon}><Ionicons name="key-outline" size={18} color={colors.primary} /></View>
+              <View style={[styles.rowIcon, { backgroundColor: colors.primarySoft }]}><Ionicons name="key-outline" size={18} color={colors.primary} /></View>
               <View style={styles.flex}>
                 <Text variant="bodyMedium">Changer mon mot de passe</Text>
                 <Text variant="caption" color="textMuted">Un code de sécurité vous sera envoyé par SMS</Text>
@@ -193,7 +194,7 @@ export default function EditProfileScreen({ navigation }) {
       )}
 
       {!loading ? (
-        <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
           {saving ? <ActivityIndicator color={colors.primary} style={styles.mb8} /> : null}
           <Button title="Enregistrer" icon="checkmark" size="lg" full loading={saving} disabled={!dirty} onPress={save} />
         </View>
@@ -202,7 +203,7 @@ export default function EditProfileScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   pad: { padding: GUTTER },
@@ -227,4 +228,4 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: GUTTER, paddingTop: 12,
     backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
   },
-});
+}));

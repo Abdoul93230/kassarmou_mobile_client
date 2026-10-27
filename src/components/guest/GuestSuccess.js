@@ -8,13 +8,14 @@ import { login } from '../../redux/authSlice';
 import { claimGuestAccount, clearGuestSession, shareTracking, trackingUrl } from '../../services/guestSession';
 import { Button, PressableScale, Text } from '../../ui';
 import TextField from '../../ui/TextField';
-import { colors, radius } from '../../theme';
+import { colors, radius, useTheme, themedStyles } from '../../theme';
 
 /**
  * Après une commande sans compte : lien de suivi (voir, copier, partager)
  * et création du compte avec un simple mot de passe (numéro déjà vérifié).
  */
 function GuestSuccess({ reference, trackingToken, verified, callback = false, navigation }) {
+  const { colors } = useTheme();
   const dispatch = useDispatch();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -42,37 +43,37 @@ function GuestSuccess({ reference, trackingToken, verified, callback = false, na
   return (
     <View style={styles.wrap}>
       {callback ? (
-        <View style={[styles.card, styles.callback]}>
+        <View style={[styles.card, styles.callback, { backgroundColor: colors.woodSoft, borderColor: colors.wood + '55' }]}>
           <Text variant="bodyMedium">📞 Nous allons vous appeler</Text>
           <Text variant="caption" color="textSecondary">Le code SMS n'est pas arrivé : notre équipe vous appelle très vite pour confirmer la commande avant sa préparation.</Text>
         </View>
       ) : null}
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text variant="title">Suivez votre commande</Text>
         <Text variant="caption" color="textSecondary">Ce lien suffit : gardez-le ou partagez-le.</Text>
         <View style={styles.actions}>
           <Button title="Suivre" icon="navigate-outline" size="md" onPress={() => navigation.navigate('Tracking', { reference, k: trackingToken })} style={styles.flex} />
           <PressableScale
             onPress={async () => { await Clipboard.setStringAsync(url); Toast.show({ type: 'success', text1: 'Lien copié' }); }}
-            style={styles.iconBtn}
+            style={[styles.iconBtn, { borderColor: colors.border }]}
             accessibilityLabel="Copier le lien"
           >
             <Ionicons name="copy-outline" size={18} color={colors.text} />
           </PressableScale>
-          <PressableScale onPress={() => shareTracking(url)} style={styles.iconBtn} accessibilityLabel="Partager">
+          <PressableScale onPress={() => shareTracking(url)} style={[styles.iconBtn, { borderColor: colors.border }]} accessibilityLabel="Partager">
             <Ionicons name="share-social-outline" size={18} color={colors.text} />
           </PressableScale>
         </View>
       </View>
 
       {created ? (
-        <View style={[styles.card, styles.success]}>
+        <View style={[styles.card, styles.success, { backgroundColor: colors.successSoft, borderColor: colors.success + '55' }]}>
           <Text variant="title" color="success">Votre compte est créé 🎉</Text>
           <Text variant="caption" color="textSecondary">Vos commandes et vos points sont dans votre compte.</Text>
           <Button title="Voir mes commandes" size="md" full onPress={() => navigation.navigate('Orders')} style={styles.mt10} />
         </View>
       ) : verified ? (
-        <View style={[styles.card, styles.claim]}>
+        <View style={[styles.card, styles.claim, { backgroundColor: colors.primarySoft, borderColor: colors.primary + '55' }]}>
           <View style={styles.row}>
             <Ionicons name="gift" size={18} color={colors.wood} />
             <Text variant="title" style={styles.flex}>Gardez vos Baobab Points</Text>
@@ -82,7 +83,7 @@ function GuestSuccess({ reference, trackingToken, verified, callback = false, na
           <Button title="Créer mon compte" size="md" full loading={busy} onPress={claim} />
         </View>
       ) : (
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text variant="small" color="textSecondary">Créez un compte pour retrouver vos commandes partout et gagner des Baobab Points.</Text>
           <Button title="Créer mon compte" variant="secondary" size="md" full onPress={() => navigation.navigate('QuickAuth', { returnScreen: 'Orders' })} style={styles.mt10} />
         </View>
@@ -91,7 +92,7 @@ function GuestSuccess({ reference, trackingToken, verified, callback = false, na
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   wrap: { width: '100%', gap: 12, marginTop: 20 },
   card: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   claim: { backgroundColor: colors.primarySoft, borderColor: colors.primary + '55' },
@@ -103,6 +104,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   mb8: { marginBottom: 8 },
   mt10: { marginTop: 10 },
-});
+}));
 
 export default memo(GuestSuccess);

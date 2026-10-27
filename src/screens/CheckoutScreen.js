@@ -31,7 +31,7 @@ import {
 } from '../utils/phoneRules';
 import { formatPrice } from '../utils/formatPrice';
 import { productImage } from '../utils/image';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const F = (n) => `${formatPrice(n)} FCFA`;
 const EMPTY_DELIVERY = { name: '', email: '', landmark: '' };
@@ -48,10 +48,11 @@ const calcsFromQuote = (q) => Object.fromEntries((q?.parcels || []).map((p) => [
 }]));
 
 function Section({ title, icon, right, children }) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, { backgroundColor: colors.surface }]}>
       <View style={styles.sectionHead}>
-        <View style={styles.sectionIcon}><Ionicons name={icon} size={16} color={colors.primary} /></View>
+        <View style={[styles.sectionIcon, { backgroundColor: colors.primarySoft }]}><Ionicons name={icon} size={16} color={colors.primary} /></View>
         <Text variant="h3" style={styles.flex}>{title}</Text>
         {right}
       </View>
@@ -70,6 +71,7 @@ function Row({ label, value, tone, bold }) {
 }
 
 export default function CheckoutScreen({ navigation, route }) {
+  const { colors } = useTheme();
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const user = useSelector((s) => s.auth.user);
@@ -327,8 +329,8 @@ export default function CheckoutScreen({ navigation, route }) {
   // ── Confirmation ─────────────────────────────────────────────────────────────
   if (done) {
     return (
-      <View style={[styles.screen, styles.doneWrap, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
-        <Animated.View entering={ZoomIn.springify().damping(12)} style={styles.doneIcon}>
+      <View style={[styles.screen, styles.doneWrap, { backgroundColor: colors.bg, paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
+        <Animated.View entering={ZoomIn.springify().damping(12)} style={[styles.doneIcon, { backgroundColor: colors.success }]}>
           <Ionicons name="checkmark" size={56} color={colors.textInverse} />
         </Animated.View>
         <Animated.View entering={FadeInDown.delay(200)} style={styles.doneText}>
@@ -338,7 +340,7 @@ export default function CheckoutScreen({ navigation, route }) {
               ? 'Un conseiller va vous appeler pour finaliser le paiement.'
               : 'Vous paierez à la livraison. Le vendeur prépare votre colis.'}
           </Text>
-          <View style={styles.refPill}>
+          <View style={[styles.refPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text variant="caption" color="textSecondary">Référence</Text>
             <Text variant="title" selectable>{done.reference}</Text>
           </View>
@@ -374,8 +376,8 @@ export default function CheckoutScreen({ navigation, route }) {
   const offline = isOfflinePayment(method);
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <View style={styles.flex}>
           <Text variant="h2">Finaliser la commande</Text>
@@ -418,7 +420,7 @@ export default function CheckoutScreen({ navigation, route }) {
                 hint="Le livreur vous appellera sur ce numéro"
               />
               <Text variant="smallMedium" color="textSecondary" style={styles.fieldLabel}>Quartier ou ville</Text>
-              <PressableScale onPress={() => setZoneSheet(true)} scaleTo={0.985} style={[styles.zoneField, errors.zone && styles.zoneFieldError]}>
+              <PressableScale onPress={() => setZoneSheet(true)} scaleTo={0.985} style={[styles.zoneField, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }, errors.zone && styles.zoneFieldError]}>
                 <Ionicons name="location" size={18} color={zone ? colors.primary : colors.textMuted} />
                 <View style={styles.flex}>
                   <Text variant={zone ? 'title' : 'body'} color={zone ? 'text' : 'textMuted'} numberOfLines={1}>{zone ? zoneLabel(zone).title : 'Choisir dans la liste'}</Text>
@@ -437,7 +439,7 @@ export default function CheckoutScreen({ navigation, route }) {
         <Section title="Paiement" icon="wallet">
           <PaymentOptions value={method} onChange={setMethod} />
           {method && !offline ? (
-            <View style={styles.note}>
+            <View style={[styles.note, { backgroundColor: colors.primarySoft }]}>
               <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
               <Text variant="small" color="textSecondary" style={styles.flex}>
                 Vous choisirez votre moyen de paiement (mobile money, portefeuille ou carte) sur la page sécurisée iPay.
@@ -468,7 +470,7 @@ export default function CheckoutScreen({ navigation, route }) {
             {cartItems.map((it) => (
               <View key={`${it.id}-${it.color}-${it.taille}`}>
                 <SmartImage uri={it.colorImage || productImage(it)} width={56} style={styles.thumb} />
-                <View style={styles.qtyBadge}><Text variant="caption" color="textInverse">{it.quantite}</Text></View>
+                <View style={[styles.qtyBadge, { backgroundColor: colors.inverse, borderColor: colors.surface }]}><Text variant="caption" color="onInverse">{it.quantite}</Text></View>
               </View>
             ))}
           </ScrollView>
@@ -486,12 +488,12 @@ export default function CheckoutScreen({ navigation, route }) {
           )) : null}
           {ship.error ? <Text variant="caption" color="danger" style={styles.parcelLine}>{ship.error}</Text> : null}
           {pointsDiscount > 0 ? <Row label="Baobab Points" value={`-${F(pointsDiscount)}`} tone="success" /> : null}
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <Row label="Total à payer" value={F(payable)} bold />
         </Section>
       </ScrollView>
 
-      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View style={[styles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Button
           title={offline ? 'Confirmer la commande' : `Payer ${formatPrice(payable)} FCFA`}
           icon={offline ? 'checkmark-circle-outline' : 'lock-closed'}
@@ -530,7 +532,7 @@ export default function CheckoutScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   guestScroll: { alignSelf: 'stretch', flexGrow: 0, maxHeight: '55%' },
   guestScrollContent: { paddingHorizontal: 4 },
   screen: { flex: 1, backgroundColor: colors.bg },
@@ -562,7 +564,7 @@ const styles = StyleSheet.create({
   thumb: { width: 56, height: 56, borderRadius: radius.sm },
   qtyBadge: {
     position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 4,
-    backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface,
+    backgroundColor: colors.inverse, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface,
   },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 8 },
@@ -577,4 +579,4 @@ const styles = StyleSheet.create({
   doneText: { marginTop: 28, alignItems: 'center' },
   refPill: { marginTop: 20, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   doneActions: { alignSelf: 'stretch', gap: 8, marginTop: 36 },
-});
+}));

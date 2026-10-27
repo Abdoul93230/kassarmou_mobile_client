@@ -9,7 +9,7 @@ import { flattenPages, useSearchInfiniteQuery } from '../redux/catalogApi';
 import ProductGrid from '../components/ProductGrid';
 import { Chip, EmptyState, IconButton, PressableScale, SmartImage, Text } from '../ui';
 import { capitalize } from '../utils/text';
-import { colors, fonts, GUTTER, radius } from '../theme';
+import { fonts, GUTTER, radius, useTheme } from '../theme';
 
 const HISTORY_KEY = 'searchHistory';
 const TRENDING = ['Téléphone', 'Robe', 'Chaussures', 'Sac', 'Montre', 'Parfum', 'Panneau solaire', 'Ordinateur'];
@@ -26,6 +26,7 @@ const useDebounced = (value, delay) => {
 };
 
 export default function SearchScreen({ navigation, route }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const inputRef = useRef(null);
@@ -86,10 +87,10 @@ export default function SearchScreen({ navigation, route }) {
   const openCategory = (c) => navigation.navigate('ProductListScreen', { categoryId: c._id, categoryName: c.name });
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
-        <View style={styles.inputBox}>
+        <View style={[styles.inputBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
           <TextInput
             ref={inputRef}
@@ -101,7 +102,7 @@ export default function SearchScreen({ navigation, route }) {
             autoFocus
             returnKeyType="search"
             autoCorrect={false}
-            style={styles.input}
+            style={[styles.input, { color: colors.text }]}
             accessibilityLabel="Rechercher"
           />
           {query ? (
@@ -160,7 +161,7 @@ export default function SearchScreen({ navigation, route }) {
                 </PressableScale>
               </View>
               {history.map((h) => (
-                <PressableScale key={h} onPress={() => runSearch(h)} style={styles.historyRow} scaleTo={0.99}>
+                <PressableScale key={h} onPress={() => runSearch(h)} style={[styles.historyRow, { borderBottomColor: colors.border }]} scaleTo={0.99}>
                   <Ionicons name="time-outline" size={18} color={colors.textMuted} />
                   <Text variant="body" style={styles.flex} numberOfLines={1}>{h}</Text>
                   <Pressable onPress={() => removeHistory(h)} hitSlop={10} accessibilityLabel={`Supprimer ${h}`}>
@@ -189,10 +190,10 @@ export default function SearchScreen({ navigation, route }) {
                   .slice(0, 12)
                   .map((c) => (
                     <PressableScale key={c._id} onPress={() => openCategory(c)} style={styles.catCell} scaleTo={0.95}>
-                      <View style={styles.catImg}>
+                      <View style={[styles.catImg, { backgroundColor: colors.primarySoft }]}>
                         {c.image ? <SmartImage uri={c.image} width={64} style={styles.fill} /> : <Ionicons name="pricetag-outline" size={22} color={colors.primary} />}
                       </View>
-                      <Text variant="caption" align="center" numberOfLines={2} style={styles.catLabel}>{capitalize(c.name)}</Text>
+                      <Text variant="caption" color="textSecondary" align="center" numberOfLines={2} style={styles.catLabel}>{capitalize(c.name)}</Text>
                     </PressableScale>
                   ))}
               </View>
@@ -205,14 +206,14 @@ export default function SearchScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1 },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: GUTTER, paddingBottom: 12 },
   inputBox: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 46, paddingHorizontal: 14,
-    borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.primary,
+    borderRadius: radius.pill, borderWidth: 1.5,
   },
-  input: { flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.text, paddingVertical: 0 },
+  input: { flex: 1, fontFamily: fonts.regular, fontSize: 15, paddingVertical: 0 },
 
   resultsHead: { paddingBottom: 12, gap: 10 },
   chips: { gap: 8, paddingHorizontal: GUTTER },
@@ -221,11 +222,11 @@ const styles = StyleSheet.create({
   block: { paddingHorizontal: GUTTER, marginTop: 20 },
   blockHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   blockTitle: { marginBottom: 12 },
-  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   wrapChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
   catCell: { width: '25%', alignItems: 'center', paddingHorizontal: 4 },
-  catImg: { width: 60, height: 60, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  catImg: { width: 60, height: 60, borderRadius: radius.lg, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   fill: { width: '100%', height: '100%' },
-  catLabel: { marginTop: 6, color: colors.textSecondary },
+  catLabel: { marginTop: 6 },
 });

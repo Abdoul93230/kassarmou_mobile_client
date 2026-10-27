@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { PressableScale, Text } from '../../ui';
 import TextField from '../../ui/TextField';
 import { getPasswordChecks, getPasswordStrength } from '../../utils/passwordRules';
-import { colors } from '../../theme';
+import { useTheme } from '../../theme';
 
 const RULES = [
   ['minLength', '8 caractères'],
@@ -17,6 +17,7 @@ const RULES = [
  * showStrength : jauge de force + règles (création de mot de passe).
  */
 function PasswordField({ value, onChangeText, showStrength, label = 'Mot de passe', error, ...rest }, ref) {
+  const { colors } = useTheme();
   const [visible, setVisible] = useState(false);
   const checks = useMemo(() => getPasswordChecks(value), [value]);
   const strength = useMemo(() => getPasswordStrength(value), [value]);

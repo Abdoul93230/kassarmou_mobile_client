@@ -29,7 +29,7 @@ import DeepLinkingService from '../services/deepLinkingService';
 import { formatPrice } from '../utils/formatPrice';
 import { productImages } from '../utils/image';
 import { capitalize, htmlToText } from '../utils/text';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const DESCRIPTION_PREVIEW = 220;
 
@@ -46,6 +46,7 @@ const computePricing = (product, variant) => {
 };
 
 export default function ProductDetailScreen({ route, navigation }) {
+  const { colors, isDark } = useTheme();
   const contactStore = useContactStore(navigation);
   const params = route?.params || {};
   const productId = params.productId || params.product?._id;
@@ -197,7 +198,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       <Animated.ScrollView
         ref={scrollRef}
         onScroll={onScroll}
@@ -207,7 +208,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       >
         <ImageGallery ref={galleryRef} images={images} height={galleryHeight} discount={pricing.discount} />
 
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { backgroundColor: colors.bg }]}>
           {/* Prix */}
           <View style={styles.priceRow}>
             <Text variant="priceLg" color={pricing.original ? 'danger' : 'text'}>
@@ -219,7 +220,7 @@ export default function ProductDetailScreen({ route, navigation }) {
             ) : null}
           </View>
           {pricing.original ? (
-            <View style={styles.saveBadge}>
+            <View style={[styles.saveBadge, { backgroundColor: colors.successSoft }]}>
               <Ionicons name="pricetag" size={12} color={colors.success} />
               <Text variant="caption" color="success">
                 Vous économisez {formatPrice(pricing.original - pricing.current)} FCFA
@@ -245,7 +246,7 @@ export default function ProductDetailScreen({ route, navigation }) {
 
           {/* Stock */}
           {hasStockInfo ? (
-            <View style={[styles.stock, outOfStock ? styles.stockOut : stock <= 5 ? styles.stockLow : styles.stockOk]}>
+            <View style={[styles.stock, { backgroundColor: outOfStock ? colors.dangerSoft : stock <= 5 ? colors.warningSoft : colors.successSoft }]}>
               <View style={[styles.stockDot, { backgroundColor: outOfStock ? colors.danger : stock <= 5 ? colors.warning : colors.success }]} />
               <Text variant="smallMedium" color={outOfStock ? 'danger' : stock <= 5 ? 'wood' : 'success'}>
                 {outOfStock ? 'Épuisé' : stock <= 5 ? `Plus que ${stock} en stock — commandez vite` : 'En stock'}
@@ -266,8 +267,8 @@ export default function ProductDetailScreen({ route, navigation }) {
 
         {/* Livraison : d'où, vers où, frais et délai réels */}
         <DeliveryEstimate productId={product._id} sellerId={sellerIdOf(product)} quantity={quantity} style={styles.delivery} />
-        <View style={[styles.infoCard, styles.infoCardTight]}>
-          <View style={styles.infoIcon}>
+        <View style={[styles.infoCard, styles.infoCardTight, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.infoIcon, { backgroundColor: colors.primarySoft }]}>
             <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
           </View>
           <View style={styles.flex}>
@@ -294,7 +295,7 @@ export default function ProductDetailScreen({ route, navigation }) {
               productId: product._id,
             })}
             scaleTo={0.98}
-            style={styles.contactBtn}
+            style={[styles.contactBtn, { borderColor: colors.primary, backgroundColor: colors.primarySoft }]}
             accessibilityLabel="Poser une question à la boutique"
           >
             <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primaryDark} />
@@ -322,7 +323,7 @@ export default function ProductDetailScreen({ route, navigation }) {
         {product.marque || product.shipping?.weight || product.shipping?.origine || variants.length ? (
           <View style={styles.section}>
             <Text variant="h2" style={styles.sectionTitle}>Caractéristiques</Text>
-            <View style={styles.specs}>
+            <View style={[styles.specs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {[
                 product.marque && ['Marque', capitalize(product.marque)],
                 product.shipping?.origine && ['Origine', product.shipping.origine],
@@ -331,7 +332,7 @@ export default function ProductDetailScreen({ route, navigation }) {
               ]
                 .filter(Boolean)
                 .map(([k, v], i, arr) => (
-                  <View key={k} style={[styles.specRow, i < arr.length - 1 && styles.specDivider]}>
+                  <View key={k} style={[styles.specRow, i < arr.length - 1 && [styles.specDivider, { borderBottomColor: colors.border }]]}>
                     <Text variant="small" color="textSecondary">{k}</Text>
                     <Text variant="smallMedium" style={styles.specValue} numberOfLines={2}>{v}</Text>
                   </View>
@@ -356,7 +357,7 @@ export default function ProductDetailScreen({ route, navigation }) {
 
       {/* En-tête flottant */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
-        <Animated.View style={[StyleSheet.absoluteFill, styles.topBarBg, headerBg]} />
+        <Animated.View style={[StyleSheet.absoluteFill, styles.topBarBg, { backgroundColor: colors.surface }, headerBg]} />
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} elevated accessibilityLabel="Retour" />
         <Animated.View style={[styles.topTitle, headerBg]} pointerEvents="none">
           <Text variant="title" numberOfLines={1}>{product.name}</Text>
@@ -375,7 +376,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       </View>
 
       {/* Barre d'achat fixe */}
-      <View style={[styles.buyBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View style={[styles.buyBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {outOfStock ? (
           <Button title="Produit épuisé" variant="dark" full disabled size="lg" style={styles.flex} />
         ) : (
@@ -389,7 +390,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   mt12: { marginTop: 12 },
@@ -451,4 +452,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: GUTTER, paddingTop: 12, backgroundColor: colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
   },
-});
+}));

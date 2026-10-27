@@ -3,7 +3,7 @@ import { RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-nat
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState, ProductCard, ProductCardSkeleton, Text } from '../ui';
-import { colors, GUTTER } from '../theme';
+import { colors, GUTTER, useTheme } from '../theme';
 
 const GAP = 12;
 
@@ -15,6 +15,7 @@ function ProductGrid({
   products, loading, loadingMore, hasMore, onEndReached, onRefresh, refreshing,
   header, empty, contentBottom = 24, showStore = true,
 }) {
+  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const cardWidth = (width - GUTTER * 2 - GAP) / 2;
 

@@ -9,7 +9,7 @@ import StageBadge from '../components/orders/StageBadge';
 import { Button, Chip, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
 import { formatPrice } from '../utils/formatPrice';
 import { formatDate, orderDate, orderItemsCount, orderPreview, orderStage } from '../utils/orders';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const TABS = [
   { key: 'all', label: 'Toutes' },
@@ -21,11 +21,12 @@ const TABS = [
 ];
 
 const OrderCard = React.memo(function OrderCard({ order, onOpen, onPay }) {
+  const { colors } = useTheme();
   const stage = orderStage(order);
   const preview = orderPreview(order);
   const count = orderItemsCount(order);
   return (
-    <PressableScale onPress={() => onOpen(order)} scaleTo={0.99} style={styles.card} accessibilityLabel={`Commande ${order.reference}`}>
+    <PressableScale onPress={() => onOpen(order)} scaleTo={0.99} style={[styles.card, { backgroundColor: colors.surface }]} accessibilityLabel={`Commande ${order.reference}`}>
       <View style={styles.cardHead}>
         <View style={styles.flex}>
           <Text variant="title">Commande n° {String(order.reference || order._id).slice(-8)}</Text>
@@ -39,7 +40,7 @@ const OrderCard = React.memo(function OrderCard({ order, onOpen, onPay }) {
           <SmartImage key={`${p._id || i}-${i}`} uri={p.colorImage || p.imageUrl || p.image1 || p.image} width={56} style={styles.thumb} />
         ))}
         {preview.length > 4 ? (
-          <View style={[styles.thumb, styles.more]}><Text variant="smallMedium" color="textSecondary">+{preview.length - 4}</Text></View>
+          <View style={[styles.thumb, styles.more, { backgroundColor: colors.surfaceAlt }]}><Text variant="smallMedium" color="textSecondary">+{preview.length - 4}</Text></View>
         ) : null}
       </View>
 
@@ -57,6 +58,7 @@ const OrderCard = React.memo(function OrderCard({ order, onOpen, onPay }) {
 
 /** Historique des commandes, filtrable par statut */
 export default function OrdersScreen({ navigation, route }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const user = useSelector((s) => s.auth.user);
   const userId = user?.id || user?._id;
@@ -70,8 +72,8 @@ export default function OrdersScreen({ navigation, route }) {
   );
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <Text variant="h2" style={styles.flex}>Mes commandes</Text>
       </View>
@@ -120,7 +122,7 @@ export default function OrdersScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 6 },
@@ -134,4 +136,4 @@ const styles = StyleSheet.create({
   payBtn: { marginTop: 12 },
   skeletons: { paddingHorizontal: GUTTER, gap: 12 },
   help: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: GUTTER, paddingTop: 6 },
-});
+}));

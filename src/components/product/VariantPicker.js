@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip, PressableScale, Text } from '../../ui';
-import { colors, GUTTER, radius } from '../../theme';
+import { colors, GUTTER, radius, useTheme, themedStyles } from '../../theme';
 
 const isLight = (hex = '') => {
   const h = hex.replace('#', '');
@@ -13,6 +13,7 @@ const isLight = (hex = '') => {
 
 /** Choix de couleur (pastilles) et de taille (puces) */
 function VariantPicker({ variants, selected, onSelect, size, onSelectSize }) {
+  const { colors } = useTheme();
   if (!variants?.length) return null;
   const sizes = selected?.sizes?.filter(Boolean) || [];
 
@@ -32,14 +33,14 @@ function VariantPicker({ variants, selected, onSelect, size, onSelectSize }) {
               onPress={() => onSelect(v)}
               haptic="selection"
               scaleTo={0.9}
-              style={[styles.swatchRing, active && styles.swatchRingActive]}
+              style={[styles.swatchRing, active && { borderColor: colors.primary }]}
               accessibilityLabel={`${v.color}${out ? ', épuisé' : ''}`}
               accessibilityState={{ selected: active }}
             >
-              <View style={[styles.swatch, { backgroundColor: v.colorCode || colors.surfaceAlt }, isLight(v.colorCode) && styles.swatchBorder]}>
+              <View style={[styles.swatch, { backgroundColor: v.colorCode || colors.surfaceAlt }, isLight(v.colorCode) && { borderWidth: 1, borderColor: colors.border }]}>
                 {active ? <Ionicons name="checkmark" size={18} color={isLight(v.colorCode) ? colors.text : colors.textInverse} /> : null}
               </View>
-              {out ? <View style={styles.strike} /> : null}
+              {out ? <View style={[styles.strike, { backgroundColor: colors.danger }]} /> : null}
             </PressableScale>
           );
         })}
@@ -59,7 +60,7 @@ function VariantPicker({ variants, selected, onSelect, size, onSelectSize }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   wrap: { paddingHorizontal: GUTTER, marginTop: 24 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   row: { gap: 10 },
@@ -74,6 +75,6 @@ const styles = StyleSheet.create({
   sizeLabel: { marginTop: 20, marginBottom: 12 },
   sizes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sizeChip: { minWidth: 52, justifyContent: 'center' },
-});
+}));
 
 export default memo(VariantPicker);

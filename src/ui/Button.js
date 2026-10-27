@@ -4,34 +4,46 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import PressableScale from './PressableScale';
 import Text from './Text';
-import { colors, gradients, radius, shadows } from '../theme';
+import { colors, gradients, radius, shadows, useTheme } from '../theme';
 
 const HEIGHT = { sm: 38, md: 48, lg: 56 };
-
-const FOREGROUND = {
-  primary: colors.textInverse,
-  dark: colors.textInverse,
-  danger: colors.textInverse,
-  secondary: colors.primary,
-  soft: colors.primaryDark,
-  ghost: colors.text,
-};
-
-const VARIANT_STYLE = {
-  secondary: { borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.surface },
-  soft: { backgroundColor: colors.primarySoft },
-  ghost: { backgroundColor: 'transparent' },
-  danger: { backgroundColor: colors.danger },
-  dark: { backgroundColor: colors.text },
-};
 
 /**
  * Bouton du design system.
  * variant : primary (dégradé marque) | secondary (contour) | soft | ghost | danger | dark
  */
 function Button({ title, onPress, variant = 'primary', size = 'md', icon, iconRight, loading, disabled, full, style }) {
+  const { colors } = useTheme();
   const isDisabled = disabled || loading;
-  const fg = FOREGROUND[variant];
+
+  const fg =
+    variant === 'secondary'
+      ? colors.primary
+      : variant === 'soft'
+      ? colors.primaryDark
+      : variant === 'ghost'
+      ? colors.text
+      : variant === 'dark'
+      ? colors.onInverse
+      : colors.textInverse;
+
+  const variantStyle = React.useMemo(() => {
+    switch (variant) {
+      case 'secondary':
+        return { borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.surface };
+      case 'soft':
+        return { backgroundColor: colors.primarySoft };
+      case 'ghost':
+        return { backgroundColor: 'transparent' };
+      case 'danger':
+        return { backgroundColor: colors.danger };
+      case 'dark':
+        return { backgroundColor: colors.inverse };
+      default:
+        return {};
+    }
+  }, [variant, colors]);
+
   const iconSize = size === 'sm' ? 16 : 19;
 
   const content = (
@@ -65,11 +77,12 @@ function Button({ title, onPress, variant = 'primary', size = 'md', icon, iconRi
   }
 
   return (
-    <PressableScale haptic="light" onPress={onPress} disabled={isDisabled} style={[base, VARIANT_STYLE[variant]]} accessibilityRole="button" accessibilityLabel={title}>
+    <PressableScale haptic="light" onPress={onPress} disabled={isDisabled} style={[base, variantStyle]} accessibilityRole="button" accessibilityLabel={title}>
       {content}
     </PressableScale>
   );
 }
+
 
 const styles = StyleSheet.create({
   base: { overflow: 'hidden', alignSelf: 'flex-start', borderRadius: radius.pill },

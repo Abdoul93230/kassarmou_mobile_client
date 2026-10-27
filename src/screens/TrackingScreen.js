@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { fetchTracking, shareTracking, trackingUrl } from '../services/guestSession';
 import { EmptyState, IconButton, Skeleton, SmartImage, Text } from '../ui';
 import { formatPrice } from '../utils/formatPrice';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const STEPS = [
   { label: 'Commande passée', icon: 'receipt-outline' },
@@ -38,6 +38,7 @@ const F = (n) => `${formatPrice(n || 0)} F`;
 
 /** Suivi public d'une commande (lien partageable, sans connexion) */
 export default function TrackingScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { reference, k } = route.params || {};
   const [order, setOrder] = useState(null);
@@ -58,8 +59,8 @@ export default function TrackingScreen({ route, navigation }) {
   const st = stageOf(order);
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs'))} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <View style={styles.flex}>
           <Text variant="h2">Suivi de commande</Text>
@@ -77,9 +78,9 @@ export default function TrackingScreen({ route, navigation }) {
           contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.primary} colors={[colors.primary]} />}
         >
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
             {st.cancelled ? (
-              <View style={styles.cancelled}>
+              <View style={[styles.cancelled, { backgroundColor: colors.dangerSoft }]}>
                 <Ionicons name="close-circle" size={20} color={colors.danger} />
                 <Text variant="bodyMedium" color="danger">Cette commande a été annulée</Text>
               </View>
@@ -88,23 +89,23 @@ export default function TrackingScreen({ route, navigation }) {
               return (
                 <View key={s.label} style={styles.step}>
                   <View style={styles.rail}>
-                    <View style={[styles.dot, done && styles.dotDone]}>
+                    <View style={[styles.dot, { backgroundColor: colors.surfaceAlt }, done && [styles.dotDone, { backgroundColor: colors.primary }]]}>
                       <Ionicons name={s.icon} size={14} color={done ? colors.textInverse : colors.textMuted} />
                     </View>
-                    {i < STEPS.length - 1 ? <View style={[styles.line, i < st.step && styles.lineDone]} /> : null}
+                    {i < STEPS.length - 1 ? <View style={[styles.line, { backgroundColor: colors.border }, i < st.step && [styles.lineDone, { backgroundColor: colors.primary }]]} /> : null}
                   </View>
                   <Text variant={i === st.step ? 'title' : 'body'} color={done ? 'text' : 'textMuted'} style={styles.stepText}>{s.label}</Text>
                 </View>
               );
             })}
             {!st.cancelled && order.phoneConfirmation === 'pending' ? (
-              <View style={styles.payNote}>
+              <View style={[styles.payNote, { backgroundColor: colors.woodSoft }]}>
                 <Ionicons name="call-outline" size={18} color={colors.wood} />
                 <Text variant="small" style={styles.flex}>Notre équipe va vous appeler pour confirmer cette commande avant sa préparation.</Text>
               </View>
             ) : null}
             {!st.cancelled && st.payment ? (
-              <View style={[styles.payNote, st.payment === 'failed' && styles.payNoteFailed]}>
+              <View style={[styles.payNote, { backgroundColor: colors.woodSoft }, st.payment === 'failed' && [styles.payNoteFailed, { backgroundColor: colors.dangerSoft }]]}>
                 <Ionicons name={st.payment === 'failed' ? 'alert-circle' : 'time-outline'} size={18} color={st.payment === 'failed' ? colors.danger : colors.wood} />
                 <Text variant="small" color={st.payment === 'failed' ? 'danger' : 'text'} style={styles.flex}>
                   {st.payment === 'failed'
@@ -115,7 +116,7 @@ export default function TrackingScreen({ route, navigation }) {
             ) : null}
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text variant="h3" style={styles.mb8}>Livraison</Text>
             {order.livraison?.customerName ? <Text variant="body">Pour {order.livraison.customerName}</Text> : null}
             {order.livraison?.zone ? <Text variant="body" color="textSecondary">{[order.livraison.zone, order.livraison.region].filter(Boolean).join(', ')}</Text> : null}
@@ -125,7 +126,7 @@ export default function TrackingScreen({ route, navigation }) {
             ))}
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text variant="h3" style={styles.mb8}>Articles ({order.items?.length || 0})</Text>
             {(order.items || []).map((it, i) => (
               <View key={i} style={styles.item}>
@@ -137,7 +138,7 @@ export default function TrackingScreen({ route, navigation }) {
                 <Text variant="title">{F((it.prix || 0) * (it.quantite || 1))}</Text>
               </View>
             ))}
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.row}><Text variant="body" color="textSecondary">Livraison</Text><Text variant="bodyMedium">{order.fraisLivraison > 0 ? F(order.fraisLivraison) : 'Offerte'}</Text></View>
             <View style={styles.row}><Text variant="h3">Total</Text><Text variant="price">{F(order.prix)}</Text></View>
           </View>
@@ -147,7 +148,7 @@ export default function TrackingScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   pad: { padding: GUTTER },
@@ -170,4 +171,4 @@ const styles = StyleSheet.create({
   thumb: { width: 52, height: 52, borderRadius: radius.sm },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-});
+}));

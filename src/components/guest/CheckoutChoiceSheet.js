@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, PressableScale, Text } from '../../ui';
-import { colors, radius } from '../../theme';
+import { colors, radius, useTheme, themedStyles } from '../../theme';
 
 const BENEFITS = [
   ['time-outline', 'Toutes vos commandes et leur suivi au même endroit'],
@@ -14,19 +14,20 @@ const BENEFITS = [
 
 /** « Comment voulez-vous commander ? » — compte mis en avant, sans compte à une touche */
 function CheckoutChoiceSheet({ visible, onClose, onGuest, onAccount }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.handle} />
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
+      <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
         <Text variant="h2">Comment voulez-vous commander ?</Text>
 
-        <View style={styles.account}>
+        <View style={[styles.account, { borderColor: colors.primary, backgroundColor: colors.primarySoft }]}>
           <View style={styles.row}>
             <Ionicons name="person-circle" size={20} color={colors.primary} />
             <Text variant="title" style={styles.flex}>Avec un compte</Text>
-            <View style={styles.badge}><Text variant="caption" color="textInverse">Recommandé</Text></View>
+            <View style={[styles.badge, { backgroundColor: colors.primary }]}><Text variant="caption" color="textInverse">Recommandé</Text></View>
           </View>
           {BENEFITS.map(([icon, text]) => (
             <View key={text} style={styles.benefit}>
@@ -37,8 +38,8 @@ function CheckoutChoiceSheet({ visible, onClose, onGuest, onAccount }) {
           <Button title="Se connecter ou créer un compte" size="md" full onPress={onAccount} style={styles.mt10} />
         </View>
 
-        <PressableScale onPress={onGuest} scaleTo={0.98} style={styles.guest}>
-          <View style={styles.guestIcon}><Ionicons name="bag-handle-outline" size={18} color={colors.textSecondary} /></View>
+        <PressableScale onPress={onGuest} scaleTo={0.98} style={[styles.guest, { borderColor: colors.border }]}>
+          <View style={[styles.guestIcon, { backgroundColor: colors.surfaceAlt }]}><Ionicons name="bag-handle-outline" size={18} color={colors.textSecondary} /></View>
           <View style={styles.flex}>
             <Text variant="title">Continuer sans compte</Text>
             <Text variant="caption" color="textSecondary">Juste votre nom et votre numéro. Suivi par lien.</Text>
@@ -51,7 +52,7 @@ function CheckoutChoiceSheet({ visible, onClose, onGuest, onAccount }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   backdrop: { flex: 1, backgroundColor: colors.overlay },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: 20, paddingTop: 12 },
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 14 },
@@ -63,6 +64,6 @@ const styles = StyleSheet.create({
   guestIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
   mt10: { marginTop: 10 },
-});
+}));
 
 export default memo(CheckoutChoiceSheet);

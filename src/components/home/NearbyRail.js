@@ -6,10 +6,11 @@ import ProductRail from './ProductRail';
 import ZonePickerSheet from '../cart/ZonePickerSheet';
 import { fetchNearby, getRememberedZone, rememberZone } from '../../services/shippingV3';
 import { PressableScale, Text } from '../../ui';
-import { colors, GUTTER, radius } from '../../theme';
+import { colors, GUTTER, radius, useTheme, themedStyles } from '../../theme';
 
 /** Accueil : « Près de chez vous » — produits des boutiques de la zone du client */
 function NearbyRail({ navigation }) {
+  const { colors } = useTheme();
   const [zone, setZone] = useState(null);
   const [ready, setReady] = useState(false);
   const [data, setData] = useState(null);
@@ -50,8 +51,8 @@ function NearbyRail({ navigation }) {
   if (!zone) {
     return (
       <>
-        <PressableScale onPress={() => setSheet(true)} scaleTo={0.985} style={styles.cta}>
-          <View style={styles.ctaIcon}><Ionicons name="location" size={18} color={colors.textInverse} /></View>
+        <PressableScale onPress={() => setSheet(true)} scaleTo={0.985} style={[styles.cta, { backgroundColor: colors.primarySoft, borderColor: colors.primary + '33' }]}>
+          <View style={[styles.ctaIcon, { backgroundColor: colors.primary }]}><Ionicons name="location" size={18} color={colors.textInverse} /></View>
           <View style={styles.flex}>
             <Text variant="title">Près de chez vous</Text>
             <Text variant="caption" color="textSecondary">Choisissez votre quartier : livraison plus rapide et moins chère</Text>
@@ -78,13 +79,13 @@ function NearbyRail({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   flex: { flex: 1 },
   cta: {
     flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: GUTTER, marginTop: 16, padding: 14,
     borderRadius: radius.lg, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary + '33',
   },
   ctaIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-});
+}));
 
 export default memo(NearbyRail);

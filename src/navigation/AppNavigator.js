@@ -8,6 +8,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { verifyAuth } from '../redux/authSlice';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { selectPanierCount } from '../redux/cartSlice';
+import { useTheme } from '../theme';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
@@ -102,6 +103,20 @@ function AppNavigator() {
   const dispatch = useDispatch();
   const { isAuthenticated, loading, user } = useSelector(state => state.auth);
   const [initialCheckDone, setInitialCheckDone] = React.useState(false);
+  const { colors, isDark } = useTheme();
+  const navStateRef = React.useRef(undefined);
+
+  const navigationTheme = React.useMemo(() => ({
+    dark: isDark,
+    colors: {
+      primary: colors.primary,
+      background: colors.bg,
+      card: colors.surface,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.danger,
+    },
+  }), [colors, isDark]);
 
   useEffect(() => {
     // Vérifier l'authentification au démarrage une seule fois
@@ -161,8 +176,14 @@ function AppNavigator() {
 
   return (
     <NavigationContainer 
+      // Changement de thème : tous les écrans sont redessinés avec la nouvelle palette,
+      // en revenant exactement sur la même page (pile de navigation conservée)
+      key={isDark ? 'dark' : 'light'}
+      initialState={navStateRef.current}
+      onStateChange={(state) => { navStateRef.current = state; }}
       ref={navigationRef}
       linking={linking}
+      theme={navigationTheme}
       fallback={null}
       onReady={() => console.log('🧭 Navigation prête avec Deep Linking')}
     >
@@ -172,9 +193,9 @@ function AppNavigator() {
           headerShown: false,
           ...TransitionPresets.SlideFromRightIOS,
           gestureEnabled: true,
-          cardStyle: { backgroundColor: '#FAFAF8' },
+          cardStyle: { backgroundColor: colors.bg },
           headerStyle: {
-            backgroundColor: '#30A08B',        // Primary - Teal
+            backgroundColor: colors.primary,
             elevation: 0,
             shadowOpacity: 0,
           },

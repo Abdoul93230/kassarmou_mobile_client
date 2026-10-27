@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux';
 import { useLikedProductsQuery } from '../redux/catalogApi';
 import ProductGrid from '../components/ProductGrid';
 import { Chip, EmptyState, Text, getPricing } from '../ui';
-import { colors, GUTTER } from '../theme';
+import { colors, GUTTER, useTheme, themedStyles } from '../theme';
 
 const FILTERS = [
   { key: 'all', label: 'Tout' },
@@ -16,6 +16,7 @@ const EMPTY = [];
 
 /** Onglet Favoris : produits aimés, filtrables ; un cœur retiré disparaît aussitôt */
 export default function FavoritesScreen({ navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const user = useSelector((s) => s.auth.user);
   const userId = user?.id || user?._id;
@@ -42,7 +43,7 @@ export default function FavoritesScreen({ navigation }) {
 
   if (!userId) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={[styles.screen, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
         <Text variant="h1" style={styles.title}>Favoris</Text>
         <EmptyState
           icon="heart-outline"
@@ -56,7 +57,7 @@ export default function FavoritesScreen({ navigation }) {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text variant="h1">Favoris</Text>
         {data?.length ? <Text variant="small" color="textSecondary">{products.length} article{products.length > 1 ? 's' : ''}</Text> : null}
@@ -88,9 +89,9 @@ export default function FavoritesScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   title: { paddingHorizontal: GUTTER, paddingTop: 8 },
   header: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 4 },
   chips: { gap: 8, paddingHorizontal: GUTTER, paddingVertical: 12 },
-});
+}));

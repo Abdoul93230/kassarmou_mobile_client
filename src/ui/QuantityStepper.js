@@ -3,15 +3,16 @@ import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PressableScale from './PressableScale';
 import Text from './Text';
-import { colors, radius } from '../theme';
+import { colors, radius, useTheme, themedStyles } from '../theme';
 
 /** Sélecteur de quantité − / + */
 function QuantityStepper({ value, onChange, min = 1, max = 99, size = 'md' }) {
+  const { colors } = useTheme();
   const h = size === 'sm' ? 32 : 42;
   const canDec = value > min;
   const canInc = value < max;
   return (
-    <View style={[styles.wrap, { height: h, borderRadius: h / 2 }]}>
+    <View style={[styles.wrap, { height: h, borderRadius: h / 2, backgroundColor: colors.surfaceAlt }]}>
       <PressableScale
         onPress={() => canDec && onChange(value - 1)}
         disabled={!canDec}
@@ -39,10 +40,10 @@ function QuantityStepper({ value, onChange, min = 1, max = 99, size = 'md' }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   wrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.pill },
   btn: { alignItems: 'center', justifyContent: 'center' },
   value: { minWidth: 28, textAlign: 'center' },
-});
+}));
 
 export default memo(QuantityStepper);

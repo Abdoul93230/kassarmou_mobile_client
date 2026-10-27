@@ -13,7 +13,7 @@ import { Button, PressableScale, Text } from '../ui';
 import TextField from '../ui/TextField';
 import { siteUrl } from '../config/env';
 import { DEFAULT_PHONE_COUNTRY, applyPhoneInputChange, toBackendPhone, validatePhone } from '../utils/phoneRules';
-import { colors, radius } from '../theme';
+import { colors, radius, useTheme, themedStyles } from '../theme';
 
 const STEP = { PHONE: 'phone', LOGIN: 'login', REGISTER: 'register' };
 
@@ -24,6 +24,7 @@ const STEP = { PHONE: 'phone', LOGIN: 'login', REGISTER: 'register' };
  * 2b. nouveau client → prénom et nom → code SMS (écran VerifyOTP) → mot de passe
  */
 export default function QuickAuthScreen({ navigation, route }) {
+  const { colors } = useTheme();
   const dispatch = useDispatch();
   const loading = useSelector((s) => s.auth.loading);
   const params = route?.params || {};
@@ -134,7 +135,7 @@ export default function QuickAuthScreen({ navigation, route }) {
   };
 
   const phoneChip = (
-    <PressableScale onPress={back} style={styles.phoneChip} scaleTo={0.98} accessibilityLabel="Modifier le numéro">
+    <PressableScale onPress={back} style={[styles.phoneChip, { backgroundColor: colors.primarySoft }]} scaleTo={0.98} accessibilityLabel="Modifier le numéro">
       <Ionicons name="call-outline" size={16} color={colors.primaryDark} />
       <Text variant="bodyMedium" style={styles.flex}>{phoneDisplay}</Text>
       <Text variant="smallMedium" color="primary">Modifier</Text>
@@ -151,7 +152,7 @@ export default function QuickAuthScreen({ navigation, route }) {
   );
 
   const errorBox = error ? (
-    <View style={styles.error} accessibilityLiveRegion="polite">
+    <View style={[styles.error, { backgroundColor: colors.dangerSoft }]} accessibilityLiveRegion="polite">
       <Ionicons name="alert-circle" size={18} color={colors.danger} />
       <Text variant="small" color="danger" style={styles.flex}>{error}</Text>
     </View>
@@ -251,7 +252,7 @@ export default function QuickAuthScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   flex: { flex: 1 },
   phoneChip: {
     flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, marginBottom: 16,
@@ -265,4 +266,4 @@ const styles = StyleSheet.create({
   refLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 18 },
   perks: { flexDirection: 'row', justifyContent: 'center', gap: 18, marginTop: 22, flexWrap: 'wrap' },
   perk: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-});
+}));

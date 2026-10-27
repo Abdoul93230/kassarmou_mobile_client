@@ -8,13 +8,14 @@ import { fetchGuestOrders, getGuestSession } from '../services/guestSession';
 import { DEFAULT_PHONE_COUNTRY, toBackendPhone, validatePhone } from '../utils/phoneRules';
 import { Button, EmptyState, IconButton, PressableScale, Text } from '../ui';
 import { formatPrice } from '../utils/formatPrice';
-import { colors, GUTTER, radius, shadows } from '../theme';
+import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 /**
  * « Retrouver mes commandes » sans compte : numéro + code SMS (une fois par appareil),
  * puis la liste des commandes de ce numéro.
  */
 export default function FindOrdersScreen({ navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [country, setCountry] = useState(DEFAULT_PHONE_COUNTRY);
   const [digits, setDigits] = useState('');
@@ -41,8 +42,8 @@ export default function FindOrdersScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <Text variant="h2" style={styles.flex}>{orders ? 'Mes commandes' : 'Retrouver mes commandes'}</Text>
       </View>
@@ -55,8 +56,8 @@ export default function FindOrdersScreen({ navigation }) {
           ListEmptyComponent={<EmptyState icon="cube-outline" title="Aucune commande" message="Aucune commande pour ce numéro." />}
           ListFooterComponent={orders.length ? <Text variant="caption" color="textMuted" align="center" style={styles.mt12}>Créez un compte pour retrouver vos commandes partout et gagner des Baobab Points.</Text> : null}
           renderItem={({ item }) => (
-            <PressableScale onPress={() => navigation.navigate('Tracking', { reference: item.reference, k: item.trackingToken })} scaleTo={0.985} style={styles.order}>
-              <View style={styles.orderIcon}><Ionicons name="cube-outline" size={18} color={colors.primary} /></View>
+            <PressableScale onPress={() => navigation.navigate('Tracking', { reference: item.reference, k: item.trackingToken })} scaleTo={0.985} style={[styles.order, { backgroundColor: colors.surface }]}>
+              <View style={[styles.orderIcon, { backgroundColor: colors.primarySoft }]}><Ionicons name="cube-outline" size={18} color={colors.primary} /></View>
               <View style={styles.flex}>
                 <Text variant="title">n° {item.reference}</Text>
                 <Text variant="caption" color="textSecondary" numberOfLines={1}>{item.items?.length || 0} article(s) · {item.etatTraitement || 'En cours'}</Text>
@@ -67,7 +68,7 @@ export default function FindOrdersScreen({ navigation }) {
           )}
         />
       ) : (
-        <View style={styles.form}>
+        <View style={[styles.form, { backgroundColor: colors.surface }]}>
           <Text variant="body" color="textSecondary" style={styles.mb12}>Commandé sans compte ? Entrez votre numéro : nous vous envoyons un code par SMS.</Text>
           <PhoneField
             country={country}
@@ -96,7 +97,7 @@ export default function FindOrdersScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 10 },
@@ -106,4 +107,4 @@ const styles = StyleSheet.create({
   login: { alignSelf: 'center', paddingVertical: 12 },
   mb12: { marginBottom: 12 },
   mt12: { marginTop: 12 },
-});
+}));

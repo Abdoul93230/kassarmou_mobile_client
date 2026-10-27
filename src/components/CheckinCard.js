@@ -14,7 +14,7 @@ import {
   selectWallet,
 } from '../redux/gamificationSlice';
 import { Button, PressableScale, Text } from '../ui';
-import { colors, GUTTER, radius } from '../theme';
+import { colors, GUTTER, radius, useTheme, themedStyles } from '../theme';
 
 /** Points gagnés par un pointage (jour + éventuel bonus de série) */
 export const checkinPoints = (payload) =>
@@ -22,6 +22,7 @@ export const checkinPoints = (payload) =>
 
 /** Carte « Pointez aujourd'hui » de l'accueil — disparaît une fois le pointage fait */
 export default function CheckinCard({ navigation }) {
+  const { colors, isDark } = useTheme();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const userId = user?.id || user?._id;
@@ -54,10 +55,21 @@ export default function CheckinCard({ navigation }) {
     }
   };
 
+  const gradientColors = isDark
+    ? ['rgba(245, 158, 11, 0.22)', 'rgba(197, 164, 115, 0.20)']
+    : [colors.warningSoft, colors.sandSoft];
+
   return (
     <PressableScale onPress={() => navigation?.navigate('Wallet')} scaleTo={0.99} style={styles.wrap}>
-      <LinearGradient colors={[colors.warningSoft, colors.sandSoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
-        <View style={styles.icon}><Ionicons name="flame" size={22} color={colors.warning} /></View>
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.card, isDark && { borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.35)' }]}
+      >
+        <View style={[styles.icon, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : colors.surface }]}>
+          <Ionicons name="flame" size={22} color={colors.warning} />
+        </View>
         <View style={styles.flex}>
           <Text variant="title">Pointez aujourd'hui</Text>
           <Text variant="caption" color="textSecondary">
@@ -70,9 +82,10 @@ export default function CheckinCard({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+
+const styles = themedStyles((colors) => ({
   wrap: { marginHorizontal: GUTTER, marginTop: 12 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radius.lg },
   icon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
-});
+}));

@@ -19,7 +19,7 @@ import { orderStage } from '../utils/orders';
 import { formatPhoneInternational } from '../utils/phoneRules';
 import { Button, PressableScale, SmartImage, Text } from '../ui';
 import DeleteAccountSheet from '../components/profile/DeleteAccountSheet';
-import { colors, gradients, GUTTER, radius, shadows } from '../theme';
+import { colors, gradients, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const ORDER_SHORTCUTS = [
   { key: 'unpaid', label: 'À payer', icon: 'card-outline' },
@@ -28,11 +28,13 @@ const ORDER_SHORTCUTS = [
   { key: 'delivered', label: 'Livrées', icon: 'checkmark-done-outline' },
 ];
 
-function Row({ icon, tint = colors.primary, title, subtitle, right, onPress, danger }) {
+function Row({ icon, tint, title, subtitle, right, onPress, danger }) {
+  const { colors } = useTheme();
+  const iconTint = tint || colors.primary;
   return (
     <PressableScale onPress={onPress} scaleTo={0.99} style={styles.row} accessibilityRole="button" accessibilityLabel={title}>
-      <View style={[styles.rowIcon, { backgroundColor: danger ? colors.dangerSoft : `${tint}1A` }]}>
-        <Ionicons name={icon} size={18} color={danger ? colors.danger : tint} />
+      <View style={[styles.rowIcon, { backgroundColor: danger ? colors.dangerSoft : `${iconTint}1A` }]}>
+        <Ionicons name={icon} size={18} color={danger ? colors.danger : iconTint} />
       </View>
       <View style={styles.flex}>
         <Text variant="bodyMedium" color={danger ? 'danger' : 'text'}>{title}</Text>
@@ -44,17 +46,82 @@ function Row({ icon, tint = colors.primary, title, subtitle, right, onPress, dan
 }
 
 function Group({ title, children }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.group}>
       {title ? <Text variant="caption" color="textMuted" style={styles.groupTitle}>{title.toUpperCase()}</Text> : null}
-      <View style={styles.groupCard}>{children}</View>
+      <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>{children}</View>
     </View>
   );
 }
 
+function ThemeOption({ label, icon, active, onPress }) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={onPress}
+      haptic="selection"
+      scaleTo={0.96}
+      style={[
+        styles.themeOption,
+        {
+          backgroundColor: active ? colors.primary : colors.surfaceAlt,
+          borderColor: active ? colors.primary : colors.border,
+        },
+      ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <Ionicons
+        name={icon}
+        size={17}
+        color={active ? colors.textInverse : colors.textSecondary}
+      />
+      <Text
+        variant="smallMedium"
+        color={active ? 'textInverse' : 'text'}
+        style={styles.themeOptionText}
+      >
+        {label}
+      </Text>
+    </PressableScale>
+  );
+}
+
+function ThemeGroup() {
+  const { themeMode, setThemeMode } = useTheme();
+
+  return (
+    <Group title="Apparence">
+      <View style={styles.themeContainer}>
+        <ThemeOption
+          label="Clair"
+          icon="sunny-outline"
+          active={themeMode === 'light'}
+          onPress={() => setThemeMode('light')}
+        />
+        <ThemeOption
+          label="Sombre"
+          icon="moon-outline"
+          active={themeMode === 'dark'}
+          onPress={() => setThemeMode('dark')}
+        />
+        <ThemeOption
+          label="Système"
+          icon="phone-portrait-outline"
+          active={themeMode === 'system'}
+          onPress={() => setThemeMode('system')}
+        />
+      </View>
+    </Group>
+  );
+}
+
+
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
+  const { colors, isDark } = useTheme();
   const user = useSelector((s) => s.auth.user);
   const userId = user?.id || user?._id;
   const likedCount = useSelector((s) => s.likes.likedProducts.length);
@@ -174,7 +241,7 @@ export default function ProfileScreen({ navigation }) {
   // ── Invité ───────────────────────────────────────────────────────────────────
   if (!userId) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView style={[styles.screen, { backgroundColor: colors.bg }]} contentContainerStyle={{ paddingBottom: 32 }}>
         <LinearGradient colors={gradients.hero} style={[styles.guestHero, { paddingTop: insets.top + 28 }]}>
           <View style={styles.guestIcon}><Ionicons name="person" size={34} color={colors.textInverse} /></View>
           <Text variant="h1" color="textInverse" align="center">Bienvenue sur Ihambaobab</Text>
@@ -196,7 +263,7 @@ export default function ProfileScreen({ navigation }) {
             style={styles.guestBtn}
           />
         </LinearGradient>
-        <View style={styles.perks}>
+        <View style={[styles.perks, { backgroundColor: colors.surface }]}>
           {[
             ['cube-outline', 'Suivi de vos commandes en temps réel'],
             ['gift-outline', 'Baobab Points à chaque achat'],
@@ -208,6 +275,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
           ))}
         </View>
+        <ThemeGroup />
         {helpGroup}
         {legalGroup}
         <Text variant="caption" color="textMuted" align="center" style={styles.version}>Ihambaobab · version {version}</Text>
@@ -215,20 +283,21 @@ export default function ProfileScreen({ navigation }) {
     );
   }
 
+
   // ── Connecté ─────────────────────────────────────────────────────────────────
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[styles.screen, { backgroundColor: colors.bg }]} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
       <LinearGradient colors={gradients.hero} style={[styles.hero, { paddingTop: insets.top + 16 }]}>
         <View style={styles.heroRow}>
           <PressableScale onPress={changePhoto} scaleTo={0.95} style={styles.avatarWrap} accessibilityLabel="Changer la photo de profil">
             {profile?.image ? (
               <SmartImage uri={profile.image} width={76} style={styles.avatar} />
             ) : (
-              <View style={[styles.avatar, styles.avatarInitial]}>
+              <View style={[styles.avatar, styles.avatarInitial, { backgroundColor: colors.primarySoft }]}>
                 <Text variant="h1" color="primaryDark">{(name || '?').charAt(0).toUpperCase()}</Text>
               </View>
             )}
-            <View style={styles.camera}>
+            <View style={[styles.camera, { borderColor: colors.surface }]}>
               {uploading ? <ActivityIndicator size="small" color={colors.textInverse} /> : <Ionicons name="camera" size={13} color={colors.textInverse} />}
             </View>
           </PressableScale>
@@ -259,7 +328,7 @@ export default function ProfileScreen({ navigation }) {
       </LinearGradient>
 
       {/* Commandes par statut */}
-      <View style={styles.ordersCard}>
+      <View style={[styles.ordersCard, { backgroundColor: colors.surface }]}>
         <View style={styles.ordersHead}>
           <Text variant="h3">Mes commandes</Text>
           <PressableScale onPress={() => navigation.navigate('Orders')} hitSlop={8} style={styles.inline}>
@@ -273,7 +342,7 @@ export default function ProfileScreen({ navigation }) {
               <View>
                 <Ionicons name={s.icon} size={24} color={colors.text} />
                 {counts[s.key] ? (
-                  <View style={styles.badge}><Text variant="caption" color="textInverse" style={styles.badgeText}>{counts[s.key]}</Text></View>
+                  <View style={[styles.badge, { borderColor: colors.surface }]}><Text variant="caption" color="textInverse" style={styles.badgeText}>{counts[s.key]}</Text></View>
                 ) : null}
               </View>
               <Text variant="caption" color="textSecondary" style={styles.mt6}>{s.label}</Text>
@@ -288,6 +357,7 @@ export default function ProfileScreen({ navigation }) {
         <Row icon="people-outline" tint={colors.wood} title="Inviter un ami" subtitle="Partagez Ihambaobab" onPress={invite} />
       </Group>
 
+      <ThemeGroup />
       {helpGroup}
       {legalGroup}
 
@@ -307,7 +377,7 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 2 },
@@ -354,4 +424,12 @@ const styles = StyleSheet.create({
   guestBtn: { marginTop: 20, alignSelf: 'center' },
   perks: { marginHorizontal: GUTTER, marginTop: 20, padding: 16, gap: 12, borderRadius: radius.lg, backgroundColor: colors.surface, ...shadows.sm },
   perk: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-});
+
+  themeContainer: { flexDirection: 'row', padding: 8, gap: 8 },
+  themeOption: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, paddingHorizontal: 6, borderRadius: radius.md, borderWidth: 1,
+  },
+  themeOptionText: { fontSize: 13 },
+}));
+

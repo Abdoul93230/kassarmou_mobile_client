@@ -7,13 +7,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getCategories, getTypes } from '../redux/productsSlice';
 import { PressableScale, Skeleton, SmartImage, Text } from '../ui';
 import { capitalize } from '../utils/text';
-import { colors, gradients, GUTTER, radius } from '../theme';
+import { colors, gradients, GUTTER, radius, useTheme, themedStyles } from '../theme';
 
 const RAIL_W = 96;
 const EMPTY = [];
 
 /** Onglet Catégories : rail vertical à gauche, sous-catégories à droite */
 export default function CategoryScreen({ navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const allCategories = useSelector((s) => s.products.categories || EMPTY);
@@ -41,9 +42,9 @@ export default function CategoryScreen({ navigation }) {
     ({ item }) => {
       const active = selected?._id === item._id;
       return (
-        <PressableScale onPress={() => setSelectedId(item._id)} haptic="selection" scaleTo={0.97} style={[styles.railItem, active && styles.railItemActive]}>
-          {active ? <View style={styles.railMarker} /> : null}
-          <View style={[styles.railImg, active && styles.railImgActive]}>
+        <PressableScale onPress={() => setSelectedId(item._id)} haptic="selection" scaleTo={0.97} style={[styles.railItem, active && { backgroundColor: colors.bg }]}>
+          {active ? <View style={[styles.railMarker, { backgroundColor: colors.primary }]} /> : null}
+          <View style={[styles.railImg, { backgroundColor: colors.surface, borderColor: active ? colors.primary : 'transparent', borderWidth: 2 }]}>
             {item.image ? <SmartImage uri={item.image} width={44} style={styles.fill} /> : <Ionicons name="pricetag-outline" size={18} color={colors.primary} />}
           </View>
           <Text variant="caption" align="center" numberOfLines={2} color={active ? 'primaryDark' : 'textSecondary'} style={active && styles.bold}>
@@ -52,14 +53,14 @@ export default function CategoryScreen({ navigation }) {
         </PressableScale>
       );
     },
-    [selected?._id],
+    [selected?._id, colors],
   );
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text variant="h1" style={styles.flex}>Catégories</Text>
-        <PressableScale onPress={() => navigation.navigate('Search')} style={styles.searchBtn} accessibilityLabel="Rechercher">
+        <PressableScale onPress={() => navigation.navigate('Search')} style={[styles.searchBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityLabel="Rechercher">
           <Ionicons name="search" size={18} color={colors.textSecondary} />
           <Text variant="small" color="textMuted">Rechercher</Text>
         </PressableScale>
@@ -75,7 +76,8 @@ export default function CategoryScreen({ navigation }) {
             data={categories}
             keyExtractor={(c) => c._id}
             renderItem={renderRailItem}
-            style={styles.rail}
+            extraData={selectedId}
+            style={[styles.rail, { backgroundColor: colors.surfaceAlt }]}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.railContent}
           />
@@ -84,7 +86,7 @@ export default function CategoryScreen({ navigation }) {
             {selected ? (
               <>
                 <PressableScale onPress={() => openList({ categoryId: selected._id, categoryName: selected.name })} scaleTo={0.98} style={styles.hero}>
-                  {selected.image ? <SmartImage uri={selected.image} width={260} style={StyleSheet.absoluteFill} /> : null}
+                  {selected.image ? <SmartImage key={selected._id} uri={selected.image} width={260} style={StyleSheet.absoluteFill} /> : null}
                   <LinearGradient colors={['rgba(15,61,52,0.15)', 'rgba(15,61,52,0.85)']} style={StyleSheet.absoluteFill} />
                   <View style={styles.heroText}>
                     <Text variant="h2" color="textInverse" numberOfLines={2}>{capitalize(selected.name)}</Text>
@@ -106,7 +108,7 @@ export default function CategoryScreen({ navigation }) {
                           style={styles.typeCell}
                           scaleTo={0.95}
                         >
-                          <View style={styles.typeIcon}>
+                          <View style={[styles.typeIcon, { backgroundColor: colors.primarySoft }]}>
                             <Text variant="h3" color="primaryDark">{capitalize(t.name).charAt(0)}</Text>
                           </View>
                           <Text variant="caption" align="center" numberOfLines={2}>{capitalize(t.name)}</Text>
@@ -117,14 +119,14 @@ export default function CategoryScreen({ navigation }) {
                 ) : null}
 
                 <View style={styles.shortcuts}>
-                  <PressableScale onPress={() => openList({ filter: 'promo', categoryName: 'Promotions' })} style={styles.shortcut} scaleTo={0.97}>
+                  <PressableScale onPress={() => openList({ filter: 'promo', categoryName: 'Promotions' })} style={[styles.shortcut, { backgroundColor: colors.surface, borderColor: colors.border }]} scaleTo={0.97}>
                     <LinearGradient colors={gradients.promo} style={styles.shortcutIcon}>
                       <Ionicons name="flame" size={16} color={colors.textInverse} />
                     </LinearGradient>
                     <Text variant="smallMedium" style={styles.flex}>Promotions</Text>
                     <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                   </PressableScale>
-                  <PressableScale onPress={() => openList({ filter: 'new', categoryName: 'Nouveautés' })} style={styles.shortcut} scaleTo={0.97}>
+                  <PressableScale onPress={() => openList({ filter: 'new', categoryName: 'Nouveautés' })} style={[styles.shortcut, { backgroundColor: colors.surface, borderColor: colors.border }]} scaleTo={0.97}>
                     <LinearGradient colors={gradients.brand} style={styles.shortcutIcon}>
                       <Ionicons name="sparkles" size={16} color={colors.textInverse} />
                     </LinearGradient>
@@ -137,11 +139,12 @@ export default function CategoryScreen({ navigation }) {
           </ScrollView>
         </View>
       )}
+
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   bold: { fontFamily: 'Inter_600SemiBold' },
@@ -177,4 +180,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
   shortcutIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-});
+}));

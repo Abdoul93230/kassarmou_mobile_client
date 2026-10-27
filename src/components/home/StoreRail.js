@@ -2,7 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableScale, SectionHeader, SmartImage, Text } from '../../ui';
-import { colors, GUTTER, radius, shadows } from '../../theme';
+import { GUTTER, radius, shadows, useTheme } from '../../theme';
 import OriginBadge from '../OriginBadge';
 
 const CARD_W = 128;
@@ -11,21 +11,23 @@ const compact = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace('.0', '')}k
 
 /** Boutiques populaires : logo, nom, badge vérifié, abonnés */
 function StoreRail({ stores, onPressStore, onSeeAll }) {
+  const { colors } = useTheme();
+
   const renderItem = useCallback(
     ({ item }) => {
       const name = item.storeName || item.name;
       return (
-        <PressableScale onPress={() => onPressStore(item)} scaleTo={0.96} style={styles.card} accessibilityLabel={name}>
+        <PressableScale onPress={() => onPressStore(item)} scaleTo={0.96} style={[styles.card, { backgroundColor: colors.surface }]} accessibilityLabel={name}>
           <View style={styles.logoWrap}>
             {item.logo ? (
               <SmartImage uri={item.logo} width={64} style={styles.logo} />
             ) : (
-              <View style={[styles.logo, styles.initial]}>
+              <View style={[styles.logo, styles.initial, { backgroundColor: colors.primarySoft }]}>
                 <Text variant="h2" color="primaryDark">{(name || '?').charAt(0).toUpperCase()}</Text>
               </View>
             )}
             {item.isvalid ? (
-              <View style={styles.verified}>
+              <View style={[styles.verified, { backgroundColor: colors.surface }]}>
                 <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
               </View>
             ) : null}
@@ -39,7 +41,7 @@ function StoreRail({ stores, onPressStore, onSeeAll }) {
         </PressableScale>
       );
     },
-    [onPressStore],
+    [onPressStore, colors],
   );
 
   if (!stores?.length) return null;
@@ -64,12 +66,12 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: GUTTER, gap: 12, paddingBottom: 6 },
   card: {
     width: CARD_W, alignItems: 'center', paddingVertical: 16, paddingHorizontal: 10,
-    backgroundColor: colors.surface, borderRadius: radius.lg, ...shadows.sm,
+    borderRadius: radius.lg, ...shadows.sm,
   },
   logoWrap: { width: 64, height: 64 },
   logo: { width: 64, height: 64, borderRadius: 32 },
-  initial: { backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  verified: { position: 'absolute', right: -4, bottom: -2, backgroundColor: colors.surface, borderRadius: 10 },
+  initial: { alignItems: 'center', justifyContent: 'center' },
+  verified: { position: 'absolute', right: -4, bottom: -2, borderRadius: 10 },
   name: { marginTop: 10, width: '100%' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
   origin: { marginTop: 2, maxWidth: '100%' },

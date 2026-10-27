@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { getDevicePosition, getZones, nearestZone, requestLocality, searchZones, zoneLabel } from '../../services/shippingV3';
 import { PressableScale, Text } from '../../ui';
-import { colors, fonts, radius } from '../../theme';
+import { colors, fonts, radius, useTheme, themedStyles } from '../../theme';
 
 /**
  * Feuille « Où livrer ? » : quartier ou ville dans la liste officielle,
@@ -14,6 +14,7 @@ import { colors, fonts, radius } from '../../theme';
  * onSelect(zone, { location? }) — zone.localityName est renseigné dans le dernier cas.
  */
 function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [all, setAll] = useState([]);
   const [query, setQuery] = useState('');
@@ -89,10 +90,10 @@ function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close} statusBarTranslucent>
-      <Pressable style={styles.backdrop} onPress={close} />
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={close} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]}>
-          <View style={styles.handle} />
+        <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 8 }]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
           {missing ? (
             <>
               <PressableScale onPress={() => { setMissing(false); setError(null); }} hitSlop={8} style={styles.back}>
@@ -102,14 +103,14 @@ function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
               <Text variant="h2">Votre localité</Text>
               <Text variant="small" color="textSecondary" style={styles.sub}>Les frais sont calculés jusqu’à la ville la plus proche. Notre équipe ajoutera votre localité.</Text>
               <Text variant="smallMedium" style={styles.step}>1. Nom de votre village, quartier ou localité</Text>
-              <View style={styles.search}>
+              <View style={[styles.search, { backgroundColor: colors.bg, borderColor: colors.border }]}>
                 <Ionicons name="home-outline" size={18} color={colors.textMuted} />
                 <TextInput
                   value={locality}
                   onChangeText={(t) => { setLocality(t); setError(null); }}
                   placeholder="Ex. Maijirgui"
                   placeholderTextColor={colors.textMuted}
-                  style={styles.input}
+                  style={[styles.input, { color: colors.text }]}
                   maxLength={100}
                   autoFocus
                 />
@@ -123,14 +124,14 @@ function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
             </>
           )}
 
-          <View style={[styles.search, missing && styles.searchTight]}>
+          <View style={[styles.search, missing && styles.searchTight, { backgroundColor: colors.bg, borderColor: colors.border }]}>
             <Ionicons name="search" size={18} color={colors.textMuted} />
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder={missing ? 'Ex. Tessaoua, Maradi, Dosso…' : 'Ex. Yantala, Tessaoua, Konni…'}
               placeholderTextColor={colors.textMuted}
-              style={styles.input}
+              style={[styles.input, { color: colors.text }]}
               autoCorrect={false}
               returnKeyType="search"
             />
@@ -142,7 +143,7 @@ function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
           </View>
 
           {!missing ? (
-            <PressableScale onPress={locate} disabled={locating} scaleTo={0.98} style={styles.locate}>
+            <PressableScale onPress={locate} disabled={locating} scaleTo={0.98} style={[styles.locate, { backgroundColor: colors.primarySoft }]}>
               {locating ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="locate" size={18} color={colors.primary} />}
               <Text variant="bodyMedium" color="primary">{locating ? 'Localisation…' : 'Utiliser ma position'}</Text>
             </PressableScale>
@@ -160,7 +161,7 @@ function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
               ListHeaderComponent={!query && data.length ? <Text variant="caption" color="textMuted" style={styles.hint}>{missing ? 'VILLES ET COMMUNES' : 'VILLES ET COMMUNES · TAPEZ VOTRE QUARTIER'}</Text> : null}
               ListEmptyComponent={<Text variant="body" color="textSecondary" align="center" style={styles.empty}>Aucune zone « {query} »</Text>}
               ListFooterComponent={!missing ? (
-                <PressableScale onPress={startMissing} scaleTo={0.98} style={styles.missing}>
+                <PressableScale onPress={startMissing} scaleTo={0.98} style={[styles.missing, { borderColor: colors.wood + '55', backgroundColor: colors.woodSoft }]}>
                   <Ionicons name="home-outline" size={16} color={colors.wood} />
                   <Text variant="bodyMedium" color="wood">Ma localité n’est pas dans la liste</Text>
                 </PressableScale>
@@ -168,9 +169,10 @@ function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
               renderItem={({ item }) => {
                 const active = !missing && selected?._id === item._id && !selected?.localityName;
                 const l = zoneLabel(item);
+                const pinBg = active ? colors.primary : item.type !== 'district' ? colors.sandSoft : colors.primarySoft;
                 return (
-                  <PressableScale onPress={() => pick(item)} scaleTo={0.98} style={[styles.row, active && styles.rowActive]}>
-                    <View style={[styles.pin, active && styles.pinActive, item.type !== 'district' && !active && styles.pinCity]}>
+                  <PressableScale onPress={() => pick(item)} scaleTo={0.98} style={[styles.row, active && { backgroundColor: colors.primarySoft }]}>
+                    <View style={[styles.pin, { backgroundColor: pinBg }]}>
                       <Ionicons name={item.type === 'district' ? 'location' : 'business'} size={15} color={active ? colors.textInverse : item.type === 'district' ? colors.primary : colors.wood} />
                     </View>
                     <View style={styles.flex}>
@@ -189,7 +191,7 @@ function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   backdrop: { flex: 1, backgroundColor: colors.overlay },
   wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '90%' },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: 20, paddingTop: 12 },
@@ -223,6 +225,6 @@ const styles = StyleSheet.create({
   pin: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   pinCity: { backgroundColor: colors.sandSoft },
   pinActive: { backgroundColor: colors.primary },
-});
+}));
 
 export default memo(ZonePickerSheet);

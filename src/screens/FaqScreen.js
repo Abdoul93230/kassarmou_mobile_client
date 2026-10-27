@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { IconButton, PressableScale, Text } from '../ui';
 import { SUPPORT } from '../config/env';
 import { useSelector } from 'react-redux';
-import { colors, fonts, GUTTER, radius, shadows } from '../theme';
+import { colors, fonts, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -43,8 +43,19 @@ const FAQ = [
 ];
 
 function Item({ item, open, onToggle }) {
+  const { colors } = useTheme();
   return (
-    <PressableScale onPress={onToggle} scaleTo={0.99} style={[styles.item, open && styles.itemOpen]} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+    <PressableScale
+      onPress={onToggle}
+      scaleTo={0.99}
+      style={[
+        styles.item,
+        { backgroundColor: colors.surface },
+        open && [styles.itemOpen, { borderColor: colors.primarySoft }],
+      ]}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+    >
       <View style={styles.qRow}>
         <Text variant="title" style={styles.flex}>{item.q}</Text>
         <Ionicons name={open ? 'remove-circle' : 'add-circle-outline'} size={22} color={open ? colors.primary : colors.textMuted} />
@@ -56,6 +67,7 @@ function Item({ item, open, onToggle }) {
 
 /** Centre d'aide : recherche dans la FAQ et contact direct */
 export default function FaqScreen({ navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const user = useSelector((s) => s.auth.user);
   const [q, setQ] = useState('');
@@ -72,16 +84,16 @@ export default function FaqScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <Text variant="h2" style={styles.flex}>Centre d'aide</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} keyboardShouldPersistTaps="handled">
-        <View style={styles.search}>
+        <View style={[styles.search, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput value={q} onChangeText={setQ} placeholder="Rechercher une question…" placeholderTextColor={colors.textMuted} style={styles.input} />
+          <TextInput value={q} onChangeText={setQ} placeholder="Rechercher une question…" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text }]} />
         </View>
 
         <View style={styles.listWrap}>
@@ -94,23 +106,23 @@ export default function FaqScreen({ navigation }) {
           ) : null}
         </View>
 
-        <View style={styles.contact}>
+        <View style={[styles.contact, { backgroundColor: colors.surface }]}>
           <Text variant="h3">Besoin d'aide ?</Text>
           <Text variant="small" color="textSecondary" style={styles.mt4}>Notre équipe au Niger vous répond.</Text>
           <View style={styles.contactRow}>
-            <PressableScale onPress={() => (user ? navigation.navigate('Support') : navigation.navigate('QuickAuth', { returnScreen: 'Faq' }))} style={styles.contactBtn} scaleTo={0.96}>
+            <PressableScale onPress={() => (user ? navigation.navigate('Support') : navigation.navigate('QuickAuth', { returnScreen: 'Faq' }))} style={[styles.contactBtn, { backgroundColor: colors.bg }]} scaleTo={0.96}>
               <Ionicons name="chatbubbles-outline" size={22} color={colors.primary} />
               <Text variant="caption">Messages</Text>
             </PressableScale>
-            <PressableScale onPress={() => Linking.openURL(`https://wa.me/${SUPPORT.whatsapp}`).catch(() => {})} style={styles.contactBtn} scaleTo={0.96}>
+            <PressableScale onPress={() => Linking.openURL(`https://wa.me/${SUPPORT.whatsapp}`).catch(() => {})} style={[styles.contactBtn, { backgroundColor: colors.bg }]} scaleTo={0.96}>
               <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
               <Text variant="caption">WhatsApp</Text>
             </PressableScale>
-            <PressableScale onPress={() => Linking.openURL(`tel:${SUPPORT.phone}`).catch(() => {})} style={styles.contactBtn} scaleTo={0.96}>
+            <PressableScale onPress={() => Linking.openURL(`tel:${SUPPORT.phone}`).catch(() => {})} style={[styles.contactBtn, { backgroundColor: colors.bg }]} scaleTo={0.96}>
               <Ionicons name="call-outline" size={22} color={colors.wood} />
               <Text variant="caption">Appeler</Text>
             </PressableScale>
-            <PressableScale onPress={() => Linking.openURL(`mailto:${SUPPORT.email}`).catch(() => {})} style={styles.contactBtn} scaleTo={0.96}>
+            <PressableScale onPress={() => Linking.openURL(`mailto:${SUPPORT.email}`).catch(() => {})} style={[styles.contactBtn, { backgroundColor: colors.bg }]} scaleTo={0.96}>
               <Ionicons name="mail-outline" size={22} color={colors.sand} />
               <Text variant="caption">Email</Text>
             </PressableScale>
@@ -121,7 +133,7 @@ export default function FaqScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   mt4: { marginTop: 4 },
@@ -140,4 +152,4 @@ const styles = StyleSheet.create({
   contact: { marginHorizontal: GUTTER, marginTop: 24, padding: 18, borderRadius: radius.lg, backgroundColor: colors.surface, ...shadows.sm },
   contactRow: { flexDirection: 'row', marginTop: 16, gap: 8 },
   contactBtn: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: radius.md, backgroundColor: colors.bg },
-});
+}));

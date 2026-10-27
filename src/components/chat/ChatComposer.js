@@ -23,11 +23,7 @@ import {
 } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts } from '../../theme';
-
-// Palette de l'app (thème clair)
-const P = { white: colors.textInverse, error: colors.danger, charcoal: colors.text };
-const theme = { screen: colors.surface, surface: colors.bg, border: colors.border, text: colors.text, textSoft: colors.textMuted };
+import { colors, fonts, useTheme, themedStyles } from '../../theme';
 
 const CANCEL_X = 110;        // distance à gauche pour annuler
 const LOCK_Y = 90;           // distance vers le haut pour verrouiller
@@ -86,8 +82,10 @@ export default function ChatComposer({
   bottomInset = 0,
   disabled = false,
 }) {
-  const isDark = false;
+  const { colors, isDark } = useTheme();
   const accent = colors.primary;
+  const P = { white: colors.textInverse, error: colors.danger, charcoal: colors.text };
+  const theme = { screen: colors.surface, surface: colors.bg, border: colors.border, text: colors.text, textSoft: colors.textMuted };
 
   const [mode, setMode] = useState('idle');
   const [paused, setPaused] = useState(false);
@@ -395,7 +393,7 @@ export default function ChatComposer({
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   wrap: { paddingHorizontal: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   pill: {
@@ -405,7 +403,7 @@ const s = StyleSheet.create({
   side: { width: 36, height: BUTTON, alignItems: 'center', justifyContent: 'center' },
   input: { fontSize: 15, fontFamily: fonts.regular, paddingTop: Platform.OS === 'ios' ? 13 : 10, paddingBottom: Platform.OS === 'ios' ? 13 : 10, maxHeight: 130 },
   recordingRow: { flexDirection: 'row', alignItems: 'center', height: BUTTON, gap: 8, overflow: 'hidden' },
-  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: P.error },
+  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger },
   timer: { fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'], minWidth: 42 },
   slideHint: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
   slideTxt: { fontSize: 14 },
@@ -417,11 +415,11 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
   },
   hint: { position: 'absolute', right: 12, bottom: BUTTON + 18, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, zIndex: 10 },
-  hintTxt: { color: P.white, fontSize: 12.5, fontWeight: '600' },
+  hintTxt: { color: colors.textInverse, fontSize: 12.5, fontWeight: '600' },
   lockedCard: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10 },
   lockedTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   lockedActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   roundGhost: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   wave: { flex: 1, height: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   waveBar: { width: 3, borderRadius: 2 },
-});
+}));

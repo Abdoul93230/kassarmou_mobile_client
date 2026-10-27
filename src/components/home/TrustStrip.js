@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../../ui';
-import { colors, GUTTER, radius } from '../../theme';
+import { GUTTER, radius, useTheme } from '../../theme';
 
 const ITEMS = [
   { icon: 'shield-checkmark-outline', label: 'Paiement sécurisé' },
@@ -12,8 +12,10 @@ const ITEMS = [
 
 /** Bandeau de réassurance : lève les freins à l'achat */
 function TrustStrip() {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {ITEMS.map((it) => (
         <View key={it.label} style={styles.item}>
           <Ionicons name={it.icon} size={18} color={colors.primary} />
@@ -27,7 +29,7 @@ function TrustStrip() {
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row', marginHorizontal: GUTTER, marginTop: 28, paddingVertical: 14,
-    backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.lg, borderWidth: 1,
   },
   item: { flex: 1, alignItems: 'center', gap: 5, paddingHorizontal: 6 },
 });

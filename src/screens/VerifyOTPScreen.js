@@ -13,7 +13,7 @@ import useAuthReturn, { authErrorMessage } from '../hooks/useAuthReturn';
 import { Button, PressableScale, Text } from '../ui';
 import { validatePassword } from '../utils/passwordRules';
 import { formatPhoneInternational } from '../utils/phoneRules';
-import { colors, radius } from '../theme';
+import { colors, radius, useTheme, themedStyles } from '../theme';
 
 const OTP_LENGTH = 6;
 const RESET = 'password-reset';
@@ -24,6 +24,7 @@ const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart
  * Sert à l'inscription (quick-register) et au mot de passe oublié (password-reset).
  */
 export default function VerifyOTPScreen({ navigation, route }) {
+  const { colors } = useTheme();
   const dispatch = useDispatch();
   const params = route?.params || {};
   const { formData = {}, type = 'quick-register' } = params;
@@ -127,7 +128,7 @@ export default function VerifyOTPScreen({ navigation, route }) {
   };
 
   const errorBox = error ? (
-    <View style={styles.error}>
+    <View style={[styles.error, { backgroundColor: colors.dangerSoft }]}>
       <Ionicons name="alert-circle" size={18} color={colors.danger} />
       <Text variant="small" color="danger" style={styles.flex}>{error}</Text>
     </View>
@@ -196,10 +197,10 @@ export default function VerifyOTPScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   flex: { flex: 1 },
   meta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, marginBottom: 18 },
   error: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginBottom: 14, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
   resend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 20, paddingVertical: 6 },
   change: { alignSelf: 'center', marginTop: 10, paddingVertical: 6 },
-});
+}));

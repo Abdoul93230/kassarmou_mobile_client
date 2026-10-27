@@ -26,7 +26,7 @@ import NearbyRail from '../components/home/NearbyRail';
 import TrustStrip from '../components/home/TrustStrip';
 import EventBanner from '../components/EventBanner';
 import CheckinCard from '../components/CheckinCard';
-import { colors, gradients, GUTTER, radius, shadows } from '../theme';
+import { colors, gradients, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const GAP = 12;
 const EMPTY = [];
@@ -40,11 +40,12 @@ const greeting = () => {
 
 // ─── En-tête : logo, salutation, recherche, messagerie ────────────────────────────
 function HomeHeader({ user, onSearch, onMessages, elevated }) {
+  const { colors } = useTheme();
   const { unread } = useMessagingState(); // non-lus des boutiques, en temps réel
   const insets = useSafeAreaInsets();
   const firstName = (user?.name || '').trim().split(' ')[0];
   return (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }, elevated && styles.headerElevated]}>
+    <View style={[styles.header, { backgroundColor: elevated ? colors.surface : colors.bg, paddingTop: insets.top + 8 }, elevated && styles.headerElevated]}>
       <View style={styles.headerRow}>
         <View style={styles.brand}>
           <Image source={require('../../assets/brand/logo-horizontal.png')} style={styles.logo} contentFit="contain" accessibilityLabel="Ihambaobab" />
@@ -62,8 +63,10 @@ function HomeHeader({ user, onSearch, onMessages, elevated }) {
   );
 }
 
+
 // ─── Écran ────────────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }) {
+  const { colors } = useTheme();
   const dispatch = useDispatch();
   const { width } = useWindowDimensions();
   const cardWidth = (width - GUTTER * 2 - GAP) / 2;
@@ -227,7 +230,7 @@ export default function HomeScreen({ navigation }) {
   }, [cardWidth, feed.hasNextPage, feed.isFetchingNextPage, feed.isLoading, feedItems.length]);
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       <HomeHeader
         user={user}
         elevated={elevated}
@@ -255,7 +258,7 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
 
@@ -282,4 +285,4 @@ const styles = StyleSheet.create({
   skeletonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, paddingHorizontal: GUTTER, paddingBottom: 24 },
   end: { alignItems: 'center', gap: 6, paddingVertical: 28, paddingHorizontal: 32 },
   bottomSpace: { height: 24 },
-});
+}));

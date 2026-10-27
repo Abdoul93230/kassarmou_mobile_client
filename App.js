@@ -13,12 +13,26 @@ import AppNavigator from './src/navigation/AppNavigator';
 import NetworkIndicator from './src/components/NetworkIndicator';
 import { loadCart } from './src/redux/cartSlice';
 import toastConfig from './src/ui/toastConfig';
+import { ThemeProvider, useTheme } from './src/theme';
 
 // Avertissement interne d'une dépendance (react-navigation), sans impact — masqué en dev
 LogBox.ignoreLogs(['InteractionManager has been deprecated']);
 
 // Garde l'écran de démarrage natif tant que les polices ne sont pas prêtes (pas de « saut » de texte)
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function MainApp() {
+  const { isDark } = useTheme();
+
+  return (
+    <SafeAreaProvider>
+      <NetworkIndicator />
+      <AppNavigator />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Toast config={toastConfig} topOffset={56} />
+    </SafeAreaProvider>
+  );
+}
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -43,13 +57,11 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
-        <SafeAreaProvider>
-          <NetworkIndicator />
-          <AppNavigator />
-          <StatusBar style="dark" />
-          <Toast config={toastConfig} topOffset={56} />
-        </SafeAreaProvider>
+        <ThemeProvider>
+          <MainApp />
+        </ThemeProvider>
       </Provider>
     </GestureHandlerRootView>
   );
 }
+

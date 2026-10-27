@@ -2,22 +2,20 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Text from './Text';
-import { colors, radius, shadows } from '../theme';
-
-const ICONS = {
-  success: { name: 'checkmark-circle', color: colors.success },
-  error: { name: 'alert-circle', color: colors.danger },
-  info: { name: 'information-circle', color: colors.primary },
-};
+import { colors, radius, shadows, useTheme } from '../theme';
 
 const BrandToast = ({ text1, text2, kind }) => {
-  const icon = ICONS[kind] || ICONS.info;
+  const { colors, isDark } = useTheme();
+  const iconName = kind === 'success' ? 'checkmark-circle' : kind === 'error' ? 'alert-circle' : 'information-circle';
+  const iconColor = kind === 'success' ? colors.success : kind === 'error' ? colors.danger : colors.primary;
+
   return (
-    <View style={styles.toast}>
-      <Ionicons name={icon.name} size={22} color={icon.color} />
+    // En sombre, un gris plus clair que le fond et un liseré pour que le toast se détache
+    <View style={[styles.toast, isDark && { backgroundColor: colors.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}>
+      <Ionicons name={iconName} size={22} color={iconColor} />
       <View style={styles.flex}>
-        {text1 ? <Text variant="title" color="textInverse" numberOfLines={1}>{text1}</Text> : null}
-        {text2 ? <Text variant="small" color="textInverse" style={styles.sub} numberOfLines={2}>{text2}</Text> : null}
+        {text1 ? <Text variant="title" color={isDark ? 'text' : 'textInverse'} numberOfLines={1}>{text1}</Text> : null}
+        {text2 ? <Text variant="small" color={isDark ? 'text' : 'textInverse'} style={styles.sub} numberOfLines={2}>{text2}</Text> : null}
       </View>
     </View>
   );

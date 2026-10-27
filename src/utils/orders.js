@@ -4,22 +4,31 @@
  * livraison reçu, livré, Traité, annulé).
  */
 export const ORDER_STAGES = {
-  unpaid: { key: 'unpaid', label: 'À payer', icon: 'card-outline', tone: 'warning', step: 0 },
+  unpaid: { key: 'unpaid', label: 'À payer', icon: 'card-outline', tone: 'warning', step: 0, note: 'Paiement en attente' },
+  // Même parcours que « À payer » (onglet, bouton Payer) : le client peut réessayer
+  payFailed: { key: 'unpaid', label: 'Paiement non abouti', icon: 'alert-circle-outline', tone: 'danger', step: 0, note: 'Paiement non abouti : vous pouvez réessayer' },
   processing: { key: 'processing', label: 'En préparation', icon: 'cube-outline', tone: 'primary', step: 1 },
   shipping: { key: 'shipping', label: 'En livraison', icon: 'car-outline', tone: 'primary', step: 2 },
   delivered: { key: 'delivered', label: 'Livrée', icon: 'checkmark-done-outline', tone: 'success', step: 3 },
   cancelled: { key: 'cancelled', label: 'Annulée', icon: 'close-circle-outline', tone: 'danger', step: -1 },
 };
 
-const PAID_OR_DEFERRED = ['payé', 'paye', 'payé à la livraison', 'payé par téléphone', 'succeeded', 'success'];
+// Mêmes règles que le site (iham_baobab_web_nextjs/src/lib/orderStatus.ts)
+const PAY_WAITING = ['en_attente', 'en attente', 'en cours', 'pending'];
+const PAY_FAILED = ['échec', 'echec', 'failed'];
+const DELIVERED = ['livraison reçu', 'livré', 'livrée', 'traité'];
+const low = (v) => String(v || '').toLowerCase();
 
 export const orderStage = (order) => {
-  const etat = String(order?.etatTraitement || '').toLowerCase();
-  const pay = String(order?.statusPayment || '').toLowerCase();
-  if (etat === 'annulé' || pay === 'failed' || pay === 'échec' || pay === 'echec') return ORDER_STAGES.cancelled;
-  if (['livraison reçu', 'livré', 'traité'].includes(etat)) return ORDER_STAGES.delivered;
+  const etat = low(order?.etatTraitement);
+  const livraison = low(order?.statusLivraison);
+  const pay = low(order?.statusPayment);
+  if (etat.includes('annul') || livraison.includes('annul')) return ORDER_STAGES.cancelled;
+  // L'avancement de la livraison prime sur le paiement (paiement à la livraison, etc.)
+  if (DELIVERED.includes(etat) || ['livré', 'livrée'].includes(livraison)) return ORDER_STAGES.delivered;
   if (['reçu par le livreur', 'en cours de livraison'].includes(etat)) return ORDER_STAGES.shipping;
-  if (!PAID_OR_DEFERRED.includes(pay) && (pay === 'en_attente' || pay === 'en attente')) return ORDER_STAGES.unpaid;
+  if (PAY_FAILED.includes(pay)) return ORDER_STAGES.payFailed;
+  if (PAY_WAITING.includes(pay)) return ORDER_STAGES.unpaid;
   return ORDER_STAGES.processing;
 };
 

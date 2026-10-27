@@ -7,7 +7,7 @@ import useSellerOrigin from '../../hooks/useSellerOrigin';
 import { getRememberedZone, rememberZone, zoneLabel } from '../../services/shippingV3';
 import { PressableScale, Text } from '../../ui';
 import { formatPrice } from '../../utils/formatPrice';
-import { colors, radius } from '../../theme';
+import { colors, radius, useTheme, themedStyles } from '../../theme';
 
 const F = (n) => `${formatPrice(n || 0)} F`;
 
@@ -16,6 +16,7 @@ const F = (n) => `${formatPrice(n || 0)} F`;
  * frais et délai réels pour la quantité choisie (même calcul que le panier et la commande).
  */
 function DeliveryEstimate({ productId, sellerId, quantity = 1, style }) {
+  const { colors } = useTheme();
   const origin = useSellerOrigin(sellerId);
   const [zone, setZone] = useState(null);
   const [sheet, setSheet] = useState(false);
@@ -57,9 +58,9 @@ function DeliveryEstimate({ productId, sellerId, quantity = 1, style }) {
   const label = zone ? zoneLabel(zone) : null;
 
   return (
-    <View style={[styles.card, style]}>
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>
       <View style={styles.head}>
-        <View style={styles.icon}><Ionicons name="car-outline" size={20} color={colors.primary} /></View>
+        <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}><Ionicons name="car-outline" size={20} color={colors.primary} /></View>
         <View style={styles.flex}>
           <Text variant="title">Livraison</Text>
           {origin ? (
@@ -72,7 +73,7 @@ function DeliveryEstimate({ productId, sellerId, quantity = 1, style }) {
         </View>
       </View>
 
-      <PressableScale onPress={() => setSheet(true)} scaleTo={0.985} style={styles.zone}>
+      <PressableScale onPress={() => setSheet(true)} scaleTo={0.985} style={[styles.zone, { backgroundColor: colors.bg, borderColor: colors.border }]}>
         <Ionicons name="location-outline" size={16} color={zone ? colors.primary : colors.textMuted} />
         <View style={styles.flex}>
           <Text variant={zone ? 'smallMedium' : 'small'} color={zone ? 'text' : 'textSecondary'} numberOfLines={1}>
@@ -97,27 +98,27 @@ function DeliveryEstimate({ productId, sellerId, quantity = 1, style }) {
                 <Ionicons name="time-outline" size={15} color={colors.primary} />
                 <Text variant="bodyMedium">{estimate.delay?.label || '—'}</Text>
               </View>
-              {estimate.free ? (
+              {/* {estimate.free ? (
                 <View style={styles.delay}>
                   <Text variant="caption" color="textMuted" style={styles.strike}>{F(estimate.free.amount)}</Text>
                   <Text variant="title" color="success">Offerte</Text>
                 </View>
               ) : (
                 <Text variant="title">{F(estimate.fee)}</Text>
-              )}
+              )} */}
             </View>
             {estimate.delay?.sameDay && estimate.delay?.cutoff ? (
               <Text variant="caption" color="textMuted" style={styles.mt4}>Commandez avant {estimate.delay.cutoff} pour une livraison le jour même.</Text>
             ) : null}
             {estimate.freeHint ? (
-              <View style={styles.hint}>
+              <View style={[styles.hint, { backgroundColor: colors.successSoft }]}>
                 <Ionicons name="gift-outline" size={14} color={colors.success} />
                 <Text variant="caption" color="success" style={styles.flex}>Plus que {F(estimate.freeHint.remaining)} dans cette boutique pour la livraison offerte</Text>
               </View>
             ) : null}
           </View>
         ) : (
-          <View style={[styles.hint, estimate.quoteRequired ? styles.hintQuote : styles.hintOff]}>
+          <View style={[styles.hint, { backgroundColor: estimate.quoteRequired ? colors.woodSoft : colors.dangerSoft }]}>
             <Ionicons name="alert-circle-outline" size={14} color={estimate.quoteRequired ? colors.wood : colors.danger} />
             <Text variant="caption" color={estimate.quoteRequired ? 'wood' : 'danger'} style={styles.flex}>
               {estimate.message || 'Livraison indisponible pour cette zone.'}
@@ -131,7 +132,7 @@ function DeliveryEstimate({ productId, sellerId, quantity = 1, style }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   card: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   icon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
@@ -149,6 +150,6 @@ const styles = StyleSheet.create({
   hintOff: { backgroundColor: colors.dangerSoft },
   mt4: { marginTop: 4 },
   mt8: { marginTop: 10 },
-});
+}));
 
 export default memo(DeliveryEstimate);

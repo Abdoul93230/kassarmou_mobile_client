@@ -6,12 +6,13 @@ import ProductGrid from '../components/ProductGrid';
 import ZonePickerSheet from '../components/cart/ZonePickerSheet';
 import { fetchNearby, getRememberedZone, rememberZone, zoneLabel } from '../services/shippingV3';
 import { EmptyState, IconButton, PressableScale, Text } from '../ui';
-import { colors, GUTTER, radius } from '../theme';
+import { colors, GUTTER, radius, useTheme, themedStyles } from '../theme';
 
 const LIMIT = 20;
 
 /** « Près de chez moi » : produits des boutiques les plus proches, les plus proches d'abord */
 export default function NearbyScreen({ navigation }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [zone, setZone] = useState(null);
   const [ready, setReady] = useState(false);
@@ -51,7 +52,7 @@ export default function NearbyScreen({ navigation }) {
 
   const header = (
     <View>
-      <PressableScale onPress={() => setSheet(true)} scaleTo={0.985} style={styles.zone}>
+      <PressableScale onPress={() => setSheet(true)} scaleTo={0.985} style={[styles.zone, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Ionicons name="location" size={18} color={colors.primary} />
         <View style={styles.flex}>
           <Text variant="title" numberOfLines={1}>{label ? label.title : 'Choisir mon quartier ou ma ville'}</Text>
@@ -68,8 +69,8 @@ export default function NearbyScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <View style={[styles.top, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
         <IconButton name="chevron-back" onPress={() => navigation.goBack()} bg={colors.surfaceAlt} accessibilityLabel="Retour" />
         <Text variant="h2" style={styles.flex}>Près de chez moi</Text>
       </View>
@@ -108,7 +109,7 @@ export default function NearbyScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 10 },
@@ -117,4 +118,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
   summary: { marginHorizontal: GUTTER, marginBottom: 10 },
-});
+}));
