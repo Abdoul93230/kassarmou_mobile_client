@@ -19,6 +19,7 @@ import { orderStage } from '../utils/orders';
 import { formatPhoneInternational } from '../utils/phoneRules';
 import { Button, PressableScale, SmartImage, Text } from '../ui';
 import DeleteAccountSheet from '../components/profile/DeleteAccountSheet';
+import { diagnosePush } from '../services/pushNotifications';
 import { colors, gradients, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const ORDER_SHORTCUTS = [
@@ -211,6 +212,17 @@ export default function ProfileScreen({ navigation }) {
     ]);
   }, [dispatch]);
 
+  const [testingPush, setTestingPush] = useState(false);
+  const testPush = useCallback(async () => {
+    if (testingPush) return;
+    setTestingPush(true);
+    try {
+      Alert.alert('Test des notifications', await diagnosePush());
+    } finally {
+      setTestingPush(false);
+    }
+  }, [testingPush]);
+
   const invite = () =>
     Share.share({
       message: `Je fais mes achats sur Ihambaobab, la marketplace du Niger 🇳🇪 Rejoins-moi : ${siteUrl('/')}`,
@@ -356,6 +368,13 @@ export default function ProfileScreen({ navigation }) {
         <Row icon="location-outline" title="Adresse de livraison" subtitle="Remplie d'office à chaque commande" onPress={() => navigation.navigate('Address')} />
         <Row icon="gift-outline" tint={colors.sand} title="Baobab Points" subtitle="Gagnez et utilisez vos points" onPress={() => navigation.navigate('Wallet')} />
         <Row icon="people-outline" tint={colors.wood} title="Inviter un ami" subtitle="Partagez Ihambaobab" onPress={invite} />
+        <Row
+          icon="notifications-outline"
+          title="Tester les notifications"
+          subtitle={testingPush ? 'Test en cours…' : 'Vérifie que les messages des boutiques vous parviennent'}
+          right={testingPush ? <ActivityIndicator color={colors.primary} /> : undefined}
+          onPress={testPush}
+        />
       </Group>
 
       <ThemeGroup />

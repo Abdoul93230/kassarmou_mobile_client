@@ -23,6 +23,7 @@ export const messagingApi = {
   archive: (id) => apiClient.delete(`/api/messaging/conversations/${id}`),
   unread: () => apiClient.get('/api/messaging/unread').then((r) => r.data.count || 0),
   registerPushToken: (token) => apiClient.post('/api/messaging/push-token', { token }),
+  testPush: () => apiClient.post('/api/messaging/push-test', {}, { timeout: 20000 }),
   unregisterPushToken: (token) => apiClient.delete('/api/messaging/push-token', { data: { token } }).catch(() => {}),
   uploadAudio: async (uri, durationMs) => {
     const ext = (String(uri).split('?')[0].split('.').pop() || 'm4a').toLowerCase();
