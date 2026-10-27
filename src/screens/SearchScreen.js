@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getCategories } from '../redux/productsSlice';
 import { flattenPages, useSearchInfiniteQuery } from '../redux/catalogApi';
 import ProductGrid from '../components/ProductGrid';
+import PriceFilterSheet, { priceLabel } from '../components/search/PriceFilterSheet';
 import { Chip, EmptyState, IconButton, PressableScale, SmartImage, Text } from '../ui';
 import { capitalize } from '../utils/text';
 import { fonts, GUTTER, radius, useTheme } from '../theme';
@@ -14,6 +15,12 @@ import { fonts, GUTTER, radius, useTheme } from '../theme';
 const HISTORY_KEY = 'searchHistory';
 const TRENDING = ['Téléphone', 'Robe', 'Chaussures', 'Sac', 'Montre', 'Parfum', 'Panneau solaire', 'Ordinateur'];
 const EMPTY = [];
+const SORTS = [
+  { key: 'newest', label: 'Récents', icon: 'sparkles-outline' },
+  { key: 'price_asc', label: 'Prix croissant', icon: 'arrow-up' },
+  { key: 'price_desc', label: 'Prix décroissant', icon: 'arrow-down' },
+  { key: 'popular', label: 'Populaires', icon: 'flame-outline' },
+];
 
 /** Valeur retardée (anti-rebond) : évite une requête à chaque lettre */
 const useDebounced = (value, delay) => {
@@ -38,7 +45,14 @@ export default function SearchScreen({ navigation, route }) {
   const term = useDebounced(query.trim(), 350);
   const active = term.length >= 2;
 
-  const search = useSearchInfiniteQuery(term, { skip: !active });
+  // Filtres (le prix porte sur le prix payé, promo comprise — filtré par le serveur)
+  const [price, setPrice] = useState({ min: 0, max: 0 });
+  const [sort, setSort] = useState('newest');
+  const [priceSheet, setPriceSheet] = useState(false);
+  const hasPrice = price.min > 0 || price.max > 0;
+  const searchArg = useMemo(() => ({ term, minPrice: price.min, maxPrice: price.max, sort }), [term, price, sort]);
+
+  const search = useSearchInfiniteQuery(searchArg, { skip: !active });
   const results = useMemo(() => (active ? flattenPages(search.data) : EMPTY), [active, search.data]);
 
   useEffect(() => {
@@ -123,6 +137,12 @@ export default function SearchScreen({ navigation, route }) {
           contentBottom={insets.bottom + 24}
           header={
             <View style={styles.resultsHead}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.chips, styles.filters]}>
+                <Chip label={priceLabel(price)} icon="cash-outline" active={hasPrice} onPress={() => setPriceSheet(true)} />
+                {SORTS.map((s) => (
+                  <Chip key={s.key} label={s.label} icon={s.icon} active={sort === s.key} onPress={() => setSort(s.key)} />
+                ))}
+              </ScrollView>
               {matchingCats.length ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                   {matchingCats.map((c) => (
@@ -138,13 +158,23 @@ export default function SearchScreen({ navigation, route }) {
             </View>
           }
           empty={
-            <EmptyState
-              icon="search-outline"
-              title="Aucun résultat"
-              message={`Rien trouvé pour « ${term} ». Essayez un autre mot ou parcourez les catégories.`}
-              actionLabel="Voir les catégories"
-              onAction={() => navigation.navigate('MainTabs', { screen: 'Categories' })}
-            />
+            hasPrice ? (
+              <EmptyState
+                icon="cash-outline"
+                title="Rien dans cette fourchette"
+                message={`Aucun résultat pour « ${term} » (${priceLabel(price)}).`}
+                actionLabel="Retirer le filtre de prix"
+                onAction={() => setPrice({ min: 0, max: 0 })}
+              />
+            ) : (
+              <EmptyState
+                icon="search-outline"
+                title="Aucun résultat"
+                message={`Rien trouvé pour « ${term} ». Essayez un autre mot ou parcourez les catégories.`}
+                actionLabel="Voir les catégories"
+                onAction={() => navigation.navigate('MainTabs', { screen: 'Categories' })}
+              />
+            )
           }
         />
       ) : (
@@ -201,6 +231,7 @@ export default function SearchScreen({ navigation, route }) {
           ) : null}
         </ScrollView>
       )}
+      <PriceFilterSheet visible={priceSheet} value={price} onApply={setPrice} onClose={() => setPriceSheet(false)} />
     </View>
   );
 }
@@ -217,6 +248,7 @@ const styles = StyleSheet.create({
 
   resultsHead: { paddingBottom: 12, gap: 10 },
   chips: { gap: 8, paddingHorizontal: GUTTER },
+  filters: { paddingBottom: 10 },
   count: { paddingHorizontal: GUTTER },
 
   block: { paddingHorizontal: GUTTER, marginTop: 20 },

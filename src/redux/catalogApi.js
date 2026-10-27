@@ -73,11 +73,21 @@ export const catalogApi = createApi({
     }),
 
     /** Recherche plein texte paginée */
+    // queryArg : terme (texte) ou { term, minPrice, maxPrice, sort }
     search: build.infiniteQuery({
-      query: ({ queryArg, pageParam }) => ({
-        url: `/searchProductByName/${encodeURIComponent(queryArg)}`,
-        params: { page: pageParam, limit: PAGE_SIZE },
-      }),
+      query: ({ queryArg, pageParam }) => {
+        const a = typeof queryArg === 'string' ? { term: queryArg } : queryArg || {};
+        return {
+          url: `/searchProductByName/${encodeURIComponent(a.term || '')}`,
+          params: {
+            page: pageParam,
+            limit: PAGE_SIZE,
+            ...(a.minPrice > 0 ? { minPrice: a.minPrice } : {}),
+            ...(a.maxPrice > 0 ? { maxPrice: a.maxPrice } : {}),
+            ...(a.sort && a.sort !== 'relevance' ? { sort: a.sort } : {}),
+          },
+        };
+      },
       transformResponse: (res) => toPage(res),
       infiniteQueryOptions: infinitePaging,
     }),

@@ -40,6 +40,7 @@ import TrackingScreen from '../screens/TrackingScreen';
 import FindOrdersScreen from '../screens/FindOrdersScreen';
 import SellerDetailScreen from '../screens/SellerDetailScreen';
 import WalletScreen from '../screens/WalletScreen';
+import AddressScreen from '../screens/AddressScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -169,6 +170,7 @@ function AppNavigator() {
           Messages: 'Messagerie',
           StoreChat: 'Messagerie/:conversationId',
           Wallet: 'wallet',
+          Address: 'livraison',
         } : {}),
       }
     }
@@ -322,6 +324,11 @@ function AppNavigator() {
             <Stack.Screen
               name="Wallet"
               component={WalletScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Address"
+              component={AddressScreen}
               options={{ headerShown: false }}
             />
             <Stack.Screen

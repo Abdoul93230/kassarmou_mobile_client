@@ -353,6 +353,7 @@ export default function ProfileScreen({ navigation }) {
 
       <Group title="Mon compte">
         <Row icon="person-outline" title="Informations personnelles" subtitle="Nom, téléphone, email" onPress={() => navigation.navigate('EditProfile')} />
+        <Row icon="location-outline" title="Adresse de livraison" subtitle="Remplie d'office à chaque commande" onPress={() => navigation.navigate('Address')} />
         <Row icon="gift-outline" tint={colors.sand} title="Baobab Points" subtitle="Gagnez et utilisez vos points" onPress={() => navigation.navigate('Wallet')} />
         <Row icon="people-outline" tint={colors.wood} title="Inviter un ami" subtitle="Partagez Ihambaobab" onPress={invite} />
       </Group>
