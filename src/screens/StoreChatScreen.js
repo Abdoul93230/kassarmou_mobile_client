@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +17,8 @@ import VoiceMessageBubble from '../components/chat/VoiceMessageBubble';
 import { configureVoicePlayback, stopVoicePlayback } from '../components/chat/voicePlayback';
 
 const STARTERS = ['Est-il toujours disponible ?', 'Quels sont les délais de livraison ?', "Avez-vous d'autres tailles ou couleurs ?", 'Pouvez-vous me montrer plus de photos ?'];
-const PUSH_ASKED = 'ihamPushAsked';
+// v2 : les installations des anciennes versions (sans Firebase) doivent être redemandées
+const PUSH_ASKED = 'ihamPushAsked.v2';
 
 const fcfa = (n) => `${Number(n || 0).toLocaleString('fr-FR')} F`;
 const time = (d) => new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -117,6 +118,16 @@ export default function StoreChatScreen({ navigation, route }) {
     };
   }, []));
 
+  // App en arrière-plan : le client ne regarde plus, le serveur doit envoyer les push
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (!focused.current || !convIdRef.current) return;
+      if (state === 'active') emit('conversation:view', { conversationId: convIdRef.current });
+      else emit('conversation:leave', {});
+    });
+    return () => sub.remove();
+  }, []);
+
   // Vocaux consécutifs : lecture enchaînée (liste du plus récent au plus ancien)
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -189,9 +200,10 @@ export default function StoreChatScreen({ navigation, route }) {
   // ── Envoi ──
   const askPushOnce = async () => {
     try {
-      if (await AsyncStorage.getItem(PUSH_ASKED)) return;
-      await AsyncStorage.setItem(PUSH_ASKED, '1');
-      await registerDevicePush({ ask: true });
+      const asked = await AsyncStorage.getItem(PUSH_ASKED);
+      // Déjà demandé : on (ré)enregistre quand même le jeton si la permission a été donnée
+      await registerDevicePush({ ask: !asked });
+      if (!asked) await AsyncStorage.setItem(PUSH_ASKED, '1');
     } catch { /* facultatif */ }
   };
 

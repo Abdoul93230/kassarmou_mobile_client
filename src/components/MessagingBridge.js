@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { useSelector } from 'react-redux';
 import { CommonActions } from '@react-navigation/native';
 import { navigationRef } from '../navigation/RootNavigation';
@@ -31,9 +32,13 @@ export default function MessagingBridge() {
 
   useMessagingConnection(userId);
 
-  // Jeton push : seulement si la permission est déjà donnée (sinon demandée au 1er message)
+  // Jeton push : seulement si la permission est déjà donnée (sinon demandée au 1er message).
+  // Refait au retour au premier plan : permission activée entre-temps dans les réglages.
   useEffect(() => {
-    if (userId) registerDevicePush({ ask: false });
+    if (!userId) return undefined;
+    registerDevicePush({ ask: false });
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') registerDevicePush({ ask: false }); });
+    return () => sub.remove();
   }, [userId]);
 
   useEffect(() => {
