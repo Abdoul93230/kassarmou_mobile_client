@@ -248,6 +248,8 @@ export const logoutUser = createAsyncThunk(
       await require('../services/pushNotifications').unregisterDevicePush().catch(() => {});
       require('../services/messaging').disconnectMessaging();
       await removeUserFromStorage();
+      // Paiement en cours de ce compte : ne doit pas être repris par le compte suivant
+      await AsyncStorage.multiRemove(['pendingOrder', 'paymentInitiated', 'appliedPromoCode']).catch(() => {});
       isCheckingAuth = false;
       console.log("✅ Déconnexion réussie");
       return null;

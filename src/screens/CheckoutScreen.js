@@ -267,7 +267,13 @@ export default function CheckoutScreen({ navigation, route }) {
       // E.164 sans espace (+22787727501), format exigé par le backend
       const phone = toBackendPhone(country, phoneDigits);
       const transactionId = generateUniqueID();
-      const existingOrder = JSON.parse((await AsyncStorage.getItem('pendingOrder')) || 'null');
+      // Commande en attente de paiement mémorisée : reprise seulement si elle est à ce compte
+      const owner = userId || 'guest';
+      let existingOrder = JSON.parse((await AsyncStorage.getItem('pendingOrder')) || 'null');
+      if (existingOrder?.owner && existingOrder.owner !== owner) {
+        existingOrder = null;
+        await AsyncStorage.multiRemove(['pendingOrder', 'paymentInitiated']);
+      }
 
       const order = buildOrder({
         userId, cartItems, delivery, phone, zone, location, shippingCalculations: ship.calcs,
@@ -305,7 +311,7 @@ export default function CheckoutScreen({ navigation, route }) {
       }
 
       // Paiement électronique : la commande est conservée pour un éventuel nouvel essai
-      await AsyncStorage.setItem('pendingOrder', JSON.stringify({ transactionId, total: payable }));
+      await AsyncStorage.setItem('pendingOrder', JSON.stringify({ transactionId, total: payable, owner }));
       await AsyncStorage.setItem('paymentInitiated', JSON.stringify({ transactionId, method, timestamp: Date.now() }));
       navigation.navigate('PaymentWebView', { amount: payable, transactionId, paymentMethod: method });
     } catch (e) {
