@@ -13,7 +13,7 @@ export const ONLINE = 'Mobile Money';
 export const CASH = 'payé à la livraison';
 export const ASSISTED = 'paiement_assiste';
 
-const ONLINE_BRANDS = ['Airtel', 'Moov', 'Zamani', 'MyNita', 'Amana', 'Zeyna', 'Visa', 'Mastercard'];
+const ONLINE_BRANDS = ['Airtel', 'Moov', 'Zamani', 'MyNita', 'Amana', 'Visa', 'Mastercard'];
 
 const OPTIONS = [
   {

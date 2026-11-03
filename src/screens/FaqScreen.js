@@ -14,7 +14,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const FAQ = [
   {
     q: 'Quels sont les moyens de paiement acceptés ?',
-    a: 'Mobile Money (Airtel, Moov, Zamani…), les portefeuilles MyNita, Amana et Zeyna, les cartes Visa et Mastercard, le paiement à la livraison et le paiement assisté par un conseiller. Le paiement en ligne passe par la page sécurisée iPay.',
+    a: 'Mobile Money (Airtel, Moov, Zamani…), les portefeuilles MyNita et Amana, les cartes Visa et Mastercard, le paiement à la livraison et le paiement assisté par un conseiller. Le paiement en ligne passe par la page sécurisée iPay.',
   },
   {
     q: 'Quels sont les délais de livraison ?',
