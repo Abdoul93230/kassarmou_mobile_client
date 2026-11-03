@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableScale, SmartImage, Text } from '../../ui';
+import { labelFit } from '../../utils/labelFit';
 import { GUTTER, useTheme } from '../../theme';
 
 const SIZE = 62;
@@ -21,7 +22,7 @@ function CategoryRail({ categories, onPressCategory, onPressAll }) {
             <Ionicons name="pricetag-outline" size={24} color={colors.primary} />
           )}
         </View>
-        <Text variant="caption" color="textSecondary" numberOfLines={2} align="center" style={styles.label} textBreakStrategy="simple">{capitalize(item.name)}</Text>
+        <Text variant="caption" color="textSecondary" {...labelFit(item.name)} align="center" style={styles.label} textBreakStrategy="simple">{capitalize(item.name)}</Text>
       </PressableScale>
     ),
     [onPressCategory, colors],

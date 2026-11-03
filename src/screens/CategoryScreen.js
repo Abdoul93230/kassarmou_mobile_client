@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getCategories, getTypes } from '../redux/productsSlice';
 import { PressableScale, Skeleton, SmartImage, Text } from '../ui';
 import { capitalize } from '../utils/text';
+import { labelFit } from '../utils/labelFit';
 import { colors, gradients, GUTTER, radius, useTheme, themedStyles } from '../theme';
 
 const RAIL_W = 96;
@@ -47,7 +48,7 @@ export default function CategoryScreen({ navigation }) {
           <View style={[styles.railImg, { backgroundColor: colors.surface, borderColor: active ? colors.primary : 'transparent', borderWidth: 2 }]}>
             {item.image ? <SmartImage uri={item.image} width={44} style={styles.fill} /> : <Ionicons name="pricetag-outline" size={18} color={colors.primary} />}
           </View>
-          <Text variant="caption" align="center" numberOfLines={2} color={active ? 'primaryDark' : 'textSecondary'} style={active && styles.bold}>
+          <Text variant="caption" align="center" {...labelFit(item.name)} color={active ? 'primaryDark' : 'textSecondary'} style={active && styles.bold}>
             {capitalize(item.name)}
           </Text>
         </PressableScale>
@@ -111,7 +112,7 @@ export default function CategoryScreen({ navigation }) {
                           <View style={[styles.typeIcon, { backgroundColor: colors.primarySoft }]}>
                             <Text variant="h3" color="primaryDark">{capitalize(t.name).charAt(0)}</Text>
                           </View>
-                          <Text variant="caption" align="center" numberOfLines={2}>{capitalize(t.name)}</Text>
+                          <Text variant="caption" align="center" {...labelFit(t.name)}>{capitalize(t.name)}</Text>
                         </PressableScale>
                       ))}
                     </View>

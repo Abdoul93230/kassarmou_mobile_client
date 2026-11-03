@@ -10,6 +10,7 @@ import ProductGrid from '../components/ProductGrid';
 import PriceFilterSheet, { priceLabel } from '../components/search/PriceFilterSheet';
 import { Chip, EmptyState, IconButton, PressableScale, SmartImage, Text } from '../ui';
 import { capitalize } from '../utils/text';
+import { labelFit } from '../utils/labelFit';
 import { fonts, GUTTER, radius, useTheme } from '../theme';
 
 const HISTORY_KEY = 'searchHistory';
@@ -223,7 +224,7 @@ export default function SearchScreen({ navigation, route }) {
                       <View style={[styles.catImg, { backgroundColor: colors.primarySoft }]}>
                         {c.image ? <SmartImage uri={c.image} width={64} style={styles.fill} /> : <Ionicons name="pricetag-outline" size={22} color={colors.primary} />}
                       </View>
-                      <Text variant="caption" color="textSecondary" align="center" numberOfLines={2} style={styles.catLabel}>{capitalize(c.name)}</Text>
+                      <Text variant="caption" color="textSecondary" align="center" {...labelFit(c.name)} style={styles.catLabel}>{capitalize(c.name)}</Text>
                     </PressableScale>
                   ))}
               </View>
