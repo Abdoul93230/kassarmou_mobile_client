@@ -475,7 +475,7 @@ const styles = themedStyles((colors) => ({
   avatarInitial: { backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   status: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  loader: { marginTop: 40 },
+  loader: { flex: 1 }, // occupe la place de la liste : la zone de saisie reste en bas pendant le chargement
   errorBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
   retryBtn: { backgroundColor: colors.primary, paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.pill },
   list: { paddingHorizontal: GUTTER, paddingVertical: 12 },
