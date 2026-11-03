@@ -52,7 +52,7 @@ function Card({ card, mine, onPress }) {
   );
 }
 
-/** Conversation avec une boutique (temps réel) */
+/** Conversation avec une boutique, ou avec le support Ihambaobab (sellerId « support »), en temps réel */
 export default function StoreChatScreen({ navigation, route }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -323,8 +323,10 @@ export default function StoreChatScreen({ navigation, route }) {
   }, [messages]);
   const lastMine = messages.find((m) => m.from === 'client' && !m.pending && !m.failed);
 
-  const storeName = store?.name || 'Boutique';
-  const status = storeTyping === 'audio' ? 'enregistre un vocal…' : storeTyping ? 'écrit…' : online ? 'En ligne' : 'Vous répond ici dès que possible';
+  const isSupport = !!store?.support || params.sellerId === 'support';
+  const storeName = store?.name || (isSupport ? 'Support Ihambaobab' : 'Boutique');
+  const idle = isSupport ? 'Commande, paiement, livraison : on vous aide' : 'Vous répond ici dès que possible';
+  const status = storeTyping === 'audio' ? 'enregistre un vocal…' : storeTyping ? 'écrit…' : online ? 'En ligne' : idle;
 
   return (
     <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -333,10 +335,13 @@ export default function StoreChatScreen({ navigation, route }) {
         <PressableScale
           style={styles.headerStore}
           scaleTo={0.98}
-          onPress={() => store?.id && navigation.navigate('Boutique', { sellerId: store.id, storeName: store.name })}
-          accessibilityLabel={`Voir la boutique ${storeName}`}
+          onPress={isSupport ? undefined : () => store?.id && navigation.navigate('Boutique', { sellerId: store.id, storeName: store.name })}
+          disabled={isSupport}
+          accessibilityLabel={isSupport ? storeName : `Voir la boutique ${storeName}`}
         >
-          {store?.logo ? <SmartImage uri={store.logo} width={40} style={styles.avatar} /> : (
+          {isSupport ? (
+            <View style={[styles.avatar, styles.avatarInitial, { backgroundColor: colors.primary }]}><Ionicons name="headset" size={20} color={colors.textInverse} /></View>
+          ) : store?.logo ? <SmartImage uri={store.logo} width={40} style={styles.avatar} /> : (
             <View style={[styles.avatar, styles.avatarInitial, { backgroundColor: colors.primarySoft }]}><Text variant="title" color="primaryDark">{storeName.charAt(0).toUpperCase()}</Text></View>
           )}
           <View style={styles.flex}>
@@ -449,7 +454,7 @@ export default function StoreChatScreen({ navigation, route }) {
           onError={(m) => Toast.show({ type: 'info', text1: m })}
           onPickPhoto={pickPhoto}
           uploading={uploading}
-          placeholder={`Écrire à ${storeName}…`}
+          placeholder={isSupport ? 'Écrire au support…' : `Écrire à ${storeName}…`}
           bottomInset={insets.bottom}
           disabled={loading}
         />

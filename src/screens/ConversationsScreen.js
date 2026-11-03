@@ -68,14 +68,27 @@ export default function ConversationsScreen({ navigation }) {
     );
   }
 
+  // Le support est épinglé en tête ; les boutiques en dessous
+  const supportConv = rows?.find((c) => c.store?.support);
+  const shops = (rows || []).filter((c) => !c.store?.support);
+  const sTyping = supportConv && typing[supportConv.id];
   const support = (
     <PressableScale onPress={() => navigation.navigate('Support')} scaleTo={0.985} style={[styles.row, { backgroundColor: colors.surface, borderBottomColor: colors.divider }]} accessibilityLabel="Support Ihambaobab">
       <View style={[styles.avatar, styles.supportAvatar, { backgroundColor: colors.primary }]}><Ionicons name="headset" size={22} color={colors.textInverse} /></View>
       <View style={styles.flex}>
-        <Text variant="title">Support Ihambaobab</Text>
-        <Text variant="small" color="textSecondary" numberOfLines={1}>Commande, paiement, livraison : on vous aide</Text>
+        <View style={styles.line}>
+          <Text variant="title" style={styles.flex}>Support Ihambaobab</Text>
+          {supportConv?.lastMessage?.at ? <Text variant="caption" color={supportConv.unread ? 'primary' : 'textMuted'}>{when(supportConv.lastMessage.at)}</Text> : null}
+        </View>
+        <View style={styles.line}>
+          <Text variant="small" color={sTyping ? 'primary' : supportConv?.unread ? 'text' : 'textSecondary'} numberOfLines={1} style={[styles.flex, supportConv?.unread && styles.bold]}>
+            {sTyping || (supportConv?.lastMessage?.text
+              ? `${supportConv.lastMessage.from === 'client' ? 'Vous : ' : ''}${supportConv.lastMessage.text}`
+              : 'Commande, paiement, livraison : on vous aide')}
+          </Text>
+          {supportConv?.unread ? <View style={[styles.badge, { backgroundColor: colors.primary }]}><Text variant="caption" color="textInverse" style={styles.badgeText}>{supportConv.unread > 99 ? '99+' : supportConv.unread}</Text></View> : null}
+        </View>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </PressableScale>
   );
 
@@ -86,13 +99,13 @@ export default function ConversationsScreen({ navigation }) {
         <Text variant="h2" style={styles.flex}>Messages</Text>
       </View>
       <FlatList
-        data={rows || []}
+        data={shops}
         keyExtractor={(c) => c.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
         ListHeaderComponent={
           <>
             {support}
-            {rows?.length ? <Text variant="caption" color="textMuted" style={styles.section}>BOUTIQUES</Text> : null}
+            {shops.length ? <Text variant="caption" color="textMuted" style={styles.section}>BOUTIQUES</Text> : null}
           </>
         }
         ListEmptyComponent={rows === null ? (

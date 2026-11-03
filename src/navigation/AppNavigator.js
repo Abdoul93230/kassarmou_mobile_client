@@ -21,7 +21,6 @@ import CartScreen from '../screens/CartScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import OrdersScreen from '../screens/OrdersScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
-import MessagesScreen from '../screens/MessagesScreen';
 import ConversationsScreen from '../screens/ConversationsScreen';
 import StoreChatScreen from '../screens/StoreChatScreen';
 import MessagingBridge from '../components/MessagingBridge';
@@ -359,7 +358,8 @@ function AppNavigator() {
             />
             <Stack.Screen
               name="Support"
-              component={MessagesScreen}
+              component={StoreChatScreen}
+              initialParams={{ sellerId: 'support' }}
               options={{ headerShown: false }}
             />
           </>
