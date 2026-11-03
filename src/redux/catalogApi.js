@@ -195,7 +195,11 @@ export const catalogApi = createApi({
     /** Détail d'une commande */
     order: build.query({
       query: (id) => ({ url: `/getCommandesById/${id}` }),
-      transformResponse: (res) => res?.commande || res?.data || null,
+      // trace : montants, paiement réservé, code de livraison, étapes (voir backend services/orderTrace)
+      transformResponse: (res) => {
+        const o = res?.commande || res?.data || null;
+        return o ? { ...o, trace: res?.trace || null } : null;
+      },
       providesTags: ['Orders'],
     }),
 

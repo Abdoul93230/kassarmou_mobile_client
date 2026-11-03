@@ -8,15 +8,21 @@ import { Notifications, registerDevicePush } from '../services/pushNotifications
 
 const handled = new Set(); // une notification n'ouvre sa conversation qu'une fois
 
-/** Ouvre la conversation d'une notification, avec l'accueil puis la liste des messages en dessous */
+/** Ouvre ce que vise une notification : la conversation (messages) ou la commande (suivi) */
 function openFromNotification(response) {
   const id = response?.notification?.request?.identifier;
   const data = response?.notification?.request?.content?.data;
-  if (!id || handled.has(id) || data?.type !== 'store_message' || !data.conversationId) return;
+  if (!id || handled.has(id)) return;
+  const isMessage = data?.type === 'store_message' && data.conversationId;
+  const isOrder = data?.type === 'order' && data.orderId; // annulation, colis en route, livraison
+  if (!isMessage && !isOrder) return;
   handled.add(id);
-  const go = () => navigationRef.dispatch(CommonActions.reset({
+  const go = () => navigationRef.dispatch(CommonActions.reset(isMessage ? {
     index: 2,
     routes: [{ name: 'MainTabs' }, { name: 'Messages' }, { name: 'StoreChat', params: { conversationId: String(data.conversationId) } }],
+  } : {
+    index: 1,
+    routes: [{ name: 'MainTabs' }, { name: 'OrderDetail', params: { orderId: String(data.orderId) } }],
   }));
   if (navigationRef.isReady()) go();
   else setTimeout(() => navigationRef.isReady() && go(), 800);

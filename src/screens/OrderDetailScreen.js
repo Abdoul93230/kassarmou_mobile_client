@@ -1,13 +1,13 @@
 import React from 'react';
-import { Linking, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useOrderQuery } from '../redux/catalogApi';
 import useReorder from '../hooks/useReorder';
 import useContactStore from '../hooks/useContactStore';
 import StageBadge from '../components/orders/StageBadge';
+import { OrderJournal, OrderTraceBanners, paymentText } from '../components/orders/OrderTraceCards';
 import { Button, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, Text } from '../ui';
-import { SUPPORT } from '../config/env';
 import { fetchShareLink, shareTracking } from '../services/guestSession';
 import { formatPrice } from '../utils/formatPrice';
 import { formatPhoneInternational } from '../utils/phoneRules';
@@ -96,10 +96,9 @@ export default function OrderDetailScreen({ route, navigation }) {
   const d = order.livraisonDetails || {};
   const ref = String(order.reference || order._id);
 
-  const contactSupport = () => {
-    const text = encodeURIComponent(`Bonjour, j'ai une question sur ma commande n° ${ref}.`);
-    Linking.openURL(`https://wa.me/${SUPPORT.whatsapp}?text=${text}`).catch(() => {});
-  };
+  // Support dans l'app : la commande est jointe à la conversation
+  const contactSupport = () => navigation.navigate('StoreChat', { sellerId: 'support', orderId: order._id });
+  const trace = order.trace;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.bg }]}>
@@ -129,12 +128,15 @@ export default function OrderDetailScreen({ route, navigation }) {
         refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
+        <OrderTraceBanners trace={trace} />
+
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <View style={styles.cardHead}>
             <Text variant="h3">Suivi</Text>
             <StageBadge stage={stage} />
           </View>
           <Timeline stage={stage} />
+          <OrderJournal trace={trace} />
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
@@ -178,11 +180,11 @@ export default function OrderDetailScreen({ route, navigation }) {
           <Text variant="h3" style={styles.mb10}>Paiement</Text>
           <Line label="Sous-total" value={F(order.prixTotal ?? order.fraisSousTotalArticles)} />
           {Number(order.reduction) > 0 ? <Line label={`Code ${order.codePromo || 'promo'}`} value={`-${F(order.reduction)}`} tone="success" /> : null}
-          {Number(order.pointsDiscount) > 0 ? <Line label="Baobab Points" value={`-${F(order.pointsDiscount)}`} tone="success" /> : null}
+          {Number(order.pointsDiscount) > 0 ? <Line label={`${order.pointsUsed || ''} Baobab Points`.trim()} value={`-${F(order.pointsDiscount)}`} tone="success" /> : null}
           <Line label="Livraison" value={Number(order.fraisLivraison) > 0 ? F(order.fraisLivraison) : 'Offerte'} />
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <Line label="Total" value={F(order.prix)} bold />
-          <Text variant="caption" color="textMuted" style={styles.mt8}>Statut du paiement : {order.statusPayment || '—'}</Text>
+          <Text variant="caption" color="textMuted" style={styles.mt8}>Paiement : {paymentText(order, trace)}</Text>
         </View>
 
         {(order.shippingByStore || []).filter((s) => s?.storeId).map((s) => (
@@ -202,10 +204,10 @@ export default function OrderDetailScreen({ route, navigation }) {
         ))}
 
         <PressableScale onPress={contactSupport} style={[styles.help, { backgroundColor: colors.surface, borderColor: colors.border }]} scaleTo={0.99}>
-          <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+          <Ionicons name="headset-outline" size={20} color={colors.primary} />
           <View style={styles.flex}>
             <Text variant="title">Un souci avec cette commande ?</Text>
-            <Text variant="caption" color="textSecondary">Écrivez au support, la référence est jointe</Text>
+            <Text variant="caption" color="textSecondary">Écrivez au support, la commande est jointe</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </PressableScale>
