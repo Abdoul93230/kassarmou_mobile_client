@@ -1,5 +1,5 @@
 import React, { memo, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { Button, PressableScale, Stars, Text } from '../../ui';
@@ -53,7 +53,7 @@ export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmi
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheetWrap}>
+      <KeyboardAvoidingView behavior="padding" style={styles.sheetWrap}>
         <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <Text variant="h2" align="center">Votre avis compte</Text>

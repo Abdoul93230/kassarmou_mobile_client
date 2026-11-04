@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Chip, Text } from '../../ui';
 import TextField from '../../ui/TextField';
@@ -44,7 +44,7 @@ function PriceFilterSheet({ visible, value, onApply, onClose }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView behavior="padding">
         <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <Text variant="h2">Prix</Text>

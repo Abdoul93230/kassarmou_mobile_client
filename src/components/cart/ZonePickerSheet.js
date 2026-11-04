@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -91,7 +91,7 @@ function ZonePickerSheet({ visible, onClose, selected, onSelect }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close} statusBarTranslucent>
       <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={close} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
+      <KeyboardAvoidingView behavior="padding" style={styles.wrap}>
         <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 8 }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           {missing ? (

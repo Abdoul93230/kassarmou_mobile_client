@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { sendGuestOtp, verifyGuestOtp } from '../../services/guestSession';
@@ -82,7 +82,7 @@ function GuestOtpSheet({ visible, phone, name, reason, onClose, onVerified, onCa
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
+      <KeyboardAvoidingView behavior="padding" style={styles.wrap}>
         <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}><Ionicons name="shield-checkmark" size={22} color={colors.primary} /></View>
