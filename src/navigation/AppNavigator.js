@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './RootNavigation';
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
@@ -190,10 +191,12 @@ function AppNavigator() {
     >
       <Stack.Navigator
         screenOptions={{
-          // Chaque écran a son propre en-tête (design system) ; transition latérale + retour par glissement
+          // Chaque écran a son propre en-tête (design system) ; transition latérale.
+          // Retour par glissement : iPhone seulement. Sur Android il captait tout glissement vers la droite
+          // (galerie produit, carrousels) ; le retour s'y fait par le geste système ou le bouton retour.
           headerShown: false,
           ...TransitionPresets.SlideFromRightIOS,
-          gestureEnabled: true,
+          gestureEnabled: Platform.OS === 'ios',
           cardStyle: { backgroundColor: colors.bg },
           headerStyle: {
             backgroundColor: colors.primary,
