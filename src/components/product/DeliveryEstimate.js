@@ -1,155 +1,148 @@
-import React, { memo, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import React, { memo, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import apiClient from '../../config/api';
 import ZonePickerSheet from '../cart/ZonePickerSheet';
 import useSellerOrigin from '../../hooks/useSellerOrigin';
-import { getRememberedZone, rememberZone, zoneLabel } from '../../services/shippingV3';
+import { onZoneChange, quoteCart, rememberZone, resolveDeliveryZone, zoneLabel } from '../../services/shippingV3';
+import { selectPanierArticles } from '../../redux/cartSlice';
+import { storeIdOf } from '../../utils/cart';
 import { PressableScale, Text } from '../../ui';
 import { formatPrice } from '../../utils/formatPrice';
-import { colors, radius, useTheme, themedStyles } from '../../theme';
+import { radius, useTheme, themedStyles } from '../../theme';
 
 const F = (n) => `${formatPrice(n || 0)} F`;
 
 /**
- * Bloc « Livraison » de la fiche produit : d'où part le colis, vers quelle zone,
- * frais et délai réels pour la quantité choisie (même calcul que le panier et la commande).
+ * Ligne « Livraison » de la fiche produit, cohérente avec le panier :
+ * - même quartier que le panier (dernier choisi, sinon adresse du compte) ;
+ * - même calcul : un colis par boutique. Si le panier contient déjà des articles de cette boutique,
+ *   on annonce ce que l'ajout change vraiment (« inclus dans votre colis » ou « +X F »).
  */
 function DeliveryEstimate({ productId, sellerId, quantity = 1, style }) {
   const { colors } = useTheme();
   const origin = useSellerOrigin(sellerId);
+  const user = useSelector((s) => s.auth.user);
+  const cart = useSelector(selectPanierArticles);
+  const userId = user?.id || user?._id;
   const [zone, setZone] = useState(null);
   const [sheet, setSheet] = useState(false);
-  const [estimate, setEstimate] = useState(null);
+  const [result, setResult] = useState(null); // { parcel, before }
   const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    getRememberedZone().then((z) => alive && z && setZone(z));
-    return () => { alive = false; };
-  }, []);
+    resolveDeliveryZone(userId).then((z) => alive && z && setZone(z));
+    const off = onZoneChange((z) => alive && setZone(z)); // changé depuis le panier ou une autre fiche
+    return () => { alive = false; off(); };
+  }, [userId]);
+
+  // Articles de cette boutique déjà dans le panier (le panier les livrera dans le même colis)
+  const sameStore = useMemo(
+    () => (cart || []).filter((a) => a._id && sellerId && String(storeIdOf(a)) === String(sellerId) && Number(a.quantite) > 0),
+    [cart, sellerId],
+  );
+  const cartKey = sameStore.map((a) => `${a._id}:${a.quantite}`).sort().join('|');
 
   useEffect(() => {
-    if (!zone?._id || !productId) {
-      setEstimate(null);
-      return undefined;
-    }
+    if (!zone?._id || !productId) { setResult(null); return undefined; }
     let alive = true;
     setLoading(true);
-    setFailed(false);
     const t = setTimeout(async () => {
       try {
-        const r = await apiClient.get('/api/shipping-v3/estimate', {
-          params: { productId, destinationZoneId: zone._id, quantity: Math.max(1, quantity) },
-          timeout: 10000,
-        });
-        if (alive) setEstimate(r.data?.data || null);
+        const before = sameStore.map((a) => ({ productId: String(a._id), quantity: Number(a.quantite) }));
+        // Après l'ajout : la quantité s'ajoute à celle déjà au panier pour ce produit
+        const after = [...before];
+        const i = after.findIndex((x) => x.productId === String(productId));
+        if (i >= 0) after[i] = { ...after[i], quantity: after[i].quantity + Math.max(1, quantity) };
+        else after.push({ productId: String(productId), quantity: Math.max(1, quantity) });
+        const [qAfter, qBefore] = await Promise.all([
+          quoteCart(zone._id, after),
+          before.length ? quoteCart(zone._id, before) : Promise.resolve(null),
+        ]);
+        if (alive) setResult({ parcel: qAfter?.parcels?.[0] || null, before: qBefore?.parcels?.[0] || null });
       } catch {
-        if (alive) { setEstimate(null); setFailed(true); }
+        if (alive) setResult({ error: true });
       } finally {
         if (alive) setLoading(false);
       }
     }, 250);
     return () => { alive = false; clearTimeout(t); };
-  }, [zone?._id, productId, quantity]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zone?._id, productId, quantity, cartKey]);
 
-  const choose = (z) => { setZone(z); rememberZone(z); };
-  const label = zone ? zoneLabel(zone) : null;
+  const choose = (z) => rememberZone(z); // met aussi à jour le panier
+  const place = zone ? zoneLabel(zone).title : null;
+  const p = result?.parcel;
+  const inCart = sameStore.length > 0 && result?.before?.deliverable;
+
+  // Montant annoncé : frais du colis, ou ce que l'ajout change quand la boutique est déjà au panier
+  let price = null;
+  if (p?.deliverable) {
+    if (p.free) price = { text: 'offerte', tone: 'success' };
+    else if (inCart) {
+      const extra = (p.fee || 0) - (result.before.free ? 0 : result.before.fee || 0);
+      price = extra > 0 ? { text: `+${F(extra)}`, tone: 'text', note: 'sur votre colis de cette boutique' } : { text: 'déjà incluse', tone: 'success', note: 'dans votre colis de cette boutique' };
+    } else price = { text: F(p.fee), tone: 'text' };
+  }
+
+  let line;
+  if (!zone) {
+    line = (
+      <Text variant="small" color="textSecondary" numberOfLines={2} style={styles.flex}>
+        {origin?.city ? `Expédié depuis ${origin.city} · ` : ''}
+        <Text variant="smallMedium" color="primary">Voir les frais pour mon quartier</Text>
+      </Text>
+    );
+  } else if (loading && !result) {
+    line = <ActivityIndicator size="small" color={colors.primary} style={styles.flex} />;
+  } else if (result?.error) {
+    line = <Text variant="small" color="textSecondary" style={styles.flex}>Livraison vers {place} : frais calculés au panier</Text>;
+  } else if (p && !p.deliverable) {
+    line = (
+      <Text variant="small" color={p.quoteRequired ? 'wood' : 'danger'} style={styles.flex}>
+        {p.message || `Livraison indisponible vers ${place}.`}
+      </Text>
+    );
+  } else if (p) {
+    line = (
+      <View style={styles.flex}>
+        <Text variant="small" numberOfLines={2}>
+          Livraison à {place} : <Text variant="smallMedium" color={price?.tone}>{price?.text}</Text>
+          {p.delay?.label ? <Text variant="small" color="textSecondary"> · {p.delay.label}</Text> : null}
+        </Text>
+        {price?.note ? <Text variant="caption" color="textMuted">{price.note}</Text> : null}
+        {p.delay?.sameDay && p.delay?.cutoff ? <Text variant="caption" color="textMuted">Commandez avant {p.delay.cutoff} pour le jour même</Text> : null}
+        {p.freeHint ? <Text variant="caption" color="success">Plus que {F(p.freeHint.remaining)} dans cette boutique pour la livraison offerte</Text> : null}
+      </View>
+    );
+  } else {
+    line = <View style={styles.flex} />;
+  }
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>
-      <View style={styles.head}>
-        <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}><Ionicons name="car-outline" size={20} color={colors.primary} /></View>
-        <View style={styles.flex}>
-          <Text variant="title">Livraison</Text>
-          {origin ? (
-            <View style={styles.originRow}>
-              <Text variant="small" color="textSecondary">Expédié depuis </Text>
-              <Ionicons name="location" size={12} color={colors.wood} />
-              <Text variant="smallMedium" color="wood">{origin.city}</Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-
-      <PressableScale onPress={() => setSheet(true)} scaleTo={0.985} style={[styles.zone, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-        <Ionicons name="location-outline" size={16} color={zone ? colors.primary : colors.textMuted} />
-        <View style={styles.flex}>
-          <Text variant={zone ? 'smallMedium' : 'small'} color={zone ? 'text' : 'textSecondary'} numberOfLines={1}>
-            {zone ? `Vers ${label.title}` : 'Choisir mon quartier ou ma ville'}
-          </Text>
-          {label?.subtitle ? <Text variant="caption" color="textMuted" numberOfLines={1}>{label.subtitle}</Text> : null}
-        </View>
-        <Text variant="smallMedium" color="primary">{zone ? 'Modifier' : 'Choisir'}</Text>
+    <>
+      <PressableScale
+        onPress={() => setSheet(true)}
+        scaleTo={0.985}
+        style={[styles.row, { borderColor: colors.border, backgroundColor: colors.surface }, style]}
+        accessibilityLabel={zone ? `Livraison à ${place}, changer de quartier` : 'Voir les frais de livraison pour mon quartier'}
+      >
+        <Ionicons name="car-outline" size={20} color={colors.primary} />
+        {line}
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </PressableScale>
-
-      {!zone ? (
-        <Text variant="caption" color="textMuted" style={styles.mt8}>Choisissez votre zone pour voir les frais et le délai exacts.</Text>
-      ) : loading ? (
-        <ActivityIndicator size="small" color={colors.primary} style={styles.mt8} />
-      ) : failed ? (
-        <Text variant="caption" color="textMuted" style={styles.mt8}>Frais calculés au panier.</Text>
-      ) : estimate ? (
-        estimate.deliverable ? (
-          <View style={styles.mt8}>
-            <View style={styles.row}>
-              <View style={styles.delay}>
-                <Ionicons name="time-outline" size={15} color={colors.primary} />
-                <Text variant="bodyMedium">{estimate.delay?.label || '—'}</Text>
-              </View>
-              {/* {estimate.free ? (
-                <View style={styles.delay}>
-                  <Text variant="caption" color="textMuted" style={styles.strike}>{F(estimate.free.amount)}</Text>
-                  <Text variant="title" color="success">Offerte</Text>
-                </View>
-              ) : (
-                <Text variant="title">{F(estimate.fee)}</Text>
-              )} */}
-            </View>
-            {estimate.delay?.sameDay && estimate.delay?.cutoff ? (
-              <Text variant="caption" color="textMuted" style={styles.mt4}>Commandez avant {estimate.delay.cutoff} pour une livraison le jour même.</Text>
-            ) : null}
-            {estimate.freeHint ? (
-              <View style={[styles.hint, { backgroundColor: colors.successSoft }]}>
-                <Ionicons name="gift-outline" size={14} color={colors.success} />
-                <Text variant="caption" color="success" style={styles.flex}>Plus que {F(estimate.freeHint.remaining)} dans cette boutique pour la livraison offerte</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <View style={[styles.hint, { backgroundColor: estimate.quoteRequired ? colors.woodSoft : colors.dangerSoft }]}>
-            <Ionicons name="alert-circle-outline" size={14} color={estimate.quoteRequired ? colors.wood : colors.danger} />
-            <Text variant="caption" color={estimate.quoteRequired ? 'wood' : 'danger'} style={styles.flex}>
-              {estimate.message || 'Livraison indisponible pour cette zone.'}
-            </Text>
-          </View>
-        )
-      ) : null}
-
       <ZonePickerSheet visible={sheet} onClose={() => setSheet(false)} selected={zone} onSelect={choose} />
-    </View>
+    </>
   );
 }
 
 const styles = themedStyles((colors) => ({
-  card: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  icon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  flex: { flex: 1 },
-  originRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 },
-  zone: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 12, paddingVertical: 10,
-    borderRadius: radius.md, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
   },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  delay: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  strike: { textDecorationLine: 'line-through' },
-  hint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, padding: 8, borderRadius: radius.sm, backgroundColor: colors.successSoft },
-  hintQuote: { backgroundColor: colors.woodSoft },
-  hintOff: { backgroundColor: colors.dangerSoft },
-  mt4: { marginTop: 4 },
-  mt8: { marginTop: 10 },
+  flex: { flex: 1 },
 }));
 
 export default memo(DeliveryEstimate);

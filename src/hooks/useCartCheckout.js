@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../config/api';
-import { getRememberedZone, getZones, quoteCart, rememberZone } from '../services/shippingV3';
+import { onZoneChange, quoteCart, rememberZone, resolveDeliveryZone } from '../services/shippingV3';
 import { groupByStore, originalPrice, unitPrice } from '../utils/cart';
 
 // Helpers purs : voir utils/cart.js (ré-exportés pour compatibilité)
@@ -46,25 +46,17 @@ export default function useCartCheckout(articles, user) {
     let cancelled = false;
     (async () => {
       try {
-        const remembered = await getRememberedZone();
-        if (remembered) {
-          if (!cancelled) setZoneState(remembered);
-          return;
-        }
-        if (!userId) return;
-        const r = await apiClient.get(`/getAddressByUserKey/${userId}`).catch(() => null);
-        const zoneId = r?.data?.address?.zoneId;
-        if (!zoneId) return;
-        const z = (await getZones()).find((x) => x._id === String(zoneId));
-        const locality = r?.data?.address?.localityName;
-        if (z && !cancelled) setZone(locality ? { ...z, localityName: locality } : z);
+        const z = await resolveDeliveryZone(userId);
+        if (z && !cancelled) setZoneState(z);
       } catch {
         // l'utilisateur choisira sa zone
       } finally {
         if (!cancelled) setZoneReady(true);
       }
     })();
-    return () => { cancelled = true; };
+    // Quartier changé ailleurs (fiche produit) : le panier suit
+    const off = onZoneChange((z) => { if (!cancelled) setZoneState(z); });
+    return () => { cancelled = true; off(); };
   }, [setZone, userId]);
 
   // ── Devis v3 : un appel pour tout le panier, relancé (anti-rebond) si la zone ou le panier change ──

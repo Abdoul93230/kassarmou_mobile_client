@@ -128,7 +128,15 @@ export function requestLocality(name, nearZoneId) {
 
 // ─── Zone mémorisée ──────────────────────────────────────────────────────────
 
+// Les écrans (fiche produit, panier, commande) suivent tous le même quartier, en direct
+const zoneListeners = new Set();
+export function onZoneChange(fn) {
+  zoneListeners.add(fn);
+  return () => zoneListeners.delete(fn);
+}
+
 export async function rememberZone(z) {
+  zoneListeners.forEach((fn) => { try { fn(z); } catch {} });
   try {
     if (z) await AsyncStorage.setItem(ZONE_KEY, JSON.stringify(z));
     else await AsyncStorage.removeItem(ZONE_KEY);
@@ -144,6 +152,28 @@ export async function getRememberedZone() {
     if (!list) return z;
     const found = list.find((x) => x._id === z._id);
     return found ? (z.localityName ? { ...found, localityName: z.localityName } : found) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Quartier de livraison du client, même règle partout (fiche produit, panier, commande) :
+ * le dernier quartier choisi, sinon celui de l'adresse enregistrée du compte (alors mémorisé).
+ */
+export async function resolveDeliveryZone(userId) {
+  const remembered = await getRememberedZone();
+  if (remembered || !userId) return remembered;
+  try {
+    const r = await apiClient.get(`/getAddressByUserKey/${userId}`);
+    const zoneId = r?.data?.address?.zoneId;
+    if (!zoneId) return null;
+    const z = (await getZones()).find((x) => x._id === String(zoneId));
+    if (!z) return null;
+    const locality = r?.data?.address?.localityName;
+    const zone = locality ? { ...z, localityName: locality } : z;
+    rememberZone(zone);
+    return zone;
   } catch {
     return null;
   }
