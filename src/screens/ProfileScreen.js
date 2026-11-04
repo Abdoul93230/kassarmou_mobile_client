@@ -167,12 +167,14 @@ export default function ProfileScreen({ navigation }) {
   }, [orders.data]);
 
   const changePhoto = useCallback(async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Autorisation requise', 'Autorisez l’accès à vos photos pour changer votre photo de profil.');
+    // Sélecteur de photos du système : aucune permission à demander
+    let picked;
+    try {
+      picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
+    } catch {
+      Alert.alert('Galerie indisponible', 'Autorisez l’accès à vos photos dans les réglages du téléphone.');
       return;
     }
-    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
     if (picked.canceled || !picked.assets?.[0]) return;
     setUploading(true);
     try {

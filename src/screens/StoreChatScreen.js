@@ -286,12 +286,15 @@ export default function StoreChatScreen({ navigation, route }) {
   };
 
   const pickPhoto = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Toast.show({ type: 'info', text1: 'Accès aux photos refusé', text2: 'Autorisez-le dans les réglages pour envoyer une photo.' });
+    // Sélecteur de photos du système (Android 13+, iOS 14+) : aucune permission à demander,
+    // l'utilisateur choisit la photo et seule celle-ci est partagée avec l'app
+    let r;
+    try {
+      r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: false });
+    } catch {
+      Toast.show({ type: 'info', text1: 'Galerie indisponible', text2: 'Autorisez l’accès aux photos dans les réglages du téléphone.' });
       return;
     }
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: false });
     if (r.canceled || !r.assets?.[0]) return;
     setUploading(true);
     try {

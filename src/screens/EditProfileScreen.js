@@ -66,13 +66,22 @@ export default function EditProfileScreen({ navigation }) {
     (name.trim() !== initial.name || email.trim() !== initial.email || whatsapp !== initial.whatsapp || !!newPhoto);
 
   const pickPhoto = useCallback(async (fromCamera) => {
-    const perm = fromCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Autorisation requise', fromCamera ? "Autorisez l'appareil photo dans les réglages." : 'Autorisez l’accès à vos photos dans les réglages.');
-      return;
+    // Appareil photo : permission nécessaire. Galerie : sélecteur du système, sans permission.
+    if (fromCamera) {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Autorisation requise', "Autorisez l'appareil photo dans les réglages.");
+        return;
+      }
     }
     const opts = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 };
-    const r = fromCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+    let r;
+    try {
+      r = fromCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+    } catch {
+      Alert.alert('Galerie indisponible', 'Autorisez l’accès à vos photos dans les réglages du téléphone.');
+      return;
+    }
     if (r.canceled || !r.assets?.[0]) return;
     const small = await ImageManipulator.manipulateAsync(r.assets[0].uri, [{ resize: { width: 512 } }], { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG });
     setNewPhoto(small.uri);

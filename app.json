@@ -258,6 +258,14 @@
           "enableBackgroundPlayback": false,
           "enableBackgroundRecording": false
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ihambaobab accède aux photos que vous choisissez pour les envoyer aux boutiques ou en faire votre photo de profil.",
+          "cameraPermission": "Ihambaobab utilise l'appareil photo pour prendre votre photo de profil.",
+          "microphonePermission": "Ihambaobab utilise le micro uniquement pour enregistrer les messages vocaux que vous envoyez aux boutiques."
+        }
       ]
     ]
   }
