@@ -39,6 +39,7 @@ const TX = {
   REFERRAL_PARRAIN: ['Parrainage', 'people-outline'],
   REFERRAL_FILLEUL: ['Bonus filleul', 'people-outline'],
   REDEMPTION: ['Réduction utilisée', 'pricetag-outline'],
+  REFUND: ['Points rendus', 'arrow-undo-outline'], // commande annulée ou paiement non abouti
   ADMIN_CREDIT: ['Crédit', 'add-circle-outline'],
   ADMIN_DEBIT: ['Débit', 'remove-circle-outline'],
   CANCELLATION: ['Annulation', 'close-circle-outline'],
@@ -187,6 +188,30 @@ export default function WalletScreen({ navigation }) {
           </LinearGradient>
         )}
 
+        {/* Points réservés par une commande en attente de paiement */}
+        {wallet?.reserved?.length ? (
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
+            <View style={styles.row}>
+              <View style={[styles.icon, { backgroundColor: colors.warningSoft }]}><Ionicons name="lock-closed" size={18} color={colors.warning} /></View>
+              <View style={styles.flex}>
+                <Text variant="title">{wallet.reservedTotal} BP réservés</Text>
+                <Text variant="caption" color="textSecondary">Toujours à vous : ils attendent le paiement de votre commande.</Text>
+              </View>
+            </View>
+            {wallet.reserved.map((r) => (
+              <View key={r.orderId} style={[styles.reserved, { borderColor: colors.border }]}>
+                <View style={styles.flex}>
+                  <Text variant="smallMedium">{r.points} BP · commande {String(r.reference).slice(-8)}</Text>
+                  <Text variant="caption" color="textMuted">
+                    Rendus automatiquement à {new Date(r.expiresAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} si elle n'est pas payée
+                  </Text>
+                </View>
+                <Button title="Payer" size="sm" onPress={() => navigation.navigate('OrderDetail', { orderId: r.orderId })} />
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/* Pointage */}
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <View style={styles.row}>
@@ -283,6 +308,7 @@ const styles = StyleSheet.create({
   dim: { opacity: 0.85 },
   mt4: { marginTop: 4 },
   mt12: { marginTop: 12 },
+  reserved: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   mb8: { marginBottom: 8 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: GUTTER, paddingBottom: 10 },
   cardSkeleton: { marginHorizontal: GUTTER },

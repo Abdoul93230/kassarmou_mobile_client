@@ -120,11 +120,14 @@ export default function useCartCheckout(articles, user) {
   const validatePromo = useCallback(
     async (code, amount = subtotal) => {
       const userId = user?.id || user?._id;
+      // Nouvel essai de paiement : l'utilisation enregistrée par cette commande ne compte pas
+      const pending = JSON.parse((await AsyncStorage.getItem('pendingOrder').catch(() => null)) || 'null');
       const res = await apiClient.post('/api/promocodes/validate', {
         code,
         orderAmount: amount,
         userId,
         products: (articles || []).map((a) => a._id).filter(Boolean),
+        ...(pending?.transactionId ? { orderReference: pending.transactionId } : {}),
       });
       if (!res.data?.valid) throw new Error(res.data?.message || 'Code promo invalide');
       const { discount, finalAmount, promoCode } = res.data;

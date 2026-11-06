@@ -104,6 +104,17 @@ export default function CheckoutScreen({ navigation, route }) {
   const [errors, setErrors] = useState({});
   const [method, setMethod] = useState(ONLINE);
   const [points, setPoints] = useState(0);
+  // Nouvel essai de paiement : points déjà réservés par la commande (ils lui reviennent, donc réutilisables)
+  const [reservedPoints, setReservedPoints] = useState(0);
+  const presetPoints = useRef(false);
+  useEffect(() => {
+    AsyncStorage.getItem('pendingOrder')
+      .then((raw) => {
+        const p = JSON.parse(raw || 'null');
+        if (p?.transactionId && (!p.owner || p.owner === (userId || 'guest'))) setReservedPoints(Number(p.pointsUsed) || 0);
+      })
+      .catch(() => {});
+  }, [userId]);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null); // { reference, method }
 
@@ -186,12 +197,20 @@ export default function CheckoutScreen({ navigation, route }) {
   // Baobab Points
   const pointsInfo = useMemo(() => {
     // Points réservés aux comptes : jamais en invité ni sans connexion
-    if (guest || !userId || !gConfig?.enabled || !wallet || wallet.balance <= 0) return null;
+    const balance = (wallet?.balance || 0) + reservedPoints;
+    if (guest || !userId || !gConfig?.enabled || !wallet || balance <= 0) return null;
     const rate = gConfig?.redemption?.pointsToFcfaRate ?? 20;
     const maxPct = gConfig?.redemption?.maxPercentPerOrder ?? 30;
-    const maxPoints = Math.min(wallet.balance, Math.floor((subtotal * maxPct) / 100 / rate));
-    return maxPoints > 0 ? { rate, maxPct, maxPoints, balance: wallet.balance } : null;
-  }, [gConfig, guest, subtotal, userId, wallet]);
+    const maxPoints = Math.min(balance, Math.floor((subtotal * maxPct) / 100 / rate));
+    return maxPoints > 0 ? { rate, maxPct, maxPoints, balance, reserved: Math.min(reservedPoints, maxPoints) } : null;
+  }, [gConfig, guest, reservedPoints, subtotal, userId, wallet]);
+
+  // Les points choisis au premier essai sont présélectionnés (une fois)
+  useEffect(() => {
+    if (presetPoints.current || !pointsInfo?.reserved) return;
+    presetPoints.current = true;
+    setPoints(pointsInfo.reserved);
+  }, [pointsInfo]);
   const pointsDiscount = pointsInfo ? points * pointsInfo.rate : 0;
   const payable = Math.max(0, total - pointsDiscount);
 
@@ -311,7 +330,7 @@ export default function CheckoutScreen({ navigation, route }) {
       }
 
       // Paiement électronique : la commande est conservée pour un éventuel nouvel essai
-      await AsyncStorage.setItem('pendingOrder', JSON.stringify({ transactionId, total: payable, owner }));
+      await AsyncStorage.setItem('pendingOrder', JSON.stringify({ transactionId, total: payable, owner, pointsUsed: guest ? 0 : points, codePromo: appliedPromo?.code || null }));
       await AsyncStorage.setItem('paymentInitiated', JSON.stringify({ transactionId, method, timestamp: Date.now() }));
       navigation.navigate('PaymentWebView', { amount: payable, transactionId, paymentMethod: method });
     } catch (e) {
@@ -458,12 +477,19 @@ export default function CheckoutScreen({ navigation, route }) {
         {pointsInfo ? (
           <Section title="Baobab Points" icon="gift" right={<Text variant="smallMedium" color="primaryDark">{pointsInfo.balance} BP</Text>}>
             <View style={styles.pointsRow}>
-              {[0, Math.floor(pointsInfo.maxPoints / 2), pointsInfo.maxPoints]
-                .filter((v, i, a) => a.indexOf(v) === i)
+              {[0, pointsInfo.reserved, Math.floor(pointsInfo.maxPoints / 2), pointsInfo.maxPoints]
+                .filter((v, i, a) => (v === 0 || v > 0) && a.indexOf(v) === i)
+                .sort((a, b) => a - b)
+                .slice(0, 4)
                 .map((v) => (
                   <Chip key={v} label={v === 0 ? 'Aucun' : `${v} BP`} active={points === v} onPress={() => setPoints(v)} style={styles.flex} />
                 ))}
             </View>
+            {pointsInfo.reserved ? (
+              <Text variant="caption" color="success" style={styles.mt8}>
+                Vos {reservedPoints} BP de l'essai précédent sont toujours à vous : ils sont repris pour ce paiement.
+              </Text>
+            ) : null}
             <Text variant="caption" color="textMuted" style={styles.mt8}>
               1 BP = {pointsInfo.rate} FCFA · jusqu'à {pointsInfo.maxPct} % de la commande
             </Text>

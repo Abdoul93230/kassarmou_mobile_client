@@ -24,7 +24,12 @@ export default function useReorder(navigation) {
         await AsyncStorage.setItem('panier', JSON.stringify(items));
         await AsyncStorage.removeItem('paymentInitiated');
         if (mode === 'pay' && order?.reference) {
-          await AsyncStorage.setItem('pendingOrder', JSON.stringify({ commandeId: order._id, transactionId: order.reference, owner: order.clefUser ? String(order.clefUser) : undefined, timestamp: Date.now() }));
+          await AsyncStorage.setItem('pendingOrder', JSON.stringify({
+            commandeId: order._id, transactionId: order.reference, owner: order.clefUser ? String(order.clefUser) : undefined,
+            // Réservés par cette commande : repris au nouvel essai (le serveur les rend puis les redébite)
+            pointsUsed: Number(order.pointsUsed) || 0, codePromo: order.codePromo || null,
+            timestamp: Date.now(),
+          }));
           if (order.codePromo) await AsyncStorage.setItem('appliedPromoCode', order.codePromo);
           else await AsyncStorage.removeItem('appliedPromoCode');
         } else {
