@@ -49,13 +49,15 @@ export default function SellerDetailScreen({ route, navigation }) {
 
   const requireAuth = () => navigation.navigate('QuickAuth', { returnScreen: 'SellerDetail', returnParams: { sellerId } });
 
+  const myReview = reviews.find((r) => String(r.user?._id || r.user?.id || r.user) === String(userId)) || null;
+
   const submit = useCallback(
     async ({ rating, text }) => {
       setPosting(true);
       try {
         await socialService.createReview(sellerId, { rating, comment: text });
         setSheet(false);
-        Toast.show({ type: 'success', text1: 'Merci pour votre avis !' });
+        Toast.show({ type: 'success', text1: myReview ? 'Avis modifié' : 'Merci pour votre avis !' });
         await Promise.all([load(1), stats.refetch()]);
         return true;
       } catch (e) {
@@ -65,7 +67,7 @@ export default function SellerDetailScreen({ route, navigation }) {
         setPosting(false);
       }
     },
-    [load, sellerId, stats],
+    [load, myReview, sellerId, stats],
   );
 
   const toggleUseful = useCallback(
@@ -114,7 +116,6 @@ export default function SellerDetailScreen({ route, navigation }) {
   const rating = Number(stats.data?.rating ?? s?.rating) || 0;
   const count = Number(stats.data?.reviewsCount ?? s?.reviewsCount) || 0;
   const name = s?.storeName || 'Boutique';
-  const alreadyReviewed = reviews.some((r) => String(r.user?._id || r.user?.id || r.user) === String(userId));
 
   const header = (
     <View>
@@ -131,9 +132,14 @@ export default function SellerDetailScreen({ route, navigation }) {
         <Text variant="hero" style={styles.big}>{rating ? rating.toFixed(1) : '—'}</Text>
         <Stars value={rating} size={20} gap={4} />
         <Text variant="small" color="textSecondary" style={styles.mt6}>{count ? `Basé sur ${count} avis` : 'Pas encore d\'avis'}</Text>
-        {!alreadyReviewed ? (
-          <Button title="Noter cette boutique" icon="star-outline" variant="secondary" onPress={() => (userId ? setSheet(true) : requireAuth())} style={styles.mt16} />
-        ) : null}
+        {/* Un seul avis par client : s'il a déjà noté, il modifie son avis */}
+        <Button
+          title={myReview ? 'Modifier mon avis' : 'Noter cette boutique'}
+          icon={myReview ? 'create-outline' : 'star-outline'}
+          variant="secondary"
+          onPress={() => (userId ? setSheet(true) : requireAuth())}
+          style={styles.mt16}
+        />
       </View>
       {reviews.length ? <Text variant="h3" style={styles.listTitle}>Derniers avis</Text> : null}
     </View>
@@ -165,7 +171,7 @@ export default function SellerDetailScreen({ route, navigation }) {
                   <Text variant="smallMedium">{author}{mine ? ' (vous)' : ''}</Text>
                   <View style={styles.metaRow}>
                     <Stars value={Number(item.rating) || 0} size={12} />
-                    <Text variant="caption" color="textMuted">{timeAgo(item.createdAt)}</Text>
+                    <Text variant="caption" color="textMuted">{timeAgo(item.updatedAt || item.createdAt)}{item.updatedAt ? ' · modifié' : ''}</Text>
                   </View>
                 </View>
                 {mine ? (
@@ -174,6 +180,12 @@ export default function SellerDetailScreen({ route, navigation }) {
                   </PressableScale>
                 ) : null}
               </View>
+              {item.verifiedPurchase ? (
+                <View style={[styles.verified, { backgroundColor: colors.successSoft }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text variant="caption" color="success">Achat vérifié</Text>
+                </View>
+              ) : null}
               {item.comment ? <Text variant="body" color="textSecondary" style={styles.mt8}>{item.comment}</Text> : null}
               <PressableScale onPress={() => toggleUseful(item)} style={[styles.useful, { backgroundColor: colors.surfaceAlt }, useful && [styles.usefulOn, { backgroundColor: colors.primarySoft }]]} hitSlop={6}>
                 <Ionicons name={useful ? 'thumbs-up' : 'thumbs-up-outline'} size={14} color={useful ? colors.primaryDark : colors.textSecondary} />
@@ -190,7 +202,7 @@ export default function SellerDetailScreen({ route, navigation }) {
         ListFooterComponent={loading && reviews.length ? <ActivityIndicator color={colors.primary} style={styles.mt16} /> : null}
       />
 
-      <ReviewSheet visible={sheet} onClose={() => setSheet(false)} onSubmit={submit} submitting={posting} />
+      <ReviewSheet visible={sheet} onClose={() => setSheet(false)} onSubmit={submit} submitting={posting} initial={myReview} />
     </View>
   );
 }
@@ -215,6 +227,7 @@ const styles = themedStyles((colors) => ({
   big: { fontSize: 44, lineHeight: 52 },
   listTitle: { marginHorizontal: GUTTER, marginTop: 24, marginBottom: 4 },
   review: { marginHorizontal: GUTTER, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  verified: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   reviewHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },

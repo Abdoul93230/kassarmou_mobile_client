@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -43,12 +43,16 @@ const ReviewItem = memo(function ReviewItem({ review }) {
 });
 
 /** Fenêtre « Donner mon avis » */
-export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmit, submitting }) {
+export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmit, submitting, initial }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
   const [text, setText] = useState('');
-  const canSend = rating > 0 && text.trim().length >= 3;
+  const canSend = rating > 0 && text.trim().length >= 5; // même règle que le serveur
+  // Modifier son avis : le formulaire reprend la note et le texte publiés
+  useEffect(() => {
+    if (visible && initial) { setRating(Number(initial.rating) || 0); setText(initial.comment || ''); }
+  }, [visible, initial]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -56,7 +60,7 @@ export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmi
       <KeyboardAvoidingView behavior="padding" style={styles.sheetWrap}>
         <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
-          <Text variant="h2" align="center">Votre avis compte</Text>
+          <Text variant="h2" align="center">{initial ? 'Modifier mon avis' : 'Votre avis compte'}</Text>
           <Text variant="small" color="textSecondary" align="center" style={styles.sheetSub}>
             Aidez les autres clients à bien choisir
           </Text>
