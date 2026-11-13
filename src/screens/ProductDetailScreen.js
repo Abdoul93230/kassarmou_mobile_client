@@ -26,6 +26,7 @@ import { sellerIdOf } from '../services/shippingV3';
 import ReviewsSection, { summarize } from '../components/product/ReviewsSection';
 import ProductRail from '../components/home/ProductRail';
 import DeepLinkingService from '../services/deepLinkingService';
+import { trackProductView, VIEWERS_MIN } from '../services/productViews';
 import { formatPrice } from '../utils/formatPrice';
 import { productImages } from '../utils/image';
 import { capitalize, htmlToText } from '../utils/text';
@@ -93,6 +94,15 @@ export default function ProductDetailScreen({ route, navigation }) {
       setSize(first?.sizes?.[0] || null);
     }
   }, [variants, variant]);
+
+  // Visite comptée (une par personne et par jour) ; « X personnes l'ont vu » affiché à partir de 10
+  const [weekViewers, setWeekViewers] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    setWeekViewers(0);
+    trackProductView(productId).then((n) => alive && setWeekViewers(n));
+    return () => { alive = false; };
+  }, [productId]);
 
   useEffect(() => {
     const userId = user?.id || user?._id;
@@ -251,6 +261,12 @@ export default function ProductDetailScreen({ route, navigation }) {
               <Text variant="smallMedium" color={outOfStock ? 'danger' : stock <= 5 ? 'wood' : 'success'}>
                 {outOfStock ? 'Épuisé' : stock <= 5 ? `Plus que ${stock} en stock — commandez vite` : 'En stock'}
               </Text>
+            </View>
+          ) : null}
+          {weekViewers >= VIEWERS_MIN ? (
+            <View style={styles.viewers}>
+              <Ionicons name="eye-outline" size={15} color={colors.textSecondary} />
+              <Text variant="small" color="textSecondary">{weekViewers} personnes ont vu cet article cette semaine</Text>
             </View>
           ) : null}
         </View>
@@ -412,6 +428,7 @@ const styles = themedStyles((colors) => ({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' },
   ratingInline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stock: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginTop: 14, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
+  viewers: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   stockOk: { backgroundColor: colors.successSoft },
   stockLow: { backgroundColor: colors.warningSoft },
   stockOut: { backgroundColor: colors.dangerSoft },
