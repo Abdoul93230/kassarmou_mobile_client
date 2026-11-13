@@ -227,7 +227,13 @@ export default function ProfileScreen({ navigation }) {
 
   const helpGroup = (
     <Group title="Aide">
-      <Row icon="logo-whatsapp" tint="#25D366" title="Discuter avec le support" subtitle={SUPPORT.phoneDisplay} onPress={() => openUrl(`https://wa.me/${SUPPORT.whatsapp}`)} />
+      {/* Support dans l'app (messages, photos, vocaux, notifications) ; connexion demandée si besoin */}
+      <Row
+        icon="chatbubbles-outline"
+        title="Discuter avec le support"
+        subtitle="Réponse dans l'app, photos et vocaux"
+        onPress={() => (userId ? navigation.navigate('Support') : navigation.navigate('QuickAuth', { returnScreen: 'Support', returnParams: { sellerId: 'support' } }))}
+      />
       <Row icon="help-circle-outline" title="Questions fréquentes" onPress={() => navigation.navigate('Faq')} />
       <Row icon="mail-outline" title="Écrire au support" subtitle={SUPPORT.email} onPress={() => openUrl(`mailto:${SUPPORT.email}`)} />
       <Row icon="storefront-outline" tint={colors.wood} title="Vendre sur Ihambaobab" subtitle="Ouvrez votre boutique avec Ihambaobab Pro" onPress={openSellerApp} />
