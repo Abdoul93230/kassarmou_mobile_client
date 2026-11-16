@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, ScrollView, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
@@ -13,6 +13,8 @@ import { API_URL, IPAY, SITE_URL } from '../config/env';
 import { clearPanierData } from '../redux/cartSlice';
 import { catalogApi } from '../redux/catalogApi';
 import { Button, IconButton, Text } from '../ui';
+import GuestSuccess from '../components/guest/GuestSuccess';
+import { getGuestSession } from '../services/guestSession';
 import { formatPrice } from '../utils/formatPrice';
 import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
@@ -116,6 +118,7 @@ export default function PaymentWebViewScreen({ navigation, route }) {
 
   const [phase, setPhase] = useState('loading'); // loading | ready | verifying | success | failed
   const settled = useRef(false);
+  const [guestOrder, setGuestOrder] = useState(null); // { reference, trackingToken, verified }
   const html = useMemo(() => buildHtml({ amount: payAmount, transactionId }), [payAmount, transactionId]);
 
   const succeed = useCallback(async () => {
@@ -125,8 +128,15 @@ export default function PaymentWebViewScreen({ navigation, route }) {
     await dispatch(clearPanierData());
     await AsyncStorage.multiRemove(['pendingOrder', 'paymentInitiated', 'shippingDetails', 'appliedPromoCode']).catch(() => {});
     dispatch(catalogApi.util.invalidateTags(['Orders']));
+    if (!user) {
+      try {
+        const last = JSON.parse((await AsyncStorage.getItem('lastGuestOrder')) || 'null');
+        const session = await getGuestSession();
+        if (last?.trackingToken) setGuestOrder({ ...last, verified: !!session?.verified });
+      } catch { /* l'écran de succès simple reste affiché */ }
+    }
     setPhase('success');
-  }, [dispatch]);
+  }, [dispatch, user]);
 
   const fail = useCallback(() => {
     if (settled.current) return;
@@ -267,6 +277,11 @@ export default function PaymentWebViewScreen({ navigation, route }) {
             Merci pour votre achat. Le vendeur prépare votre commande, vous pouvez suivre chaque étape.
           </Text>
           <View style={[styles.refPill, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text variant="caption" color="textSecondary">Référence</Text><Text variant="title" selectable>{transactionId}</Text></View>
+          {guestOrder ? (
+            <ScrollView style={styles.guestBox} contentContainerStyle={styles.guestBoxContent} keyboardShouldPersistTaps="handled">
+              <GuestSuccess reference={guestOrder.reference} trackingToken={guestOrder.trackingToken} verified={guestOrder.verified} navigation={navigation} />
+            </ScrollView>
+          ) : null}
           <View style={styles.actions}>
             <Button title="Suivre ma commande" icon="cube-outline" size="lg" full onPress={goOrders} />
             <Button title="Continuer mes achats" variant="ghost" full onPress={() => navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })} />
@@ -312,4 +327,6 @@ const styles = themedStyles((colors) => ({
   bigIcon: { width: 110, height: 110, borderRadius: 55, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
   refPill: { marginTop: 20, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   actions: { alignSelf: 'stretch', gap: 8, marginTop: 32 },
+  guestBox: { alignSelf: 'stretch', flexGrow: 0, maxHeight: 300, marginTop: 16 },
+  guestBoxContent: { paddingBottom: 4 },
 }));

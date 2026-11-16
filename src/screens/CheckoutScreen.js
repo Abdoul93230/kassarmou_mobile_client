@@ -145,6 +145,15 @@ export default function CheckoutScreen({ navigation, route }) {
     dispatch(fetchWallet(userId));
   }, [dispatch, userId]);
 
+  // Compte sans adresse enregistrée : on reprend le numéro du compte, modifiable
+  const accountPhone = user?.phoneNumber || user?.phone || null;
+  useEffect(() => {
+    if (!accountPhone || phoneDigits) return;
+    const p = parseStoredPhone(accountPhone);
+    if (p?.digits) { setCountry(p.country); setPhoneDigits(p.digits); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountPhone]);
+
   const changeZone = useCallback(async (z, meta) => {
     setZone(z);
     rememberZone(z);

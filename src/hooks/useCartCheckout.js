@@ -24,6 +24,8 @@ export default function useCartCheckout(articles, user) {
   const [promo, setPromo] = useState(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const calcId = useRef(0);
+  const [retryTick, setRetryTick] = useState(0);
+  const retryShipping = useCallback(() => setRetryTick((n) => n + 1), []);
 
   const groups = useMemo(() => groupByStore(articles), [articles]);
   const groupList = useMemo(() => Object.values(groups), [groups]);
@@ -88,7 +90,7 @@ export default function useCartCheckout(articles, user) {
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zone?._id, quoteKey]);
+  }, [zone?._id, quoteKey, retryTick]);
 
   /** Frais par boutique : { [storeId]: { totalCost, deliverable, quoteRequired, message, delay, free, freeHint, origin } } */
   const shipping = useMemo(() => {
@@ -194,7 +196,7 @@ export default function useCartCheckout(articles, user) {
   return {
     groups, groupList, itemCount, subtotal, savings,
     zone, setZone, zoneReady, location,
-    quote, shipping, shippingTotal, shippingLoading, shippingError, shippingReady,
+    quote, shipping, shippingTotal, shippingLoading, shippingError, shippingReady, retryShipping,
     blockedParcels, quoteRequired, freeHint,
     promo, applyPromo, removePromo, promoLoading,
     reduction, total,

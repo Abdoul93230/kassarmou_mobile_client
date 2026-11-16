@@ -61,8 +61,8 @@ const panierSlice = createSlice({
     setPanier: (state, action) => {
       // Normaliser les articles lors du chargement
       state.articles = action.payload.map((article) => {
-        // Pour les articles en AsyncStorage, quantity représente la quantité dans le panier
-        const panierQuantity = article.quantity || 1;
+        // « quantite » est la quantité choisie ; « quantity » n'est qu'un alias (anciens paniers enregistrés)
+        const panierQuantity = Math.max(1, Number(article.quantite ?? article.quantity) || 1);
         
         return {
           ...article,
@@ -90,6 +90,7 @@ const panierSlice = createSlice({
       if (existingIndex >= 0) {
         // Si l'article existe déjà, augmenter la quantité
         state.articles[existingIndex].quantite += quantiteToAdd;
+        state.articles[existingIndex].quantity = state.articles[existingIndex].quantite;
       } else {
         // Normaliser l'article avant ajout
         const normalizedArticle = {
@@ -140,6 +141,7 @@ const panierSlice = createSlice({
 
       if (index >= 0 && quantite > 0) {
         state.articles[index].quantite = quantite;
+        state.articles[index].quantity = quantite; // alias gardé identique (rechargement du panier)
       }
     },
   },

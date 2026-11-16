@@ -1,9 +1,10 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { clearQuickAuthContext } from '../redux/authSlice';
 import * as Haptics from 'expo-haptics';
 
 import {
@@ -41,6 +42,7 @@ export default function CartScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const articles = useSelector(selectPanierArticles) || [];
   const user = useSelector((s) => s.auth.user);
+  const pendingAction = useSelector((s) => s.auth.pendingAction);
   const isStack = navigation.getState()?.type === 'stack';
   // Dans l'onglet, la barre d'onglets gère déjà la zone sûre du bas
   const bottomInset = isStack ? insets.bottom : 0;
@@ -126,6 +128,17 @@ export default function CartScreen({ navigation }) {
       groupedByStore: cart.groups,
     });
   }, [cart, navigation, user]);
+
+  // Retour de connexion / inscription demandé par « Commander » : on enchaîne vers le paiement
+  // dès que les frais sont calculés, sans redemander de toucher le bouton
+  useEffect(() => {
+    if (pendingAction !== 'checkout' || !user) return;
+    if (!cart.zoneReady) return; // quartier mémorisé pas encore relu
+    if (!cart.zone || cart.shippingReady) {
+      dispatch(clearQuickAuthContext());
+      if (articles.length) checkout();
+    }
+  }, [articles.length, cart.shippingReady, cart.zone, cart.zoneReady, checkout, dispatch, pendingAction, user]);
 
   const header = (
     <View style={[styles.header, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
@@ -253,6 +266,9 @@ export default function CartScreen({ navigation }) {
           <View style={styles.notice}>
             <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
             <Text variant="small" color="danger" style={styles.flex}>{cart.shippingError}</Text>
+            <PressableScale onPress={cart.retryShipping} hitSlop={8} accessibilityLabel="Recalculer les frais de livraison">
+              <Text variant="smallMedium" color="primary">Réessayer</Text>
+            </PressableScale>
           </View>
         ) : cart.quoteRequired ? (
           <View style={[styles.notice, styles.noticeQuote]}>
