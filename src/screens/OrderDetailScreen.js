@@ -11,7 +11,7 @@ import { Button, EmptyState, IconButton, PressableScale, Skeleton, SmartImage, T
 import { fetchShareLink, shareTracking } from '../services/guestSession';
 import { formatPrice } from '../utils/formatPrice';
 import { formatPhoneInternational } from '../utils/phoneRules';
-import { formatDate, orderDate, orderPreview, orderStage } from '../utils/orders';
+import { formatDate, orderDate, orderLineOf, orderPreview, orderStage } from '../utils/orders';
 import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
 const F = (n) => `${formatPrice(n || 0)} FCFA`;
@@ -155,8 +155,11 @@ export default function OrderDetailScreen({ route, navigation }) {
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <Text variant="h3" style={styles.mb10}>Articles ({items.length})</Text>
           {items.map((p, i) => {
-            const qty = Number(p.quantite || p.quantity) || 1;
-            const variant = [p.color || p.colors?.[0], p.taille || p.sizes?.[0]].filter(Boolean).join(' · ');
+            // Quantité et variante : dans l'article (commandes récentes) ou dans nbrProduits (même position)
+            const line = orderLineOf(order, p, i);
+            const qty = Number(p.quantite || p.quantity || line?.quantite) || 1;
+            const variant = [p.color || p.colors?.[0] || line?.couleurs?.[0], p.taille || p.sizes?.[0] || line?.tailles?.[0]].filter(Boolean).join(' · ');
+            const unit = Number(p.prixSnapshot) > 0 ? Number(p.prixSnapshot) : Number(p.prixPromo) > 0 && Number(p.prixPromo) < Number(p.prix) ? Number(p.prixPromo) : Number(p.prix || p.price) || 0;
             return (
               <PressableScale
                 key={`${p._id || i}-${i}`}
@@ -181,7 +184,7 @@ export default function OrderDetailScreen({ route, navigation }) {
                     </PressableScale>
                   ) : null}
                 </View>
-                <Text variant="title">{formatPrice((Number(p.prix || p.price) || 0) * qty)} F</Text>
+                <Text variant="title">{formatPrice(unit * qty)} F</Text>
               </PressableScale>
             );
           })}

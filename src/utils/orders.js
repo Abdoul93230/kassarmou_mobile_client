@@ -51,16 +51,24 @@ export const isAwaitingPayment = (order) => orderStage(order).key === 'unpaid';
  * Reconstitue des articles de panier à partir du snapshot « prod » d'une commande
  * (anciens et nouveaux formats : quantity/quantite, sizes/taille, colors/color).
  */
+/** Ligne nbrProduits d'un article de la commande (même position, sinon même produit) : quantité et variante */
+export const orderLineOf = (order, p, i) => {
+  const lines = Array.isArray(order?.nbrProduits) ? order.nbrProduits : [];
+  const same = (l) => l && String(l.produit) === String(p?._id || p?.id);
+  return same(lines[i]) ? lines[i] : lines.find(same) || null;
+};
+
 export const orderToCartItems = (order) =>
   orderPreview(order)
-    .filter((p) => p && (p._id || p.id))
-    .map((p) => ({
+    .map((p, i) => [p, orderLineOf(order, p, i)])
+    .filter(([p]) => p && (p._id || p.id))
+    .map(([p, line]) => ({
       ...p,
       id: p.id || p._id,
       _id: p._id || p.id,
-      quantite: Number(p.quantite || p.quantity) || 1,
-      quantity: Number(p.quantite || p.quantity) || 1,
-      color: p.color || (Array.isArray(p.colors) ? p.colors[0] : null) || null,
-      taille: p.taille || (Array.isArray(p.sizes) ? p.sizes[0] : null) || null,
+      quantite: Number(p.quantite || p.quantity || line?.quantite) || 1,
+      quantity: Number(p.quantite || p.quantity || line?.quantite) || 1,
+      color: p.color || (Array.isArray(p.colors) ? p.colors[0] : null) || line?.couleurs?.[0] || null,
+      taille: p.taille || (Array.isArray(p.sizes) ? p.sizes[0] : null) || line?.tailles?.[0] || null,
       colorImage: p.colorImage || p.imageUrl || p.image1 || p.image,
     }));
