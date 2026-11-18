@@ -17,6 +17,7 @@ const HISTORY_KEY = 'searchHistory';
 const TRENDING = ['Téléphone', 'Robe', 'Chaussures', 'Sac', 'Montre', 'Parfum', 'Panneau solaire', 'Ordinateur'];
 const EMPTY = [];
 const SORTS = [
+  { key: 'relevance', label: 'Pertinence', icon: 'search-outline' },
   { key: 'newest', label: 'Récents', icon: 'sparkles-outline' },
   { key: 'price_asc', label: 'Prix croissant', icon: 'arrow-up' },
   { key: 'price_desc', label: 'Prix décroissant', icon: 'arrow-down' },
@@ -48,7 +49,7 @@ export default function SearchScreen({ navigation, route }) {
 
   // Filtres (le prix porte sur le prix payé, promo comprise — filtré par le serveur)
   const [price, setPrice] = useState({ min: 0, max: 0 });
-  const [sort, setSort] = useState('newest');
+  const [sort, setSort] = useState('relevance');
   const [priceSheet, setPriceSheet] = useState(false);
   const hasPrice = price.min > 0 || price.max > 0;
   const searchArg = useMemo(() => ({ term, minPrice: price.min, maxPrice: price.max, sort }), [term, price, sort]);

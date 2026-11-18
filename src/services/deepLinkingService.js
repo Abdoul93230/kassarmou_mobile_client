@@ -1,6 +1,8 @@
 import { API_URL, SITE_URL } from '../config/env';
 import * as Linking from 'expo-linking';
 import { Alert, Platform } from 'react-native';
+import { savePendingRef } from './referral';
+import { setSource } from './analytics';
 
 /**
  * Service de Deep Linking pour Ihambaobab
@@ -58,6 +60,10 @@ class DeepLinkingService {
       // Extraire les segments du path
       const segments = path ? path.split('/').filter(Boolean) : [];
       
+      // Lien de parrainage (…/?ref=CODE) ou de campagne (…?utm_source=…) : retenu pour l'inscription et la mesure
+      if (queryParams?.ref) { savePendingRef(queryParams.ref); setSource('parrainage'); }
+      else if (queryParams?.utm_source) setSource(queryParams.utm_source);
+
       if (segments.length === 0) {
         // URL racine - aller à Home
         console.log('🏠 Navigation vers Home');

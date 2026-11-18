@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,6 +22,10 @@ import { getZones, quoteCart, rememberZone, zoneLabel } from '../services/shippi
 import { ensureGuestSession, getGuestSession, OFFLINE_PAYMENTS } from '../services/guestSession';
 import GuestOtpSheet from '../components/guest/GuestOtpSheet';
 import GuestSuccess from '../components/guest/GuestSuccess';
+import PointsHint from '../components/PointsHint';
+import { track } from '../services/analytics';
+import { inviteMessage } from '../services/referral';
+import { registerDevicePush } from '../services/pushNotifications';
 import {
   DEFAULT_PHONE_COUNTRY,
   formatPhoneInternational,
@@ -334,7 +338,10 @@ export default function CheckoutScreen({ navigation, route }) {
         await dispatch(clearPanierData());
         await AsyncStorage.multiRemove(['pendingOrder', 'shippingDetails', 'appliedPromoCode', 'paymentInitiated']);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        setDone({ reference: transactionId, method, trackingToken: created.trackingToken, callback: callbackPending });
+        track('purchase', { orderRef: transactionId, value: total });
+        // Le bon moment pour proposer les notifications : le client veut suivre sa commande
+        if (!guest) registerDevicePush({ ask: true });
+        setDone({ reference: transactionId, method, trackingToken: created.trackingToken, callback: callbackPending, earnOn: Math.max(0, total - (Number(ship?.fee) || 0)) });
         return;
       }
 
@@ -379,6 +386,7 @@ export default function CheckoutScreen({ navigation, route }) {
             <Text variant="title" selectable>{done.reference}</Text>
           </View>
         </Animated.View>
+        {!guest ? <PointsHint amount={done.earnOn} earned style={styles.donePoints} /> : null}
         {guest && done.trackingToken ? (
           <ScrollView style={styles.guestScroll} contentContainerStyle={styles.guestScrollContent} keyboardShouldPersistTaps="handled">
             <GuestSuccess reference={done.reference} trackingToken={done.trackingToken} verified={guestVerified} callback={done.callback} navigation={navigation} />
@@ -394,6 +402,15 @@ export default function CheckoutScreen({ navigation, route }) {
               onPress={() => {
                 navigation.reset({ index: 1, routes: [{ name: 'MainTabs' }, { name: 'Orders' }] });
               }}
+            />
+          ) : null}
+          {!guest ? (
+            <Button
+              title="Inviter un ami"
+              icon="share-social-outline"
+              variant="secondary"
+              full
+              onPress={() => { track('share', {}); Share.share({ message: inviteMessage(wallet?.referralCode, gConfig?.modules?.REFERRAL?.pointsFilleul) }).catch(() => {}); }}
             />
           ) : null}
           <Button
@@ -616,6 +633,7 @@ const styles = themedStyles((colors) => ({
   },
 
   doneWrap: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  donePoints: { alignSelf: 'stretch', marginTop: 16 },
   doneIcon: { width: 110, height: 110, borderRadius: 55, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
   doneText: { marginTop: 28, alignItems: 'center' },
   refPill: { marginTop: 20, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },

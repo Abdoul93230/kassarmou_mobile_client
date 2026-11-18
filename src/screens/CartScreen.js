@@ -21,6 +21,8 @@ import CartLine from '../components/cart/CartLine';
 import ZonePickerSheet from '../components/cart/ZonePickerSheet';
 import CheckoutChoiceSheet from '../components/guest/CheckoutChoiceSheet';
 import { zoneLabel } from '../services/shippingV3';
+import PointsHint from '../components/PointsHint';
+import { track } from '../services/analytics';
 import ProductRail from '../components/home/ProductRail';
 import { formatPrice } from '../utils/formatPrice';
 import { colors, fonts, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
@@ -114,6 +116,7 @@ export default function CartScreen({ navigation }) {
       setChoiceOpen(true);
       return;
     }
+    track('begin_checkout', { value: cart.total });
     navigation.navigate('Checkout', {
       guest: !user,
       subtotal: cart.subtotal,
@@ -337,6 +340,7 @@ export default function CartScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <SummaryRow label="Total" value={F(cart.total)} bold />
+          <PointsHint amount={cart.total - (Number(cart.shippingTotal) || 0)} style={styles.pointsHint} />
         </View>
 
         <View style={styles.trust}>
@@ -443,4 +447,5 @@ const styles = themedStyles((colors) => ({
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, ...shadows.lg,
   },
   barTotal: { fontSize: 20, lineHeight: 26 },
+  pointsHint: { marginTop: 10 },
 }));

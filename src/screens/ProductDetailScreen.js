@@ -24,9 +24,12 @@ import SellerCard from '../components/product/SellerCard';
 import DeliveryEstimate from '../components/product/DeliveryEstimate';
 import { sellerIdOf } from '../services/shippingV3';
 import ReviewsSection, { summarize } from '../components/product/ReviewsSection';
+import GuaranteeCard from '../components/product/GuaranteeCard';
 import ProductRail from '../components/home/ProductRail';
 import DeepLinkingService from '../services/deepLinkingService';
 import { trackProductView, VIEWERS_MIN } from '../services/productViews';
+import { track } from '../services/analytics';
+import PointsHint from '../components/PointsHint';
 import { formatPrice } from '../utils/formatPrice';
 import { productImages } from '../utils/image';
 import { capitalize, htmlToText } from '../utils/text';
@@ -78,6 +81,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   const galleryRef = useRef(null);
   const scrollRef = useRef(null);
   const reviewsY = useRef(0);
+  const reviewScrolled = useRef(false);
 
   const variants = useMemo(() => (Array.isArray(product?.variants) ? product.variants : []), [product?.variants]);
   const images = useMemo(() => {
@@ -101,6 +105,7 @@ export default function ProductDetailScreen({ route, navigation }) {
     let alive = true;
     setWeekViewers(0);
     trackProductView(productId).then((n) => alive && setWeekViewers(n));
+    if (productId) track('product_view', { productId });
     return () => { alive = false; };
   }, [productId]);
 
@@ -166,8 +171,8 @@ export default function ProductDetailScreen({ route, navigation }) {
       try {
         await addReview({ product, rating, text, userName: user?.name || 'Client' }).unwrap();
         return true;
-      } catch {
-        Toast.show({ type: 'error', text1: "Impossible de publier l'avis", text2: 'Réessayez dans un instant.' });
+      } catch (e) {
+        Toast.show({ type: 'error', text1: "Impossible de publier l'avis", text2: e?.data?.message || e?.message || 'Réessayez dans un instant.' });
         return false;
       }
     },
@@ -283,15 +288,8 @@ export default function ProductDetailScreen({ route, navigation }) {
 
         {/* Livraison : d'où, vers où, frais et délai réels */}
         <DeliveryEstimate productId={product._id} sellerId={sellerIdOf(product)} quantity={quantity} style={styles.delivery} />
-        <View style={[styles.infoCard, styles.infoCardTight, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.infoIcon, { backgroundColor: colors.primarySoft }]}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.flex}>
-            <Text variant="title">Achat protégé</Text>
-            <Text variant="small" color="textSecondary">Paiement sécurisé par mobile money ou carte. Support local 7j/7.</Text>
-          </View>
-        </View>
+        {!outOfStock ? <PointsHint amount={pricing.current * quantity} style={styles.pointsHint} /> : null}
+        <GuaranteeCard style={styles.guarantee} />
 
         <SellerCard
           seller={typeof product.Clefournisseur === 'object' ? product.Clefournisseur : null}
@@ -357,7 +355,15 @@ export default function ProductDetailScreen({ route, navigation }) {
           </View>
         ) : null}
 
-        <View onLayout={(e) => { reviewsY.current = e.nativeEvent.layout.y; }}>
+        <View
+          onLayout={(e) => {
+            reviewsY.current = e.nativeEvent.layout.y;
+            if (params.review && !reviewScrolled.current) {
+              reviewScrolled.current = true;
+              scrollRef.current?.scrollTo({ y: reviewsY.current - 80, animated: false });
+            }
+          }}
+        >
           <ReviewsSection
             reviews={reviews}
             loading={reviewsQuery.isLoading}
@@ -365,6 +371,7 @@ export default function ProductDetailScreen({ route, navigation }) {
             onRequireAuth={requireAuth}
             onSubmitReview={submitReview}
             submitting={postingReview}
+            autoOpen={!!params.review}
           />
         </View>
 
@@ -441,6 +448,8 @@ const styles = themedStyles((colors) => ({
     backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
   },
   infoCardTight: { marginTop: 10 },
+  guarantee: { marginHorizontal: GUTTER, marginTop: 10 },
+  pointsHint: { marginHorizontal: GUTTER, marginTop: 10 },
   contactBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: GUTTER, marginTop: 10,
     paddingVertical: 12, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.primarySoft,

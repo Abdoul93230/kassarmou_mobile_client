@@ -15,6 +15,8 @@ import { catalogApi } from '../redux/catalogApi';
 import { Button, IconButton, Text } from '../ui';
 import GuestSuccess from '../components/guest/GuestSuccess';
 import { getGuestSession } from '../services/guestSession';
+import { track } from '../services/analytics';
+import { registerDevicePush } from '../services/pushNotifications';
 import { formatPrice } from '../utils/formatPrice';
 import { colors, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
@@ -120,6 +122,7 @@ export default function PaymentWebViewScreen({ navigation, route }) {
   const settled = useRef(false);
   const [guestOrder, setGuestOrder] = useState(null); // { reference, trackingToken, verified }
   const html = useMemo(() => buildHtml({ amount: payAmount, transactionId }), [payAmount, transactionId]);
+  useEffect(() => { track('payment_start', { orderRef: transactionId, value: payAmount }); }, [payAmount, transactionId]);
 
   const succeed = useCallback(async () => {
     if (settled.current) return;
@@ -135,8 +138,10 @@ export default function PaymentWebViewScreen({ navigation, route }) {
         if (last?.trackingToken) setGuestOrder({ ...last, verified: !!session?.verified });
       } catch { /* l'écran de succès simple reste affiché */ }
     }
+    track('purchase', { orderRef: transactionId, value: payAmount });
+    if (user) registerDevicePush({ ask: true });
     setPhase('success');
-  }, [dispatch, user]);
+  }, [dispatch, payAmount, transactionId, user]);
 
   const fail = useCallback(() => {
     if (settled.current) return;

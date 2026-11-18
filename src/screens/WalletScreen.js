@@ -1,3 +1,5 @@
+import { inviteMessage } from '../services/referral';
+import { track } from '../services/analytics';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -120,10 +122,8 @@ export default function WalletScreen({ navigation }) {
   };
 
   const shareCode = () => {
-    const parrain = config?.modules?.REFERRAL?.pointsFilleul ?? 10;
-    Share.share({
-      message: `Rejoins-moi sur Ihambaobab, la marketplace du Niger 🇳🇪 Inscris-toi avec mon code ${wallet?.referralCode} et gagne ${parrain} Baobab Points à ta première commande : ${siteUrl('/')}`,
-    }).catch(() => {});
+    track('share', {});
+    Share.share({ message: inviteMessage(wallet?.referralCode, config?.modules?.REFERRAL?.pointsFilleul ?? 10) }).catch(() => {});
   };
 
   if (!userId) {

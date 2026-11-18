@@ -16,6 +16,7 @@ import { clearLikes } from '../redux/likesSlice';
 import { fetchWallet, selectWallet } from '../redux/gamificationSlice';
 import { catalogApi, useMyOrdersQuery } from '../redux/catalogApi';
 import { orderStage } from '../utils/orders';
+import { inviteMessage } from '../services/referral';
 import { formatPhoneInternational } from '../utils/phoneRules';
 import { Button, PressableScale, SmartImage, Text } from '../ui';
 import DeleteAccountSheet from '../components/profile/DeleteAccountSheet';
@@ -214,9 +215,7 @@ export default function ProfileScreen({ navigation }) {
   }, [dispatch]);
 
   const invite = () =>
-    Share.share({
-      message: `Je fais mes achats sur Ihambaobab, la marketplace du Niger 🇳🇪 Rejoins-moi : ${siteUrl('/')}`,
-    }).catch(() => {});
+    Share.share({ message: inviteMessage(wallet?.referralCode) }).catch(() => {});
 
   const openUrl = (url) => Linking.openURL(url).catch(() => {});
   const openSellerApp = () =>
@@ -363,7 +362,7 @@ export default function ProfileScreen({ navigation }) {
         <Row icon="person-outline" title="Informations personnelles" subtitle="Nom, téléphone, email" onPress={() => navigation.navigate('EditProfile')} />
         <Row icon="location-outline" title="Adresse de livraison" subtitle="Remplie d'office à chaque commande" onPress={() => navigation.navigate('Address')} />
         <Row icon="gift-outline" tint={colors.sand} title="Baobab Points" subtitle="Gagnez et utilisez vos points" onPress={() => navigation.navigate('Wallet')} />
-        <Row icon="people-outline" tint={colors.wood} title="Inviter un ami" subtitle="Partagez Ihambaobab" onPress={invite} />
+        <Row icon="people-outline" tint={colors.wood} title="Inviter un ami" subtitle={wallet?.referralCode ? 'Gagnez des Baobab Points à sa 1re commande' : 'Partagez Ihambaobab'} onPress={invite} />
       </Group>
 
       <ThemeGroup />

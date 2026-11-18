@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import useAuthReturn, { authErrorMessage } from '../hooks/useAuthReturn';
 import { Button, PressableScale, Text } from '../ui';
 import TextField from '../ui/TextField';
 import { siteUrl } from '../config/env';
+import { getPendingRef } from '../services/referral';
 import { DEFAULT_PHONE_COUNTRY, applyPhoneInputChange, toBackendPhone, validatePhone } from '../utils/phoneRules';
 import { colors, radius, useTheme, themedStyles } from '../theme';
 
@@ -37,6 +38,10 @@ export default function QuickAuthScreen({ navigation, route }) {
   const [name, setName] = useState('');
   const [refCode, setRefCode] = useState('');
   const [showRef, setShowRef] = useState(false);
+  // Arrivé par un lien de parrainage : le code est déjà rempli (modifiable)
+  useEffect(() => {
+    getPendingRef().then((c) => { if (c) { setRefCode(c); setShowRef(true); } });
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const passwordRef = useRef(null);

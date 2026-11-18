@@ -22,10 +22,10 @@ function SellerCard({ seller, onPress }) {
       <View style={styles.flex}>
         <View style={styles.nameRow}>
           <Text variant="title" numberOfLines={1} style={styles.shrink}>{name}</Text>
-          {seller.isvalid !== false ? <Ionicons name="checkmark-circle" size={16} color={colors.primary} /> : null}
+          {seller.isvalid === true ? <Ionicons name="checkmark-circle" size={16} color={colors.primary} /> : null}
         </View>
         <View style={styles.sub}>
-          <Text variant="small" color="textSecondary">{seller.isvalid !== false ? 'Vendeur vérifié ·' : 'Vendeur ·'}</Text>
+          <Text variant="small" color="textSecondary">{seller.isvalid === true ? 'Vendeur vérifié ·' : 'Vendeur ·'}</Text>
           <OriginBadge sellerId={seller._id} variant="small" fallback={<Text variant="small" color="textSecondary">Niger</Text>} style={styles.originInline} />
         </View>
       </View>

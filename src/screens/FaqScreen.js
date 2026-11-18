@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { IconButton, PressableScale, Text } from '../ui';
 import { SUPPORT } from '../config/env';
+import { RETURN_POLICY } from '../config/policy';
 import { useSelector } from 'react-redux';
 import { colors, fonts, GUTTER, radius, shadows, useTheme, themedStyles } from '../theme';
 
@@ -18,11 +19,23 @@ const FAQ = [
   },
   {
     q: 'Quels sont les délais de livraison ?',
-    a: 'Nous proposons une livraison standard et express. Le délai dépend de votre emplacement : en général 3 à 7 jours ouvrables en standard et 1 à 3 jours ouvrables en express. Les frais sont calculés dans le panier selon votre zone.',
+    a: 'Le délai dépend de la boutique et de votre quartier ou de votre ville. Il est affiché sur la fiche de chaque article et dans le panier, avec les frais réels, avant de commander. Rien n’est ajouté ensuite.',
+  },
+  {
+    q: 'Puis-je retourner un article ?',
+    a: RETURN_POLICY,
+  },
+  {
+    q: 'Comment être sûr de recevoir ma commande ?',
+    a: 'Chaque commande a un code de livraison personnel, visible dans Mes commandes. Le livreur ne peut valider la remise qu’avec ce code : ne le donnez qu’au moment où vous avez le colis en main. Vous pouvez aussi payer à la livraison.',
+  },
+  {
+    q: 'Mon paiement a échoué, ai-je perdu mon code promo ou mes points ?',
+    a: 'Non. Tant que le paiement n’est pas confirmé, rien n’est débité : votre code promo et vos Baobab Points restent réservés pour cette commande, puis vous sont rendus si elle n’est pas payée.',
   },
   {
     q: 'Comment suivre ma commande ?',
-    a: 'Ouvrez Profil › Mes commandes : chaque commande affiche son étape (préparation, livraison, livrée). Vous pouvez aussi contacter le support depuis la commande, la référence est jointe automatiquement.',
+    a: 'Ouvrez Profil › Mes commandes : chaque commande affiche son étape (préparation, livraison, livrée) et son historique complet. Vous pouvez aussi contacter le support depuis la commande, la référence est jointe automatiquement.',
   },
   {
     q: 'Ma commande n’est pas payée, que faire ?',

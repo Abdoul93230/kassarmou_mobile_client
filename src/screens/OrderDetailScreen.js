@@ -169,6 +169,17 @@ export default function OrderDetailScreen({ route, navigation }) {
                   <Text variant="smallMedium" numberOfLines={2}>{p.name}</Text>
                   {variant ? <Text variant="caption" color="textMuted">{variant}</Text> : null}
                   <Text variant="caption" color="textSecondary" style={styles.mt4}>Qté {qty}</Text>
+                  {stage.key === 'delivered' && p._id ? (
+                    <PressableScale
+                      onPress={() => navigation.navigate('ProductDetail', { productId: p._id, review: true })}
+                      hitSlop={8}
+                      style={styles.reviewLink}
+                      accessibilityLabel={`Donner mon avis sur ${p.name}`}
+                    >
+                      <Ionicons name="star-outline" size={14} color={colors.primary} />
+                      <Text variant="smallMedium" color="primary">Donner mon avis</Text>
+                    </PressableScale>
+                  ) : null}
                 </View>
                 <Text variant="title">{formatPrice((Number(p.prix || p.price) || 0) * qty)} F</Text>
               </PressableScale>
@@ -247,6 +258,7 @@ const styles = themedStyles((colors) => ({
 
   addr: { flexDirection: 'row', gap: 10 },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  reviewLink: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-start' },
   itemImg: { width: 60, height: 60, borderRadius: radius.sm },
   line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 8 },

@@ -5,6 +5,8 @@ import { CommonActions } from '@react-navigation/native';
 import { navigationRef } from '../navigation/RootNavigation';
 import { useMessagingConnection } from '../services/messaging';
 import { Notifications, registerDevicePush } from '../services/pushNotifications';
+import { syncCartReminder } from '../services/cartReminder';
+import { track } from '../services/analytics';
 
 const handled = new Set(); // une notification n'ouvre sa conversation qu'une fois
 
@@ -15,9 +17,13 @@ function openFromNotification(response) {
   if (!id || handled.has(id)) return;
   const isMessage = data?.type === 'store_message' && data.conversationId;
   const isOrder = data?.type === 'order' && data.orderId; // annulation, colis en route, livraison
-  if (!isMessage && !isOrder) return;
+  const isCart = data?.type === 'cart'; // rappel de panier oublié
+  if (!isMessage && !isOrder && !isCart) return;
   handled.add(id);
-  const go = () => navigationRef.dispatch(CommonActions.reset(isMessage ? {
+  const go = () => navigationRef.dispatch(CommonActions.reset(isCart ? {
+    index: 1,
+    routes: [{ name: 'MainTabs' }, { name: 'Cart' }],
+  } : isMessage ? {
     index: 2,
     routes: [{ name: 'MainTabs' }, { name: 'Messages' }, { name: 'StoreChat', params: { conversationId: String(data.conversationId) } }],
   } : {
@@ -38,6 +44,16 @@ export default function MessagingBridge() {
 
   useMessagingConnection(userId);
 
+  useEffect(() => { track('app_open'); }, []);
+
+  // Rappel de panier oublié : suit le nombre d'articles (attend 4 s que le panier se stabilise)
+  const cartCount = useSelector((s) => (s.panier?.articles || []).length);
+  const firstName = String(user?.name || '').trim().split(' ')[0] || '';
+  useEffect(() => {
+    const t = setTimeout(() => syncCartReminder(cartCount, firstName), 4000);
+    return () => clearTimeout(t);
+  }, [cartCount, firstName]);
+
   // Jeton push : seulement si la permission est déjà donnée (sinon demandée au 1er message).
   // Refait au retour au premier plan : permission activée entre-temps dans les réglages.
   useEffect(() => {
@@ -48,7 +64,7 @@ export default function MessagingBridge() {
   }, [userId]);
 
   useEffect(() => {
-    if (!Notifications || !userId) return undefined;
+    if (!Notifications) return undefined; // le rappel de panier concerne aussi les visiteurs sans compte
     // App fermée : la notification qui l'a ouverte
     Notifications.getLastNotificationResponseAsync()
       .then(openFromNotification)

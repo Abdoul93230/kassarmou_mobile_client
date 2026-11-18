@@ -1,5 +1,30 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../config/api';
+
+/**
+ * Dernier catalogue gardé sur l'appareil : sans réseau, l'accueil et les listes déjà vues s'ouvrent
+ * quand même (première page seulement, 16 réponses au plus, les plus anciennes sont effacées).
+ */
+const CACHEABLE = /^\/(ProductsHome|ProductsClients|ProductClient\/|searchProductByType\/|getAllCategories|getAllType)/;
+const INDEX_KEY = 'apiCache:index';
+const MAX_ENTRIES = 16;
+const cacheKey = (url, params) => `apiCache:${url}?${JSON.stringify(params || {})}`;
+const cacheable = (url, method, params) =>
+  String(method).toLowerCase() === 'get' && CACHEABLE.test(String(url)) && (!params?.page || Number(params.page) === 1);
+
+async function remember(key, data) {
+  try {
+    const body = JSON.stringify(data);
+    if (body.length > 400000) return; // réponse trop lourde pour être gardée
+    await AsyncStorage.setItem(key, body);
+    const index = JSON.parse((await AsyncStorage.getItem(INDEX_KEY)) || '[]').filter((k) => k !== key);
+    index.push(key);
+    const old = index.splice(0, Math.max(0, index.length - MAX_ENTRIES));
+    if (old.length) await AsyncStorage.multiRemove(old);
+    await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index));
+  } catch { /* cache facultatif */ }
+}
 
 /**
  * Couche de données catalogue (RTK Query) :
@@ -9,8 +34,16 @@ import apiClient from '../config/api';
 const axiosBaseQuery = async ({ url, method = 'get', data, params }) => {
   try {
     const res = await apiClient({ url, method, data, params });
+    if (cacheable(url, method, params)) remember(cacheKey(url, params), res.data);
     return { data: res.data };
   } catch (error) {
+    // Pas de réponse du serveur (hors ligne, réseau coupé) : on sert la dernière réponse connue
+    if (!error.response && cacheable(url, method, params)) {
+      try {
+        const cached = await AsyncStorage.getItem(cacheKey(url, params));
+        if (cached) return { data: JSON.parse(cached), meta: { fromCache: true } };
+      } catch { /* pas de cache : l'erreur réseau est renvoyée */ }
+    }
     return {
       error: {
         status: error.response?.status || 'FETCH_ERROR',

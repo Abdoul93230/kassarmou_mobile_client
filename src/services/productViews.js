@@ -5,7 +5,7 @@ const KEY = 'ihamVisitorId';
 let cached = null;
 
 /** Identifiant anonyme de l'appareil (une vue par personne et par jour côté serveur) */
-async function visitorId() {
+export async function visitorId() {
   if (cached) return cached;
   try {
     cached = await AsyncStorage.getItem(KEY);

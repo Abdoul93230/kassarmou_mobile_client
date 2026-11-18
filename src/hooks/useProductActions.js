@@ -1,3 +1,4 @@
+import { track } from '../services/analytics';
 import { useCallback } from 'react';
 import { useDispatch, useSelector, useStore } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
@@ -59,6 +60,7 @@ export default function useProductActions() {
         }),
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      track('add_to_cart', { productId: product._id, value: (Number(product.prixPromo) > 0 ? Number(product.prixPromo) : Number(product.prix) || 0) * quantite });
       if (!silent) {
         Toast.show({
           type: 'success',

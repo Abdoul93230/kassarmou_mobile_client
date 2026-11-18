@@ -2,6 +2,7 @@ import React, { memo, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import { Ionicons } from '@expo/vector-icons';
 import { Button, PressableScale, Stars, Text } from '../../ui';
 import { timeAgo } from '../../utils/text';
 import { colors, fonts, GUTTER, radius, useTheme, themedStyles } from '../../theme';
@@ -30,7 +31,15 @@ const ReviewItem = memo(function ReviewItem({ review }) {
           <Text variant="smallMedium" color="primaryDark">{name.charAt(0).toUpperCase()}</Text>
         </View>
         <View style={styles.flex}>
-          <Text variant="smallMedium" numberOfLines={1}>{name}</Text>
+          <View style={styles.nameRow}>
+            <Text variant="smallMedium" numberOfLines={1} style={styles.shrink}>{name}</Text>
+            {review.verifiedPurchase ? (
+              <View style={[styles.verified, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="checkmark-circle" size={11} color={colors.primaryDark} />
+                <Text variant="caption" color="primaryDark">Achat vérifié</Text>
+              </View>
+            ) : null}
+          </View>
           <View style={styles.reviewMeta}>
             <Stars value={Number(review.etoil) || 0} size={12} />
             <Text variant="caption" color="textMuted">{timeAgo(review.date || review.createdAt)}</Text>
@@ -100,7 +109,7 @@ export const ReviewSheet = memo(function ReviewSheet({ visible, onClose, onSubmi
 });
 
 /** Section Avis de la fiche produit */
-function ReviewsSection({ reviews, loading, user, onRequireAuth, onSubmitReview, submitting }) {
+function ReviewsSection({ reviews, loading, user, onRequireAuth, onSubmitReview, submitting, autoOpen }) {
   const { colors } = useTheme();
   const [sheet, setSheet] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -108,6 +117,17 @@ function ReviewsSection({ reviews, loading, user, onRequireAuth, onSubmitReview,
   const visible = showAll ? reviews : reviews.slice(0, 3);
 
   const openSheet = () => (user ? setSheet(true) : onRequireAuth());
+
+  // Un avis par client et par article : s'il existe déjà, on le modifie
+  const myId = String(user?.id || user?._id || '');
+  const mine = useMemo(() => (myId ? reviews.find((r) => String(r.clefUser || '') === myId) : null), [reviews, myId]);
+  const initial = useMemo(() => (mine ? { rating: mine.etoil, comment: mine.description } : null), [mine]);
+
+  // Ouverture directe depuis une commande livrée ou la relance d'avis
+  useEffect(() => {
+    if (autoOpen && user && !loading) setSheet(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen, loading]);
 
   return (
     <View style={styles.section}>
@@ -148,12 +168,13 @@ function ReviewsSection({ reviews, loading, user, onRequireAuth, onSubmitReview,
         </PressableScale>
       ) : null}
 
-      <Button title="Donner mon avis" icon="create-outline" variant="secondary" full onPress={openSheet} style={styles.writeBtn} />
+      <Button title={mine ? 'Modifier mon avis' : 'Donner mon avis'} icon="create-outline" variant="secondary" full onPress={openSheet} style={styles.writeBtn} />
 
       <ReviewSheet
         visible={sheet}
         onClose={() => setSheet(false)}
         submitting={submitting}
+        initial={initial}
         onSubmit={async (payload) => {
           const ok = await onSubmitReview(payload);
           if (ok) {
@@ -186,6 +207,9 @@ const styles = themedStyles((colors) => ({
   review: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   reviewHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  shrink: { flexShrink: 1 },
+  verified: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
   reviewMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   reviewText: { marginTop: 8 },
   more: { paddingVertical: 12, alignItems: 'center' },
