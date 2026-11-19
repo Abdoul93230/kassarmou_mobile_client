@@ -275,7 +275,8 @@
             "enableShrinkResourcesInReleaseBuilds": true
           }
         }
-      ]
+      ],
+      "./plugins/withOptionalHardware"
     ]
   }
 }
