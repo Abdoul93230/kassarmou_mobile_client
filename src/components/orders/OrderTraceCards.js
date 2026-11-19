@@ -28,12 +28,23 @@ function useCountdown(deadline) {
   return Math.max(0, left);
 }
 
+/** Baobab Points de la commande, en une phrase (null si rien à afficher) */
+export const orderPointsText = (p) => {
+  if (!p) return null;
+  if (p.status === 'pending') return `+${p.estimate} Baobab Points crédités à la livraison`;
+  const total = (Number(p.earned) || 0) + (Number(p.firstOrder) || 0);
+  if (p.status === 'revoked') return `${total} Baobab Points retirés : commande annulée`;
+  const bonus = Number(p.firstOrder) > 0 ? ` (dont ${p.firstOrder} de bonus 1re commande)` : '';
+  return `+${total} Baobab Points crédités${bonus}`;
+};
+
 /** Bandeaux en tête de commande : paiement réservé (délai) ou annulation expliquée, puis code de livraison */
 export function OrderTraceBanners({ trace }) {
   const { colors } = useTheme();
   const left = useCountdown(trace?.payment?.awaiting ? trace.payment.deadline : null);
   if (!trace) return null;
   const { breakdown: b, payment, cancel, deliveryCode } = trace;
+  const pointsText = orderPointsText(trace.points);
   const reserved = reservedLabel(b);
   const expired = cancel?.reason === 'paiement_non_abouti';
   const mm = Math.floor(left / 60000);
@@ -67,6 +78,13 @@ export function OrderTraceBanners({ trace }) {
               {restoredSentence(b)}
             </Text>
           </View>
+        </View>
+      ) : null}
+
+      {pointsText ? (
+        <View style={[styles.banner, { backgroundColor: colors.woodSoft || colors.surfaceAlt, borderColor: colors.wood || colors.border }]}>
+          <Ionicons name="leaf" size={20} color={colors.wood} />
+          <Text variant="smallMedium" color="wood" style={styles.flex}>{pointsText}</Text>
         </View>
       ) : null}
 
