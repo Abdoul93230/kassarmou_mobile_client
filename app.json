@@ -266,6 +266,15 @@
           "cameraPermission": "Ihambaobab utilise l'appareil photo pour prendre votre photo de profil.",
           "microphonePermission": "Ihambaobab utilise le micro uniquement pour enregistrer les messages vocaux que vous envoyez aux boutiques."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
       ]
     ]
   }
