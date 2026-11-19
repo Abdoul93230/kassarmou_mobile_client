@@ -125,9 +125,15 @@ export default function AddressScreen({ navigation }) {
             accessibilityLabel="Choisir le quartier"
           >
             <Ionicons name="location" size={18} color={zone ? colors.primary : colors.textMuted} />
-            <Text variant="body" color={zone ? 'text' : 'textMuted'} style={styles.flex} numberOfLines={2}>
-              {zone ? zoneLabel(zone) : 'Choisir votre quartier'}
-            </Text>
+            {/* zoneLabel renvoie { title, subtitle } : un objet affiché tel quel faisait planter l'écran */}
+            <View style={styles.flex}>
+              <Text variant="body" color={zone ? 'text' : 'textMuted'} numberOfLines={1}>
+                {zone ? zoneLabel(zone).title : 'Choisir votre quartier'}
+              </Text>
+              {zone && zoneLabel(zone).subtitle ? (
+                <Text variant="caption" color="textMuted" numberOfLines={1}>{zoneLabel(zone).subtitle}</Text>
+              ) : null}
+            </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </PressableScale>
           {errors.zone ? <Text variant="small" color="danger" style={styles.err}>{errors.zone}</Text> : null}

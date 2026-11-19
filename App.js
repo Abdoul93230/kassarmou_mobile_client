@@ -11,6 +11,7 @@ import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } f
 import store from './src/redux/store';
 import AppNavigator from './src/navigation/AppNavigator';
 import NetworkIndicator from './src/components/NetworkIndicator';
+import AppErrorBoundary from './src/components/AppErrorBoundary';
 import { loadCart } from './src/redux/cartSlice';
 import toastConfig from './src/ui/toastConfig';
 import { ThemeProvider, useTheme } from './src/theme';
@@ -27,7 +28,9 @@ function MainApp() {
   return (
     <SafeAreaProvider>
       <NetworkIndicator />
-      <AppNavigator />
+      <AppErrorBoundary>
+        <AppNavigator />
+      </AppErrorBoundary>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Toast config={toastConfig} topOffset={56} />
     </SafeAreaProvider>
