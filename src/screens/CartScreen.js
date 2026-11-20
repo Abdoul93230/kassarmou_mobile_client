@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,6 +53,20 @@ export default function CartScreen({ navigation }) {
   const [zoneSheet, setZoneSheet] = useState(false);
   const [promoInput, setPromoInput] = useState('');
   const [promoOpen, setPromoOpen] = useState(false);
+  // Clavier : sur Android bord à bord l'écran ne remonte plus seul. On garde le champ du code promo visible.
+  const scrollRef = useRef(null);
+  const promoY = useRef(0);
+  const [kbHeight, setKbHeight] = useState(0);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e?.endCoordinates?.height || 0));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  useEffect(() => {
+    if (kbHeight > 0 && promoOpen) {
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, promoY.current - 140), animated: true }));
+    }
+  }, [kbHeight, promoOpen]);
   const [promoError, setPromoError] = useState(null);
 
   const suggestions = useProductsQuery({ sort: 'popular', limit: 10 }, { skip: articles.length > 0 });
@@ -187,7 +201,7 @@ export default function CartScreen({ navigation }) {
     <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       {header}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 + bottomInset }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 + bottomInset + kbHeight }} keyboardShouldPersistTaps="handled">
         {/* Zone de livraison */}
         <PressableScale onPress={() => setZoneSheet(true)} scaleTo={0.985} style={[styles.zone, { backgroundColor: colors.surface, borderColor: colors.border }, !cart.zone && styles.zoneMissing]}>
           <View style={[styles.zoneIcon, !cart.zone && styles.zoneIconMissing]}>
@@ -288,7 +302,7 @@ export default function CartScreen({ navigation }) {
         ) : null}
 
         {/* Code promo */}
-        <View style={styles.card}>
+        <View style={styles.card} onLayout={(e) => { promoY.current = e.nativeEvent.layout.y; }}>
           {cart.promo ? (
             <View style={styles.promoApplied}>
               <Ionicons name="pricetag" size={18} color={colors.success} />
